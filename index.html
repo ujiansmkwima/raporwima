@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Masuk — E-Rapor SMK</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-client.js"></script>
+</head>
+<body>
+
+<div class="login-shell">
+
+  <div class="login-brand">
+    <div class="login-brand__rule"></div>
+    <div class="login-brand__mark">E-Rapor SMK</div>
+
+    <div>
+      <div class="login-brand__headline">Satu tempat untuk nilai, presensi, dan rapor.</div>
+      <div class="login-brand__sub">
+        Sistem pencatatan nilai pengetahuan, keterampilan, sikap, hingga
+        PKL — terhubung untuk guru dan admin sekolah.
+      </div>
+    </div>
+
+    <div class="login-brand__foot">© <span id="year"></span> E-Rapor SMK</div>
+  </div>
+
+  <div class="login-panel">
+    <form class="login-card" id="loginForm">
+      <div class="login-card__title">Masuk</div>
+      <div class="login-card__sub">Masukkan akun sekolah kamu untuk melanjutkan.</div>
+
+      <div class="field">
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email" placeholder="nama@sekolah.sch.id" autocomplete="username">
+      </div>
+
+      <div class="field">
+        <label for="password">Kata sandi</label>
+        <input type="password" id="password" name="password" placeholder="••••••••" autocomplete="current-password">
+      </div>
+
+      <button type="submit" class="btn-primary" id="submitBtn">Masuk</button>
+
+      <div class="login-card__note" id="loginNote">Peran (guru/admin) ditentukan otomatis berdasarkan akun kamu di Supabase.</div>
+    </form>
+  </div>
+
+</div>
+
+<script>
+  document.getElementById('year').textContent = new Date().getFullYear();
+
+  var form = document.getElementById('loginForm');
+  var submitBtn = document.getElementById('submitBtn');
+  var note = document.getElementById('loginNote');
+  var noteDefault = note.textContent;
+
+  form.addEventListener('submit', async function (e) {
+    e.preventDefault();
+
+    var email = document.getElementById('email').value.trim();
+    var password = document.getElementById('password').value;
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Memeriksa...';
+    note.textContent = noteDefault;
+    note.style.color = '';
+
+    // 1. Login ke Supabase Auth pakai email & password
+    var authResult = await supabaseClient.auth.signInWithPassword({ email: email, password: password });
+
+    if (authResult.error) {
+      note.textContent = 'Email atau kata sandi salah.';
+      note.style.color = '#B3261E';
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Masuk';
+      return;
+    }
+
+    var userId = authResult.data.user.id;
+
+    // 2. Ambil role dari tabel profiles berdasarkan id user yang login
+    var profileResult = await supabaseClient
+      .from('profiles')
+      .select('role')
+      .eq('id', userId)
+      .single();
+
+    if (profileResult.error || !profileResult.data) {
+      note.textContent = 'Akun ini belum punya role. Hubungi admin.';
+      note.style.color = '#B3261E';
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Masuk';
+      return;
+    }
+
+    // 3. Arahkan sesuai role
+    var role = profileResult.data.role;
+    window.location.href = role === 'admin' ? 'admin.html' : 'guru.html';
+  });
+</script>
+
+</body>
+</html>

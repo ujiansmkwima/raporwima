@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Guru — E-Rapor SMK</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-client.js"></script>
+</head>
+<body>
+
+<div class="app">
+
+  <aside class="sidebar">
+    <div class="sidebar__brand">
+      <span class="sidebar__brand-mark">E-Rapor</span>
+    </div>
+    <div class="sidebar__role">Panel Guru</div>
+
+    <div class="sidebar__section-label">Menu</div>
+    <!-- Menu guru akan ditambahkan di sini -->
+    <div class="menu-placeholder">
+      Belum ada menu. Tambahkan item menu guru di sini (mis. Input Nilai, Presensi, Kelas Saya).
+    </div>
+
+    <div class="sidebar__footer">
+      <a href="index.html">← Keluar</a>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <div class="topbar__title">Dashboard Guru</div>
+        <div class="topbar__meta">Belum ada data ditampilkan</div>
+      </div>
+      <div class="user-chip">
+        <div>
+          <div class="user-chip__name" style="text-align:right;">Nama Guru</div>
+          <div class="user-chip__role">Guru</div>
+        </div>
+        <div class="user-chip__avatar">G</div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="empty-state">
+        <div class="empty-state__mark">＋</div>
+        <div class="empty-state__title">Belum ada konten</div>
+        <div class="empty-state__desc">
+          Halaman ini akan menampilkan kelas, nilai, dan presensi
+          setelah terhubung ke database.
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

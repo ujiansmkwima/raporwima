@@ -1,0 +1,382 @@
+/* =========================================================
+   E-RAPOR SMK — shared styles
+   Konsep: "buku induk" / ledger sekolah — garis tipis, tabular,
+   warna navy institusional + aksen emas (medali/prestasi).
+   ========================================================= */
+
+:root {
+  --bg: #F6F4EF;
+  --surface: #FFFFFF;
+  --ink: #1E2233;
+  --ink-soft: #5B5F72;
+  --primary: #1D3557;
+  --primary-soft: #2B4A75;
+  --accent: #B8862B;
+  --accent-soft: #E8D9B5;
+  --border: #E1DDCE;
+  --border-strong: #C9C3AD;
+
+  --sidebar-bg: #16233B;
+  --sidebar-ink: #C9D2E3;
+  --sidebar-ink-dim: #7C8AA6;
+  --sidebar-active: #24365A;
+
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-body: 'Plus Jakarta Sans', -apple-system, sans-serif;
+
+  --radius: 3px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+a { color: inherit; text-decoration: none; }
+
+/* ---------- App shell: sidebar + main ---------- */
+
+.app {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: 252px;
+  flex-shrink: 0;
+  background: var(--sidebar-bg);
+  color: var(--sidebar-ink);
+  display: flex;
+  flex-direction: column;
+  padding: 28px 20px;
+}
+
+.sidebar__brand {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+  padding: 0 4px;
+}
+
+.sidebar__brand-mark {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: 0.2px;
+}
+
+.sidebar__role {
+  font-size: 12px;
+  color: var(--sidebar-ink-dim);
+  padding: 0 4px;
+  margin-bottom: 32px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  padding-bottom: 20px;
+}
+
+.sidebar__section-label {
+  font-size: 11px;
+  color: var(--sidebar-ink-dim);
+  padding: 0 4px;
+  margin-bottom: 10px;
+}
+
+.menu-placeholder {
+  flex: 1;
+  border: 1.5px dashed rgba(255,255,255,0.16);
+  border-radius: var(--radius);
+  padding: 20px 16px;
+  font-size: 13px;
+  color: var(--sidebar-ink-dim);
+  line-height: 1.6;
+}
+
+.sidebar__footer {
+  padding-top: 20px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  font-size: 12px;
+  color: var(--sidebar-ink-dim);
+}
+
+/* ---------- Main area ---------- */
+
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 36px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.topbar__title {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.topbar__meta {
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin-top: 2px;
+}
+
+.user-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.user-chip__avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--font-display);
+}
+
+.user-chip__name {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.user-chip__role {
+  font-size: 11.5px;
+  color: var(--ink-soft);
+}
+
+.content {
+  flex: 1;
+  padding: 40px 36px;
+}
+
+/* ---------- Empty state ---------- */
+
+.empty-state {
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 64px 40px;
+  text-align: center;
+  max-width: 480px;
+  margin: 40px auto 0;
+}
+
+.empty-state__mark {
+  width: 36px;
+  height: 36px;
+  margin: 0 auto 20px;
+  border: 1.5px solid var(--accent);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  color: var(--accent);
+  font-size: 16px;
+}
+
+.empty-state__title {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 8px;
+}
+
+.empty-state__desc {
+  font-size: 13.5px;
+  color: var(--ink-soft);
+  line-height: 1.6;
+}
+
+/* ---------- Login page ---------- */
+
+.login-shell {
+  min-height: 100vh;
+  display: flex;
+}
+
+.login-brand {
+  flex: 1.1;
+  background: var(--primary);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 56px;
+  position: relative;
+  overflow: hidden;
+}
+
+.login-brand__mark {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 600;
+}
+
+.login-brand__headline {
+  font-family: var(--font-display);
+  font-size: 40px;
+  font-weight: 600;
+  line-height: 1.2;
+  max-width: 420px;
+}
+
+.login-brand__sub {
+  font-size: 14px;
+  color: #B9C4D6;
+  max-width: 380px;
+  line-height: 1.6;
+  margin-top: 14px;
+}
+
+.login-brand__rule {
+  position: absolute;
+  right: -80px;
+  top: -80px;
+  width: 320px;
+  height: 320px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 50%;
+}
+
+.login-brand__foot {
+  font-size: 12px;
+  color: #7C8AA6;
+}
+
+.login-panel {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px;
+  background: var(--bg);
+}
+
+.login-card {
+  width: 100%;
+  max-width: 360px;
+}
+
+.login-card__title {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.login-card__sub {
+  font-size: 13.5px;
+  color: var(--ink-soft);
+  margin-bottom: 32px;
+}
+
+.field {
+  margin-bottom: 18px;
+}
+
+.field label {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+
+.field input {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.field input:focus {
+  outline: 2px solid var(--primary-soft);
+  outline-offset: 1px;
+  border-color: var(--primary-soft);
+}
+
+.role-toggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.role-toggle input { display: none; }
+
+.role-toggle label {
+  flex: 1;
+  text-align: center;
+  padding: 9px 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.role-toggle input:checked + label {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+.btn-primary {
+  width: 100%;
+  padding: 12px 0;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-primary:hover { background: var(--primary-soft); }
+
+.login-card__note {
+  margin-top: 20px;
+  font-size: 12px;
+  color: var(--ink-soft);
+  text-align: center;
+}
+
+@media (max-width: 860px) {
+  .login-brand { display: none; }
+  .app { flex-direction: column; }
+  .sidebar { width: 100%; flex-direction: row; align-items: center; padding: 14px 20px; }
+  .sidebar__role, .sidebar__footer { display: none; }
+  .menu-placeholder { display: none; }
+}
