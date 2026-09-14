@@ -20,14 +20,16 @@
     </div>
     <div class="sidebar__role">Panel Guru</div>
 
-    <div class="sidebar__section-label">Menu</div>
-    <!-- Menu guru akan ditambahkan di sini -->
-    <div class="menu-placeholder">
-      Belum ada menu. Tambahkan item menu guru di sini (mis. Input Nilai, Presensi, Kelas Saya).
-    </div>
+    <div class="sidebar__section-label">Mengajar</div>
+    <nav class="menu-list" id="menuMengajar">
+      <div class="menu-empty">Memuat penugasan...</div>
+    </nav>
+
+    <div class="sidebar__section-label" id="labelWaliKelas" style="display:none;">Wali Kelas</div>
+    <nav class="menu-list" id="menuWaliKelas"></nav>
 
     <div class="sidebar__footer">
-      <a href="index.html">← Keluar</a>
+      <a href="index.html" id="logoutBtn">← Keluar</a>
     </div>
   </aside>
 
@@ -35,30 +37,158 @@
     <div class="topbar">
       <div>
         <div class="topbar__title">Dashboard Guru</div>
-        <div class="topbar__meta">Belum ada data ditampilkan</div>
+        <div class="topbar__meta" id="topbarMeta">Memuat tahun ajaran aktif...</div>
       </div>
       <div class="user-chip">
         <div>
-          <div class="user-chip__name" style="text-align:right;">Nama Guru</div>
-          <div class="user-chip__role">Guru</div>
+          <div class="user-chip__name" style="text-align:right;" id="userName">Memuat...</div>
+          <div class="user-chip__role" id="userRoleLabel">Guru</div>
         </div>
-        <div class="user-chip__avatar">G</div>
+        <div class="user-chip__avatar" id="userAvatar">•</div>
       </div>
     </div>
 
-    <div class="content">
+    <div class="content" id="content">
       <div class="empty-state">
         <div class="empty-state__mark">＋</div>
-        <div class="empty-state__title">Belum ada konten</div>
+        <div class="empty-state__title">Pilih menu di samping</div>
         <div class="empty-state__desc">
-          Halaman ini akan menampilkan kelas, nilai, dan presensi
-          setelah terhubung ke database.
+          Pilih salah satu kelas/mapel di menu "Mengajar", atau menu
+          "Wali Kelas" kalau kamu ditugaskan sebagai wali kelas.
         </div>
       </div>
     </div>
   </div>
 
 </div>
+
+<script>
+  (async function () {
+    // 1. Cek sesi login
+    var sessionResult = await supabaseClient.auth.getSession();
+    var session = sessionResult.data.session;
+    if (!session) { window.location.href = 'index.html'; return; }
+    var user = session.user;
+
+    var content = document.getElementById('content');
+    var topbarMeta = document.getElementById('topbarMeta');
+
+    // 2. Ambil nama dari tabel profiles
+    var profileResult = await supabaseClient
+      .from('profiles').select('nama, role').eq('id', user.id).single();
+    var nama = (profileResult.data && profileResult.data.nama) ? profileResult.data.nama : user.email;
+    document.getElementById('userName').textContent = nama;
+    document.getElementById('userAvatar').textContent = nama.trim().charAt(0).toUpperCase();
+
+    // 3. Ambil tahun ajaran yang SEDANG AKTIF — ini kuncinya.
+    //    Semua data guru di bawah selalu difilter pakai tahunAktif.id,
+    //    jadi begitu admin mengaktifkan tahun ajaran baru, guru otomatis
+    //    melihat data tahun baru tanpa perlu ubah apa pun di sini.
+    var taResult = await supabaseClient
+      .from('tahun_ajaran').select('id, nama, semester').eq('is_aktif', true).maybeSingle();
+    var tahunAktif = taResult.data;
+
+    if (!tahunAktif) {
+      topbarMeta.textContent = 'Belum ada tahun ajaran aktif — hubungi admin.';
+      document.getElementById('menuMengajar').innerHTML = '<div class="menu-empty">Menunggu admin mengaktifkan tahun ajaran.</div>';
+      return;
+    }
+    topbarMeta.textContent = 'Tahun Ajaran ' + tahunAktif.nama + ' — Semester ' + tahunAktif.semester;
+
+    // 4. Ambil penugasan mengajar guru ini, HANYA untuk tahun ajaran aktif.
+    var penugasanResult = await supabaseClient
+      .from('penugasan_guru')
+      .select('id, kelas:kelas_id(id, nama), mapel:mapel_id(id, nama)')
+      .eq('guru_id', user.id)
+      .eq('tahun_ajaran_id', tahunAktif.id);
+
+    var menuMengajar = document.getElementById('menuMengajar');
+    var penugasan = penugasanResult.data || [];
+
+    if (penugasan.length === 0) {
+      menuMengajar.innerHTML = '<div class="menu-empty">Belum ada penugasan mengajar di tahun ajaran ini.</div>';
+    } else {
+      menuMengajar.innerHTML = '';
+      penugasan.forEach(function (p) {
+        var item = document.createElement('a');
+        item.href = '#';
+        item.className = 'menu-item';
+        item.innerHTML = '<span class="menu-item__title">' + p.mapel.nama + '</span><span class="menu-item__sub">' + p.kelas.nama + '</span>';
+        item.addEventListener('click', function (e) {
+          e.preventDefault();
+          setActiveMenuItem(item);
+          content.innerHTML = renderPlaceholder(
+            'Input Nilai — ' + p.mapel.nama,
+            'Kelas ' + p.kelas.nama + ', Tahun Ajaran ' + tahunAktif.nama + '. Form input nilai pengetahuan/keterampilan/sikap dibangun di sini pada tahap berikutnya.'
+          );
+        });
+        menuMengajar.appendChild(item);
+      });
+    }
+
+    // 5. Cek apakah guru ini juga WALI KELAS di tahun ajaran aktif.
+    //    Wali kelas bukan role terpisah — cuma penugasan tambahan yang
+    //    menempel di atas akun guru yang sama.
+    var waliResult = await supabaseClient
+      .from('wali_kelas')
+      .select('id, kelas:kelas_id(id, nama)')
+      .eq('guru_id', user.id)
+      .eq('tahun_ajaran_id', tahunAktif.id)
+      .maybeSingle();
+
+    var waliKelas = waliResult.data;
+    if (waliKelas) {
+      document.getElementById('userRoleLabel').textContent = 'Guru · Wali Kelas ' + waliKelas.kelas.nama;
+      document.getElementById('labelWaliKelas').style.display = '';
+      var menuWali = document.getElementById('menuWaliKelas');
+
+      var itemRekap = document.createElement('a');
+      itemRekap.href = '#';
+      itemRekap.className = 'menu-item';
+      itemRekap.innerHTML = '<span class="menu-item__title">Rekap Nilai Kelas</span><span class="menu-item__sub">' + waliKelas.kelas.nama + '</span>';
+      itemRekap.addEventListener('click', function (e) {
+        e.preventDefault();
+        setActiveMenuItem(itemRekap);
+        content.innerHTML = renderPlaceholder(
+          'Rekap Nilai — ' + waliKelas.kelas.nama,
+          'Sebagai wali kelas, kamu bisa melihat nilai semua mapel untuk seluruh siswa di kelas ini. Tampilan rekap dibangun di tahap berikutnya.'
+        );
+      });
+      menuWali.appendChild(itemRekap);
+
+      var itemPresensi = document.createElement('a');
+      itemPresensi.href = '#';
+      itemPresensi.className = 'menu-item';
+      itemPresensi.innerHTML = '<span class="menu-item__title">Presensi Kelas</span><span class="menu-item__sub">' + waliKelas.kelas.nama + '</span>';
+      itemPresensi.addEventListener('click', function (e) {
+        e.preventDefault();
+        setActiveMenuItem(itemPresensi);
+        content.innerHTML = renderPlaceholder(
+          'Presensi — ' + waliKelas.kelas.nama,
+          'Pencatatan hadir/sakit/izin/alpha harian untuk kelas ini dibangun di tahap berikutnya.'
+        );
+      });
+      menuWali.appendChild(itemPresensi);
+    }
+
+    function setActiveMenuItem(el) {
+      document.querySelectorAll('.menu-item').forEach(function (m) { m.classList.remove('menu-item--active'); });
+      el.classList.add('menu-item--active');
+    }
+
+    function renderPlaceholder(title, desc) {
+      return '<div class="empty-state"><div class="empty-state__mark">＋</div>' +
+        '<div class="empty-state__title">' + title + '</div>' +
+        '<div class="empty-state__desc">' + desc + '</div></div>';
+    }
+  })();
+
+  document.getElementById('logoutBtn').addEventListener('click', async function (e) {
+    e.preventDefault();
+    await supabaseClient.auth.signOut();
+    window.location.href = 'index.html';
+  });
+</script>
 
 </body>
 </html>

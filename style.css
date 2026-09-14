@@ -100,6 +100,44 @@ a { color: inherit; text-decoration: none; }
   line-height: 1.6;
 }
 
+.menu-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 24px;
+}
+
+.menu-empty {
+  font-size: 12.5px;
+  color: var(--sidebar-ink-dim);
+  padding: 8px 4px;
+  line-height: 1.6;
+}
+
+.menu-item {
+  display: flex;
+  flex-direction: column;
+  padding: 9px 12px;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.menu-item:hover { background: rgba(255,255,255,0.05); }
+
+.menu-item--active { background: var(--sidebar-active); }
+
+.menu-item__title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.menu-item__sub {
+  font-size: 11.5px;
+  color: var(--sidebar-ink-dim);
+  margin-top: 1px;
+}
+
 .sidebar__footer {
   padding-top: 20px;
   border-top: 1px solid rgba(255,255,255,0.08);
