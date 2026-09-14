@@ -27,7 +27,7 @@
     </div>
 
     <div class="sidebar__footer">
-      <a href="index.html">← Keluar</a>
+      <a href="#" id="logoutBtn">← Keluar</a>
     </div>
   </aside>
 
@@ -39,10 +39,10 @@
       </div>
       <div class="user-chip">
         <div>
-          <div class="user-chip__name" style="text-align:right;">Nama Admin</div>
+          <div class="user-chip__name" style="text-align:right;" id="userName">Memuat...</div>
           <div class="user-chip__role">Admin</div>
         </div>
-        <div class="user-chip__avatar">A</div>
+        <div class="user-chip__avatar" id="userAvatar">•</div>
       </div>
     </div>
 
@@ -59,6 +59,39 @@
   </div>
 
 </div>
+
+<script>
+  (async function () {
+    // 1. Cek sesi login — kalau belum login, lempar balik ke halaman masuk
+    var sessionResult = await supabaseClient.auth.getSession();
+    var session = sessionResult.data.session;
+
+    if (!session) {
+      window.location.href = 'index.html';
+      return;
+    }
+
+    var user = session.user;
+
+    // 2. Ambil nama & role dari tabel profiles
+    var profileResult = await supabaseClient
+      .from('profiles')
+      .select('nama, role')
+      .eq('id', user.id)
+      .single();
+
+    var nama = (profileResult.data && profileResult.data.nama) ? profileResult.data.nama : user.email;
+
+    document.getElementById('userName').textContent = nama;
+    document.getElementById('userAvatar').textContent = nama.trim().charAt(0).toUpperCase();
+  })();
+
+  document.getElementById('logoutBtn').addEventListener('click', async function (e) {
+    e.preventDefault();
+    await supabaseClient.auth.signOut();
+    window.location.href = 'index.html';
+  });
+</script>
 
 </body>
 </html>
