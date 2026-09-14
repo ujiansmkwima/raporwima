@@ -21,10 +21,13 @@
     <div class="sidebar__role">Panel Admin</div>
 
     <div class="sidebar__section-label">Menu</div>
-    <!-- Menu admin akan ditambahkan di sini -->
-    <div class="menu-placeholder">
-      Belum ada menu. Tambahkan item menu admin di sini (mis. Data Siswa, Data Guru, Kelas, Mata Pelajaran).
-    </div>
+    <nav class="menu-list" id="menuAdmin">
+      <a href="#" class="menu-item" data-view="tahunAjaran"><span class="menu-item__title">Tahun Ajaran</span></a>
+      <a href="#" class="menu-item" data-view="siswa"><span class="menu-item__title">Siswa</span></a>
+      <a href="#" class="menu-item" data-view="kelas"><span class="menu-item__title">Kelas</span></a>
+      <a href="#" class="menu-item" data-view="mapel"><span class="menu-item__title">Mata Pelajaran</span></a>
+      <a href="#" class="menu-item" data-view="penugasan"><span class="menu-item__title">Penugasan Guru</span></a>
+    </nav>
 
     <div class="sidebar__footer">
       <a href="#" id="logoutBtn">← Keluar</a>
@@ -35,7 +38,7 @@
     <div class="topbar">
       <div>
         <div class="topbar__title">Dashboard Admin</div>
-        <div class="topbar__meta">Belum ada data ditampilkan</div>
+        <div class="topbar__meta" id="topbarMeta">Memuat tahun ajaran aktif...</div>
       </div>
       <div class="user-chip">
         <div>
@@ -46,14 +49,11 @@
       </div>
     </div>
 
-    <div class="content">
+    <div class="content" id="content">
       <div class="empty-state">
         <div class="empty-state__mark">＋</div>
-        <div class="empty-state__title">Belum ada konten</div>
-        <div class="empty-state__desc">
-          Halaman ini akan menampilkan ringkasan siswa, guru, dan kelas
-          setelah terhubung ke database.
-        </div>
+        <div class="empty-state__title">Pilih menu di samping</div>
+        <div class="empty-state__desc">Kelola tahun ajaran, siswa, kelas, mata pelajaran, dan penugasan guru.</div>
       </div>
     </div>
   </div>
@@ -61,6 +61,369 @@
 </div>
 
 <script>
+  var content = document.getElementById('content');
+  var topbarMeta = document.getElementById('topbarMeta');
+  var tahunAktif = null; // di-set setelah load, dipakai semua panel
+
+  function escapeHtml(s) {
+    return (s === null || s === undefined) ? '' : String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function setActiveMenu(view) {
+    document.querySelectorAll('#menuAdmin .menu-item').forEach(function (m) {
+      m.classList.toggle('menu-item--active', m.dataset.view === view);
+    });
+  }
+
+  async function muatTahunAktif() {
+    var r = await supabaseClient.from('tahun_ajaran').select('id, nama, semester').eq('is_aktif', true).maybeSingle();
+    tahunAktif = r.data;
+    topbarMeta.textContent = tahunAktif
+      ? 'Tahun Ajaran Aktif: ' + tahunAktif.nama + ' — Semester ' + tahunAktif.semester
+      : 'Belum ada tahun ajaran aktif — aktifkan salah satu di menu "Tahun Ajaran".';
+  }
+
+  // ================= PANEL: TAHUN AJARAN =================
+  async function renderTahunAjaran() {
+    content.innerHTML =
+      '<div class="panel-head"><div><div class="panel-head__title">Tahun Ajaran</div>' +
+      '<div class="panel-head__desc">Hanya satu tahun ajaran yang boleh aktif. Semua data guru & siswa mengikuti yang aktif di sini.</div></div></div>' +
+      '<form class="add-form" id="formTA">' +
+      '<div class="field"><label>Nama (contoh: 2026/2027)</label><input type="text" id="taNama" required></div>' +
+      '<div class="field"><label>Semester</label><select id="taSemester"><option value="Ganjil">Ganjil</option><option value="Genap">Genap</option></select></div>' +
+      '<button type="submit" class="btn-small btn-small--primary">Tambah</button>' +
+      '</form>' +
+      '<div class="table-wrap"><table class="data-table"><thead><tr><th>Nama</th><th>Semester</th><th>Status</th><th></th></tr></thead><tbody id="taBody"></tbody></table></div>';
+
+    document.getElementById('formTA').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var nama = document.getElementById('taNama').value.trim();
+      var semester = document.getElementById('taSemester').value;
+      if (!nama) return;
+      var res = await supabaseClient.from('tahun_ajaran').insert({ nama: nama, semester: semester });
+      if (res.error) { alert('Gagal menambah: ' + res.error.message); return; }
+      renderTahunAjaran();
+    });
+
+    var listRes = await supabaseClient.from('tahun_ajaran').select('id, nama, semester, is_aktif').order('nama', { ascending: false });
+    var rows = listRes.data || [];
+    var body = document.getElementById('taBody');
+    body.innerHTML = rows.length ? '' : '<tr><td colspan="4">Belum ada tahun ajaran.</td></tr>';
+
+    rows.forEach(function (r) {
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td>' + escapeHtml(r.nama) + '</td>' +
+        '<td>' + escapeHtml(r.semester) + '</td>' +
+        '<td>' + (r.is_aktif ? '<span class="chip chip--aktif">Aktif</span>' : '<span class="chip chip--muted">Nonaktif</span>') + '</td>' +
+        '<td>' + (r.is_aktif ? '' : '<button class="btn-small" data-id="' + r.id + '">Aktifkan</button>') + '</td>';
+      body.appendChild(tr);
+    });
+
+    body.querySelectorAll('button[data-id]').forEach(function (btn) {
+      btn.addEventListener('click', async function () {
+        var res = await supabaseClient.from('tahun_ajaran').update({ is_aktif: true }).eq('id', btn.dataset.id);
+        if (res.error) { alert('Gagal mengaktifkan: ' + res.error.message); return; }
+        await muatTahunAktif();
+        renderTahunAjaran();
+      });
+    });
+  }
+
+  // ================= PANEL: KELAS =================
+  async function renderKelas() {
+    content.innerHTML =
+      '<div class="panel-head"><div><div class="panel-head__title">Kelas</div>' +
+      '<div class="panel-head__desc">Daftar rombongan belajar. Tidak terikat tahun ajaran — kelas yang sama dipakai lagi tahun berikutnya.</div></div></div>' +
+      '<form class="add-form" id="formKelas">' +
+      '<div class="field"><label>Nama Kelas</label><input type="text" id="kNama" placeholder="X TKJ 1" required></div>' +
+      '<div class="field"><label>Tingkat</label><select id="kTingkat"><option value="10">10</option><option value="11">11</option><option value="12">12</option></select></div>' +
+      '<div class="field"><label>Jurusan</label><input type="text" id="kJurusan" placeholder="TKJ"></div>' +
+      '<button type="submit" class="btn-small btn-small--primary">Tambah</button>' +
+      '</form>' +
+      '<div class="table-wrap"><table class="data-table"><thead><tr><th>Nama Kelas</th><th>Tingkat</th><th>Jurusan</th><th></th></tr></thead><tbody id="kBody"></tbody></table></div>';
+
+    document.getElementById('formKelas').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var nama = document.getElementById('kNama').value.trim();
+      if (!nama) return;
+      var res = await supabaseClient.from('kelas').insert({
+        nama: nama,
+        tingkat: parseInt(document.getElementById('kTingkat').value, 10),
+        jurusan: document.getElementById('kJurusan').value.trim() || null
+      });
+      if (res.error) { alert('Gagal menambah: ' + res.error.message); return; }
+      renderKelas();
+    });
+
+    var listRes = await supabaseClient.from('kelas').select('id, nama, tingkat, jurusan').order('nama');
+    var rows = listRes.data || [];
+    var body = document.getElementById('kBody');
+    body.innerHTML = rows.length ? '' : '<tr><td colspan="4">Belum ada kelas.</td></tr>';
+    rows.forEach(function (r) {
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td>' + escapeHtml(r.nama) + '</td><td>' + escapeHtml(r.tingkat) + '</td><td>' + escapeHtml(r.jurusan || '—') + '</td>' +
+        '<td><button class="btn-small btn-small--danger" data-id="' + r.id + '">Hapus</button></td>';
+      body.appendChild(tr);
+    });
+    body.querySelectorAll('button[data-id]').forEach(function (btn) {
+      btn.addEventListener('click', async function () {
+        if (!confirm('Hapus kelas ini? Data penempatan siswa/penugasan yang terhubung juga akan terhapus.')) return;
+        await supabaseClient.from('kelas').delete().eq('id', btn.dataset.id);
+        renderKelas();
+      });
+    });
+  }
+
+  // ================= PANEL: MATA PELAJARAN =================
+  async function renderMapel() {
+    content.innerHTML =
+      '<div class="panel-head"><div><div class="panel-head__title">Mata Pelajaran</div>' +
+      '<div class="panel-head__desc">Dibutuhkan sebagai pilihan saat menugaskan guru mengajar.</div></div></div>' +
+      '<form class="add-form" id="formMapel">' +
+      '<div class="field"><label>Kode</label><input type="text" id="mKode" placeholder="MTK"></div>' +
+      '<div class="field"><label>Nama Mapel</label><input type="text" id="mNama" placeholder="Matematika" required></div>' +
+      '<div class="field"><label>KKM</label><input type="number" id="mKkm" value="75"></div>' +
+      '<button type="submit" class="btn-small btn-small--primary">Tambah</button>' +
+      '</form>' +
+      '<div class="table-wrap"><table class="data-table"><thead><tr><th>Kode</th><th>Nama Mapel</th><th>KKM</th><th></th></tr></thead><tbody id="mBody"></tbody></table></div>';
+
+    document.getElementById('formMapel').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var nama = document.getElementById('mNama').value.trim();
+      if (!nama) return;
+      var res = await supabaseClient.from('mata_pelajaran').insert({
+        kode: document.getElementById('mKode').value.trim() || null,
+        nama: nama,
+        kkm: parseInt(document.getElementById('mKkm').value, 10) || 75
+      });
+      if (res.error) { alert('Gagal menambah: ' + res.error.message); return; }
+      renderMapel();
+    });
+
+    var listRes = await supabaseClient.from('mata_pelajaran').select('id, kode, nama, kkm').order('nama');
+    var rows = listRes.data || [];
+    var body = document.getElementById('mBody');
+    body.innerHTML = rows.length ? '' : '<tr><td colspan="4">Belum ada mata pelajaran.</td></tr>';
+    rows.forEach(function (r) {
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td>' + escapeHtml(r.kode || '—') + '</td><td>' + escapeHtml(r.nama) + '</td><td>' + escapeHtml(r.kkm) + '</td>' +
+        '<td><button class="btn-small btn-small--danger" data-id="' + r.id + '">Hapus</button></td>';
+      body.appendChild(tr);
+    });
+    body.querySelectorAll('button[data-id]').forEach(function (btn) {
+      btn.addEventListener('click', async function () {
+        if (!confirm('Hapus mata pelajaran ini?')) return;
+        await supabaseClient.from('mata_pelajaran').delete().eq('id', btn.dataset.id);
+        renderMapel();
+      });
+    });
+  }
+
+  // ================= PANEL: SISWA =================
+  async function renderSiswa() {
+    if (!tahunAktif) {
+      content.innerHTML = '<div class="empty-state"><div class="empty-state__mark">！</div><div class="empty-state__title">Belum ada tahun ajaran aktif</div><div class="empty-state__desc">Aktifkan tahun ajaran dulu di menu "Tahun Ajaran" sebelum menempatkan siswa ke kelas.</div></div>';
+      return;
+    }
+
+    var kelasRes = await supabaseClient.from('kelas').select('id, nama').order('nama');
+    var kelasList = kelasRes.data || [];
+    var opsiKelas = '<option value="">Belum ditempatkan</option>' + kelasList.map(function (k) {
+      return '<option value="' + k.id + '">' + escapeHtml(k.nama) + '</option>';
+    }).join('');
+
+    content.innerHTML =
+      '<div class="panel-head"><div><div class="panel-head__title">Siswa</div>' +
+      '<div class="panel-head__desc">Data biodata siswa permanen. Penempatan kelas di kolom kanan berlaku untuk tahun ajaran ' + escapeHtml(tahunAktif.nama) + ' saja — tahun depan diisi ulang, riwayat tahun ini tidak hilang.</div></div></div>' +
+      '<form class="add-form" id="formSiswa">' +
+      '<div class="field"><label>NIS</label><input type="text" id="sNis"></div>' +
+      '<div class="field"><label>NISN</label><input type="text" id="sNisn"></div>' +
+      '<div class="field"><label>Nama</label><input type="text" id="sNama" required></div>' +
+      '<div class="field"><label>Jenis Kelamin</label><select id="sJk"><option value="L">L</option><option value="P">P</option></select></div>' +
+      '<div class="field"><label>Tanggal Lahir</label><input type="date" id="sTgl"></div>' +
+      '<button type="submit" class="btn-small btn-small--primary">Tambah</button>' +
+      '</form>' +
+      '<div class="table-wrap"><table class="data-table"><thead><tr><th>NIS</th><th>Nama</th><th>JK</th><th>Kelas (' + escapeHtml(tahunAktif.nama) + ')</th><th></th></tr></thead><tbody id="sBody"></tbody></table></div>';
+
+    document.getElementById('formSiswa').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var nama = document.getElementById('sNama').value.trim();
+      if (!nama) return;
+      var res = await supabaseClient.from('siswa').insert({
+        nis: document.getElementById('sNis').value.trim() || null,
+        nisn: document.getElementById('sNisn').value.trim() || null,
+        nama: nama,
+        jenis_kelamin: document.getElementById('sJk').value,
+        tanggal_lahir: document.getElementById('sTgl').value || null
+      });
+      if (res.error) { alert('Gagal menambah: ' + res.error.message); return; }
+      renderSiswa();
+    });
+
+    var siswaRes = await supabaseClient.from('siswa').select('id, nis, nama, jenis_kelamin').order('nama');
+    var siswaList = siswaRes.data || [];
+    var skRes = await supabaseClient.from('siswa_kelas').select('siswa_id, kelas_id').eq('tahun_ajaran_id', tahunAktif.id);
+    var skMap = {};
+    (skRes.data || []).forEach(function (r) { skMap[r.siswa_id] = r.kelas_id; });
+
+    var body = document.getElementById('sBody');
+    body.innerHTML = siswaList.length ? '' : '<tr><td colspan="5">Belum ada siswa.</td></tr>';
+
+    siswaList.forEach(function (s) {
+      var tr = document.createElement('tr');
+      var opsiTerisi = opsiKelas.replace('value="' + skMap[s.id] + '"', 'value="' + skMap[s.id] + '" selected');
+      tr.innerHTML =
+        '<td>' + escapeHtml(s.nis || '—') + '</td><td>' + escapeHtml(s.nama) + '</td><td>' + escapeHtml(s.jenis_kelamin || '—') + '</td>' +
+        '<td><select data-siswa="' + s.id + '">' + (skMap[s.id] ? opsiTerisi : opsiKelas) + '</select></td>' +
+        '<td><button class="btn-small btn-small--danger" data-id="' + s.id + '">Hapus</button></td>';
+      body.appendChild(tr);
+    });
+
+    body.querySelectorAll('select[data-siswa]').forEach(function (sel) {
+      sel.addEventListener('change', async function () {
+        var siswaId = sel.dataset.siswa;
+        if (!sel.value) {
+          await supabaseClient.from('siswa_kelas').delete().eq('siswa_id', siswaId).eq('tahun_ajaran_id', tahunAktif.id);
+          return;
+        }
+        var res = await supabaseClient.from('siswa_kelas').upsert(
+          { siswa_id: siswaId, kelas_id: sel.value, tahun_ajaran_id: tahunAktif.id },
+          { onConflict: 'siswa_id,tahun_ajaran_id' }
+        );
+        if (res.error) alert('Gagal menempatkan: ' + res.error.message);
+      });
+    });
+
+    body.querySelectorAll('button[data-id]').forEach(function (btn) {
+      btn.addEventListener('click', async function () {
+        if (!confirm('Hapus siswa ini beserta seluruh riwayat nilai/presensinya?')) return;
+        await supabaseClient.from('siswa').delete().eq('id', btn.dataset.id);
+        renderSiswa();
+      });
+    });
+  }
+
+  // ================= PANEL: PENUGASAN GURU =================
+  async function renderPenugasan() {
+    if (!tahunAktif) {
+      content.innerHTML = '<div class="empty-state"><div class="empty-state__mark">！</div><div class="empty-state__title">Belum ada tahun ajaran aktif</div><div class="empty-state__desc">Aktifkan tahun ajaran dulu sebelum menugaskan guru.</div></div>';
+      return;
+    }
+
+    var guruRes = await supabaseClient.from('profiles').select('id, nama').eq('role', 'guru').order('nama');
+    var guruList = guruRes.data || [];
+    var mapelRes = await supabaseClient.from('mata_pelajaran').select('id, nama').order('nama');
+    var mapelList = mapelRes.data || [];
+    var kelasRes = await supabaseClient.from('kelas').select('id, nama').order('nama');
+    var kelasList = kelasRes.data || [];
+
+    function opsi(list) { return list.map(function (x) { return '<option value="' + x.id + '">' + escapeHtml(x.nama) + '</option>'; }).join(''); }
+
+    content.innerHTML =
+      '<div class="panel-head"><div><div class="panel-head__title">Penugasan Guru</div>' +
+      '<div class="panel-head__desc">Menentukan menu & data yang muncul saat guru login. Berlaku untuk Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + '.</div></div></div>' +
+      '<form class="add-form" id="formPenugasan">' +
+      '<div class="field"><label>Guru</label><select id="pGuru">' + opsi(guruList) + '</select></div>' +
+      '<div class="field"><label>Mata Pelajaran</label><select id="pMapel">' + opsi(mapelList) + '</select></div>' +
+      '<div class="field"><label>Kelas</label><select id="pKelas">' + opsi(kelasList) + '</select></div>' +
+      '<button type="submit" class="btn-small btn-small--primary">Tugaskan</button>' +
+      '</form>' +
+      '<div class="table-wrap"><table class="data-table"><thead><tr><th>Guru</th><th>Mata Pelajaran</th><th>Kelas</th><th></th></tr></thead><tbody id="pBody"></tbody></table></div>' +
+      '<hr class="panel-divider">' +
+      '<div class="panel-head"><div><div class="panel-head__title">Wali Kelas</div>' +
+      '<div class="panel-head__desc">Guru yang ditugaskan sebagai wali kelas akan otomatis mendapat menu tambahan (rekap nilai & presensi) di dashboardnya.</div></div></div>' +
+      '<form class="add-form" id="formWali">' +
+      '<div class="field"><label>Guru</label><select id="wGuru">' + opsi(guruList) + '</select></div>' +
+      '<div class="field"><label>Kelas</label><select id="wKelas">' + opsi(kelasList) + '</select></div>' +
+      '<button type="submit" class="btn-small btn-small--primary">Tetapkan</button>' +
+      '</form>' +
+      '<div class="table-wrap"><table class="data-table"><thead><tr><th>Guru</th><th>Wali Kelas</th><th></th></tr></thead><tbody id="wBody"></tbody></table></div>';
+
+    if (guruList.length === 0) {
+      content.insertAdjacentHTML('beforeend', '<div class="panel-note">Belum ada akun dengan role "guru". Tambahkan lewat Supabase Dashboard → Authentication, lalu isi tabel profiles (lihat catatan di profiles.sql).</div>');
+    }
+
+    document.getElementById('formPenugasan').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      if (!guruList.length || !mapelList.length || !kelasList.length) { alert('Pastikan sudah ada guru, mata pelajaran, dan kelas.'); return; }
+      var res = await supabaseClient.from('penugasan_guru').insert({
+        guru_id: document.getElementById('pGuru').value,
+        mapel_id: document.getElementById('pMapel').value,
+        kelas_id: document.getElementById('pKelas').value,
+        tahun_ajaran_id: tahunAktif.id
+      });
+      if (res.error) { alert('Gagal menugaskan (mungkin sudah ada kombinasi yang sama): ' + res.error.message); return; }
+      renderPenugasan();
+    });
+
+    document.getElementById('formWali').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      if (!guruList.length || !kelasList.length) { alert('Pastikan sudah ada guru dan kelas.'); return; }
+      var res = await supabaseClient.from('wali_kelas').insert({
+        guru_id: document.getElementById('wGuru').value,
+        kelas_id: document.getElementById('wKelas').value,
+        tahun_ajaran_id: tahunAktif.id
+      });
+      if (res.error) { alert('Gagal menetapkan (satu kelas hanya 1 wali kelas, satu guru hanya wali 1 kelas per tahun): ' + res.error.message); return; }
+      renderPenugasan();
+    });
+
+    var listRes = await supabaseClient
+      .from('penugasan_guru')
+      .select('id, guru:guru_id(nama), mapel:mapel_id(nama), kelas:kelas_id(nama)')
+      .eq('tahun_ajaran_id', tahunAktif.id);
+    var pBody = document.getElementById('pBody');
+    var pRows = listRes.data || [];
+    pBody.innerHTML = pRows.length ? '' : '<tr><td colspan="4">Belum ada penugasan di tahun ajaran ini.</td></tr>';
+    pRows.forEach(function (r) {
+      var tr = document.createElement('tr');
+      tr.innerHTML = '<td>' + escapeHtml(r.guru.nama) + '</td><td>' + escapeHtml(r.mapel.nama) + '</td><td>' + escapeHtml(r.kelas.nama) + '</td>' +
+        '<td><button class="btn-small btn-small--danger" data-id="' + r.id + '">Hapus</button></td>';
+      pBody.appendChild(tr);
+    });
+    pBody.querySelectorAll('button[data-id]').forEach(function (btn) {
+      btn.addEventListener('click', async function () {
+        await supabaseClient.from('penugasan_guru').delete().eq('id', btn.dataset.id);
+        renderPenugasan();
+      });
+    });
+
+    var waliListRes = await supabaseClient
+      .from('wali_kelas')
+      .select('id, guru:guru_id(nama), kelas:kelas_id(nama)')
+      .eq('tahun_ajaran_id', tahunAktif.id);
+    var wBody = document.getElementById('wBody');
+    var wRows = waliListRes.data || [];
+    wBody.innerHTML = wRows.length ? '' : '<tr><td colspan="3">Belum ada wali kelas ditetapkan di tahun ajaran ini.</td></tr>';
+    wRows.forEach(function (r) {
+      var tr = document.createElement('tr');
+      tr.innerHTML = '<td>' + escapeHtml(r.guru.nama) + '</td><td>' + escapeHtml(r.kelas.nama) + '</td>' +
+        '<td><button class="btn-small btn-small--danger" data-id="' + r.id + '">Hapus</button></td>';
+      wBody.appendChild(tr);
+    });
+    wBody.querySelectorAll('button[data-id]').forEach(function (btn) {
+      btn.addEventListener('click', async function () {
+        await supabaseClient.from('wali_kelas').delete().eq('id', btn.dataset.id);
+        renderPenugasan();
+      });
+    });
+  }
+
+  var views = { tahunAjaran: renderTahunAjaran, siswa: renderSiswa, kelas: renderKelas, mapel: renderMapel, penugasan: renderPenugasan };
+
+  document.querySelectorAll('#menuAdmin .menu-item').forEach(function (item) {
+    item.addEventListener('click', function (e) {
+      e.preventDefault();
+      setActiveMenu(item.dataset.view);
+      views[item.dataset.view]();
+    });
+  });
+
   (async function () {
     // 1. Cek sesi login — kalau belum login, lempar balik ke halaman masuk
     var sessionResult = await supabaseClient.auth.getSession();
@@ -84,6 +447,11 @@
 
     document.getElementById('userName').textContent = nama;
     document.getElementById('userAvatar').textContent = nama.trim().charAt(0).toUpperCase();
+
+    // 3. Muat tahun ajaran aktif, lalu tampilkan panel pertama
+    await muatTahunAktif();
+    setActiveMenu('tahunAjaran');
+    renderTahunAjaran();
   })();
 
   document.getElementById('logoutBtn').addEventListener('click', async function (e) {
