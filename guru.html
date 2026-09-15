@@ -3,11 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dashboard Guru — E-Rapor SMK</title>
+<title>Dashboard Guru — E-Rapor SMK Widya Mandala Tambak</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=3">
+<script src="https://unpkg.com/lucide@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="supabase-client.js"></script>
 </head>
 <body>
@@ -16,20 +18,44 @@
 
   <aside class="sidebar">
     <div class="sidebar__brand">
-      <span class="sidebar__brand-mark">E-Rapor</span>
+      <img class="sidebar__brand-logo" src="assets/logo.png" alt="Logo SMK Widya Mandala Tambak">
+      <div class="sidebar__brand-text">
+        <span class="sidebar__brand-mark">E-Rapor</span>
+        <span class="sidebar__brand-school">SMK Widya Mandala Tambak</span>
+      </div>
     </div>
-    <div class="sidebar__role">Panel Guru</div>
+    <div class="sidebar__role"><i data-lucide="graduation-cap" style="width:13px;height:13px;"></i> Panel Guru</div>
 
-    <div class="sidebar__section-label">Mengajar</div>
+    <div class="sidebar__section-label">Ringkasan</div>
+    <nav class="menu-list" id="menuRingkasan">
+      <a href="#" class="menu-item" id="menuDashboardGuru"><i data-lucide="layout-dashboard" class="menu-icon"></i><span class="menu-item__title">Dashboard Saya</span></a>
+    </nav>
+
+    <div class="sidebar__section-label">Tujuan Pembelajaran</div>
+    <nav class="menu-list" id="menuTujuan">
+      <div class="menu-empty">Memuat penugasan...</div>
+    </nav>
+
+    <div class="sidebar__section-label">Input Nilai</div>
     <nav class="menu-list" id="menuMengajar">
       <div class="menu-empty">Memuat penugasan...</div>
     </nav>
 
+    <div class="sidebar__section-label" id="labelEkskul" style="display:none;">Ekstrakurikuler</div>
+    <nav class="menu-list" id="menuEkskul"></nav>
+
+    <div class="sidebar__section-label" id="labelKokurikuler" style="display:none;">Kokurikuler</div>
+    <nav class="menu-list" id="menuKokurikuler"></nav>
+
     <div class="sidebar__section-label" id="labelWaliKelas" style="display:none;">Wali Kelas</div>
     <nav class="menu-list" id="menuWaliKelas"></nav>
 
+    <div class="sidebar__section-label" id="labelCetakRapor" style="display:none;">Cetak Rapor</div>
+    <nav class="menu-list" id="menuCetakRapor"></nav>
+
     <div class="sidebar__footer">
-      <a href="index.html" id="logoutBtn">← Keluar</a>
+      <div style="margin-bottom:8px; opacity:0.8;">SMK Widya Mandala Tambak · Banyumas</div>
+      <a href="index.html" id="logoutBtn"><i data-lucide="log-out" style="width:13px;height:13px;"></i> Keluar</a>
     </div>
   </aside>
 
@@ -63,6 +89,42 @@
 </div>
 
 <script>
+  lucide.createIcons();
+
+  function escapeHtml(s) {
+    return (s === null || s === undefined) ? '' : String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  // ---------- Penyesuaian nama mapel Pendidikan Agama sesuai agama siswa ----------
+  // Nama mapel di tabel mata_pelajaran tetap SATU baris generik
+  // ("Pendidikan Agama dan Budi Pekerti"), nilainya juga disimpan di
+  // situ untuk semua siswa apa pun agamanya. Yang berubah cuma nama
+  // yang DITAMPILKAN ke guru/wali kelas, menyesuaikan agama tiap siswa.
+  function isPendidikanAgama(namaMapel) {
+    return /pendidikan\s+agama/i.test(namaMapel || '');
+  }
+
+  function namaMapelUntukSiswa(namaMapel, agama) {
+    if (!isPendidikanAgama(namaMapel) || !agama) return namaMapel;
+    var pakaiBudiPekerti = /dan budi pekerti/i.test(namaMapel);
+    return 'Pendidikan Agama ' + agama + (pakaiBudiPekerti ? ' dan Budi Pekerti' : '');
+  }
+
+  // ---------- Penomoran Semester 1–6 dari Tingkat kelas + Semester tahun ajaran ----------
+  // Sama persis dengan yang dipakai admin di Leger Nilai (6 Semester):
+  // Tingkat 10 Ganjil=1, Genap=2, Tingkat 11 Ganjil=3, Genap=4,
+  // Tingkat 12 Ganjil=5, Genap=6. Dipakai untuk menyaring bank Tujuan
+  // Pembelajaran (yang ditandai Semester 1–6) sesuai kelas yang dipilih.
+  function hitungSemesterKe(tingkat, semesterTA) {
+    if (!tingkat || !semesterTA) return null;
+    var basis = (Number(tingkat) - 10) * 2;
+    if (semesterTA === 'Ganjil') return basis + 1;
+    if (semesterTA === 'Genap') return basis + 2;
+    return null;
+  }
+
   (async function () {
     // 1. Cek sesi login
     var sessionResult = await supabaseClient.auth.getSession();
@@ -98,32 +160,71 @@
     // 4. Ambil penugasan mengajar guru ini, HANYA untuk tahun ajaran aktif.
     var penugasanResult = await supabaseClient
       .from('penugasan_guru')
-      .select('id, kelas:kelas_id(id, nama), mapel:mapel_id(id, nama)')
+      .select('id, kelas:kelas_id(id, nama, tingkat), mapel:mapel_id(id, nama)')
       .eq('guru_id', user.id)
       .eq('tahun_ajaran_id', tahunAktif.id);
 
     var menuMengajar = document.getElementById('menuMengajar');
+    var menuTujuan = document.getElementById('menuTujuan');
     var penugasan = penugasanResult.data || [];
 
     if (penugasan.length === 0) {
       menuMengajar.innerHTML = '<div class="menu-empty">Belum ada penugasan mengajar di tahun ajaran ini.</div>';
+      menuTujuan.innerHTML = '<div class="menu-empty">Belum ada penugasan mengajar di tahun ajaran ini.</div>';
     } else {
+      // Satu link per bagian — begitu diklik, muncul dropdown "Pilih Mapel"
+      // lalu "Pilih Kelas" di area konten (lihat renderPilihMapelKelas),
+      // jadi sidebar tidak perlu dipenuhi satu baris per kombinasi mapel-kelas.
       menuMengajar.innerHTML = '';
-      penugasan.forEach(function (p) {
-        var item = document.createElement('a');
-        item.href = '#';
-        item.className = 'menu-item';
-        item.innerHTML = '<span class="menu-item__title">' + p.mapel.nama + '</span><span class="menu-item__sub">' + p.kelas.nama + '</span>';
-        item.addEventListener('click', function (e) {
-          e.preventDefault();
-          setActiveMenuItem(item);
-          content.innerHTML = renderPlaceholder(
-            'Input Nilai — ' + p.mapel.nama,
-            'Kelas ' + p.kelas.nama + ', Tahun Ajaran ' + tahunAktif.nama + '. Form input nilai pengetahuan/keterampilan/sikap dibangun di sini pada tahap berikutnya.'
-          );
+      var itemMengajar = document.createElement('a');
+      itemMengajar.href = '#';
+      itemMengajar.className = 'menu-item';
+      itemMengajar.innerHTML = '<i data-lucide="book-open" class="menu-icon"></i><span class="menu-item__title">Input Nilai</span>';
+      itemMengajar.addEventListener('click', function (e) {
+        e.preventDefault();
+        setActiveMenuItem(itemMengajar);
+        renderPilihMapelKelas({
+          title: 'Input Nilai',
+          desc: 'Pilih mapel, lalu pilih kelas, untuk mulai mengisi nilai rapor.',
+          list: penugasan,
+          onPilih: renderInputNilai
         });
-        menuMengajar.appendChild(item);
       });
+      menuMengajar.appendChild(itemMengajar);
+
+      menuTujuan.innerHTML = '';
+      var itemTujuan = document.createElement('a');
+      itemTujuan.href = '#';
+      itemTujuan.className = 'menu-item';
+      itemTujuan.innerHTML = '<i data-lucide="target" class="menu-icon"></i><span class="menu-item__title">Buat Tujuan Pembelajaran</span>';
+      itemTujuan.addEventListener('click', function (e) {
+        e.preventDefault();
+        setActiveMenuItem(itemTujuan);
+        // TP tidak lagi terikat kelas — cukup pilih Mapel saja.
+        renderPilihMapelSaja({
+          title: 'Tujuan Pembelajaran',
+          desc: 'Pilih mapel untuk menyusun Tujuan Pembelajaran (tidak perlu pilih kelas — tandai Semester & status Aktif langsung di form).',
+          list: penugasan,
+          onPilih: renderTujuanPembelajaran
+        });
+      });
+      menuTujuan.appendChild(itemTujuan);
+
+      var itemPilihTujuan = document.createElement('a');
+      itemPilihTujuan.href = '#';
+      itemPilihTujuan.className = 'menu-item';
+      itemPilihTujuan.innerHTML = '<i data-lucide="list-checks" class="menu-icon"></i><span class="menu-item__title">Pilih Tujuan Pembelajaran</span>';
+      itemPilihTujuan.addEventListener('click', function (e) {
+        e.preventDefault();
+        setActiveMenuItem(itemPilihTujuan);
+        renderPilihMapelKelas({
+          title: 'Pilih Tujuan Pembelajaran',
+          desc: 'Pilih mapel, lalu pilih kelas, untuk mencentang Tujuan Pembelajaran tiap siswa.',
+          list: penugasan,
+          onPilih: renderPilihTujuanPembelajaran
+        });
+      });
+      menuTujuan.appendChild(itemPilihTujuan);
     }
 
     // 5. Cek apakah guru ini juga WALI KELAS di tahun ajaran aktif.
@@ -145,30 +246,2094 @@
       var itemRekap = document.createElement('a');
       itemRekap.href = '#';
       itemRekap.className = 'menu-item';
-      itemRekap.innerHTML = '<span class="menu-item__title">Rekap Nilai Kelas</span><span class="menu-item__sub">' + waliKelas.kelas.nama + '</span>';
+      itemRekap.innerHTML = '<i data-lucide="bar-chart-3" class="menu-icon"></i><span class="menu-item__title">Rekap Nilai Kelas</span><span class="menu-item__sub">' + waliKelas.kelas.nama + '</span>';
       itemRekap.addEventListener('click', function (e) {
         e.preventDefault();
         setActiveMenuItem(itemRekap);
-        content.innerHTML = renderPlaceholder(
-          'Rekap Nilai — ' + waliKelas.kelas.nama,
-          'Sebagai wali kelas, kamu bisa melihat nilai semua mapel untuk seluruh siswa di kelas ini. Tampilan rekap dibangun di tahap berikutnya.'
-        );
+        renderRekapNilai(waliKelas);
       });
       menuWali.appendChild(itemRekap);
 
       var itemPresensi = document.createElement('a');
       itemPresensi.href = '#';
       itemPresensi.className = 'menu-item';
-      itemPresensi.innerHTML = '<span class="menu-item__title">Presensi Kelas</span><span class="menu-item__sub">' + waliKelas.kelas.nama + '</span>';
+      itemPresensi.innerHTML = '<i data-lucide="calendar-check" class="menu-icon"></i><span class="menu-item__title">Presensi Kelas</span><span class="menu-item__sub">' + waliKelas.kelas.nama + '</span>';
       itemPresensi.addEventListener('click', function (e) {
         e.preventDefault();
         setActiveMenuItem(itemPresensi);
-        content.innerHTML = renderPlaceholder(
-          'Presensi — ' + waliKelas.kelas.nama,
-          'Pencatatan hadir/sakit/izin/alpha harian untuk kelas ini dibangun di tahap berikutnya.'
-        );
+        renderPresensi(waliKelas);
       });
       menuWali.appendChild(itemPresensi);
+
+      // Cetak Rapor — hanya untuk wali kelas, mencetak rapor per siswa
+      // di kelas yang diampunya (gabungan Nilai, Capaian Pembelajaran,
+      // Ekstrakurikuler, Kokurikuler, dan rekap Presensi).
+      document.getElementById('labelCetakRapor').style.display = '';
+      var menuCetak = document.getElementById('menuCetakRapor');
+      var itemCetak = document.createElement('a');
+      itemCetak.href = '#';
+      itemCetak.className = 'menu-item';
+      itemCetak.innerHTML = '<i data-lucide="printer" class="menu-icon"></i><span class="menu-item__title">Cetak Rapor</span><span class="menu-item__sub">' + waliKelas.kelas.nama + '</span>';
+      itemCetak.addEventListener('click', function (e) {
+        e.preventDefault();
+        setActiveMenuItem(itemCetak);
+        renderCetakRapor(waliKelas);
+      });
+      menuCetak.appendChild(itemCetak);
+    }
+
+    // 5b. Cek apakah guru ini ditugaskan sebagai PEMBINA EKSTRAKURIKULER
+    //    di tahun ajaran aktif. Sama seperti wali kelas — bukan role
+    //    terpisah, cuma penugasan tambahan. Satu guru bisa membina lebih
+    //    dari satu ekstrakurikuler, jadi menunya bisa lebih dari satu baris.
+    //    Menu "Ekstrakurikuler" ini juga muncul untuk wali kelas (mode
+    //    baca saja / rekap), meski dia bukan pembina, supaya bisa
+    //    memeriksa nilai ekstrakurikuler siswa kelasnya sebelum cetak rapor.
+    var pembinaEkskulResult = await supabaseClient
+      .from('pembina_ekstrakurikuler')
+      .select('id, ekstrakurikuler:ekstrakurikuler_id(id, nama)')
+      .eq('guru_id', user.id)
+      .eq('tahun_ajaran_id', tahunAktif.id);
+    var daftarPembinaEkskul = (pembinaEkskulResult.data || []).filter(function (r) { return r.ekstrakurikuler; });
+    daftarPembinaEkskul.sort(function (a, b) { return a.ekstrakurikuler.nama.localeCompare(b.ekstrakurikuler.nama); });
+
+    if (daftarPembinaEkskul.length || waliKelas) {
+      document.getElementById('labelEkskul').style.display = '';
+      var menuEkskul = document.getElementById('menuEkskul');
+      daftarPembinaEkskul.forEach(function (pb) {
+        var itemEkskul = document.createElement('a');
+        itemEkskul.href = '#';
+        itemEkskul.className = 'menu-item';
+        itemEkskul.innerHTML = '<i data-lucide="medal" class="menu-icon"></i><span class="menu-item__title">Nilai Ekstrakurikuler</span><span class="menu-item__sub">' + escapeHtml(pb.ekstrakurikuler.nama) + '</span>';
+        itemEkskul.addEventListener('click', function (e) {
+          e.preventDefault();
+          setActiveMenuItem(itemEkskul);
+          renderNilaiEkstrakurikuler(pb.ekstrakurikuler);
+        });
+        menuEkskul.appendChild(itemEkskul);
+      });
+
+      if (waliKelas) {
+        var itemRekapEkskul = document.createElement('a');
+        itemRekapEkskul.href = '#';
+        itemRekapEkskul.className = 'menu-item';
+        itemRekapEkskul.innerHTML = '<i data-lucide="medal" class="menu-icon"></i><span class="menu-item__title">Rekap Ekstrakurikuler</span><span class="menu-item__sub">' + waliKelas.kelas.nama + '</span>';
+        itemRekapEkskul.addEventListener('click', function (e) {
+          e.preventDefault();
+          setActiveMenuItem(itemRekapEkskul);
+          renderRekapEkstrakurikulerKelas(waliKelas);
+        });
+        menuEkskul.appendChild(itemRekapEkskul);
+      }
+    }
+
+    // 5c. Cek apakah guru ini ditugaskan sebagai PENANGGUNG JAWAB (PJ)
+    //    KOKURIKULER untuk kegiatan apa saja pada tahun ajaran aktif. Tiap
+    //    penugasan PJ punya Nama Kegiatan + lingkup Kelas (kelas tertentu,
+    //    atau null = Semua Kelas). Satu guru boleh jadi PJ lebih dari satu
+    //    kegiatan/kelas sekaligus. Menu ini juga muncul untuk wali kelas
+    //    (mode baca saja / rekap) kalau kelasnya belum tercakup PJ manapun.
+    var pjKokuResult = await supabaseClient
+      .from('pj_kokurikuler')
+      .select('id, nama_kegiatan, kelas:kelas_id(id, nama)')
+      .eq('guru_id', user.id)
+      .eq('tahun_ajaran_id', tahunAktif.id);
+    var daftarPjKoku = (pjKokuResult.data || []).filter(function (r) { return r.nama_kegiatan; });
+    daftarPjKoku.sort(function (a, b) {
+      if (a.nama_kegiatan === b.nama_kegiatan) {
+        var ak = a.kelas ? a.kelas.nama : '', bk = b.kelas ? b.kelas.nama : '';
+        return ak.localeCompare(bk);
+      }
+      return a.nama_kegiatan.localeCompare(b.nama_kegiatan);
+    });
+    var pjKokuMencakupSemuaKelas = daftarPjKoku.some(function (r) { return !r.kelas; });
+    var kelasPjKokuIds = daftarPjKoku.filter(function (r) { return r.kelas; }).map(function (r) { return r.kelas.id; });
+
+    var perluRekapKokuWali = waliKelas && !pjKokuMencakupSemuaKelas && kelasPjKokuIds.indexOf(waliKelas.kelas.id) === -1;
+
+    if (daftarPjKoku.length || perluRekapKokuWali) {
+      document.getElementById('labelKokurikuler').style.display = '';
+      var menuKoku = document.getElementById('menuKokurikuler');
+      daftarPjKoku.forEach(function (pj) {
+        var itemKoku = document.createElement('a');
+        itemKoku.href = '#';
+        itemKoku.className = 'menu-item';
+        var labelKelasPj = pj.kelas ? pj.kelas.nama : 'Semua Kelas';
+        itemKoku.innerHTML = '<i data-lucide="sprout" class="menu-icon"></i><span class="menu-item__title">Nilai Kokurikuler</span><span class="menu-item__sub">' + escapeHtml(pj.nama_kegiatan) + ' — ' + escapeHtml(labelKelasPj) + '</span>';
+        itemKoku.addEventListener('click', function (e) {
+          e.preventDefault();
+          setActiveMenuItem(itemKoku);
+          renderNilaiKokurikulerPJ({ id: pj.id, nama_kegiatan: pj.nama_kegiatan, kelas: pj.kelas || null });
+        });
+        menuKoku.appendChild(itemKoku);
+      });
+
+      if (perluRekapKokuWali) {
+        var itemRekapKoku = document.createElement('a');
+        itemRekapKoku.href = '#';
+        itemRekapKoku.className = 'menu-item';
+        itemRekapKoku.innerHTML = '<i data-lucide="sprout" class="menu-icon"></i><span class="menu-item__title">Kokurikuler</span><span class="menu-item__sub">' + waliKelas.kelas.nama + '</span>';
+        itemRekapKoku.addEventListener('click', function (e) {
+          e.preventDefault();
+          setActiveMenuItem(itemRekapKoku);
+          renderRekapKokurikulerKelas(waliKelas);
+        });
+        menuKoku.appendChild(itemRekapKoku);
+      }
+    }
+
+    // Ikon menu di atas ditambahkan setelah render awal (data async),
+    // jadi lucide perlu dipanggil ulang supaya <i data-lucide> berubah jadi svg.
+    lucide.createIcons();
+
+    // 6. Tampilkan Dashboard Saya sebagai halaman pertama setelah login
+    setActiveMenuItem(document.getElementById('menuDashboardGuru'));
+    renderDashboardGuru();
+
+    // ---------- Helper: ambil daftar siswa 1 kelas untuk tahun ajaran aktif ----------
+    async function ambilSiswaKelas(kelasId) {
+      var res = await supabaseClient
+        .from('siswa_kelas')
+        .select('siswa:siswa_id(id, nis, nama, agama)')
+        .eq('kelas_id', kelasId)
+        .eq('tahun_ajaran_id', tahunAktif.id);
+      var list = (res.data || []).map(function (r) { return r.siswa; }).filter(Boolean);
+      list.sort(function (a, b) { return a.nama.localeCompare(b.nama); });
+      return list;
+    }
+
+    // Sama seperti ambilSiswaKelas, tapi lintas SEMUA kelas pada tahun
+    // ajaran aktif — dipakai PJ Kokurikuler yang lingkupnya "Semua Kelas".
+    // Tiap siswa disertai kelasId/kelasNama karena nilai_kokurikuler tetap
+    // perlu tahu kelas konkret siswa saat disimpan.
+    async function ambilSemuaSiswa() {
+      var res = await supabaseClient
+        .from('siswa_kelas')
+        .select('siswa:siswa_id(id, nis, nama), kelas:kelas_id(id, nama)')
+        .eq('tahun_ajaran_id', tahunAktif.id);
+      var list = (res.data || [])
+        .filter(function (r) { return r.siswa && r.kelas; })
+        .map(function (r) { return { id: r.siswa.id, nis: r.siswa.nis, nama: r.siswa.nama, kelasId: r.kelas.id, kelasNama: r.kelas.nama }; });
+      list.sort(function (a, b) {
+        if (a.kelasNama === b.kelasNama) return a.nama.localeCompare(b.nama);
+        return a.kelasNama.localeCompare(b.kelasNama);
+      });
+      return list;
+    }
+
+    // ================= DASHBOARD SAYA: progres mengisi nilai ==============
+    function pctOf(filled, total) { return total > 0 ? Math.round((filled / total) * 100) : 0; }
+
+    function progressColorGuru(p) {
+      if (p >= 80) return 'var(--success)';
+      if (p >= 50) return 'var(--primary)';
+      if (p > 0) return '#d97706';
+      return 'var(--danger)';
+    }
+
+    function progressBarHtmlGuru(filled, total) {
+      var p = pctOf(filled, total);
+      return '<div class="progress-row">' +
+        '<div class="progress-track"><div class="progress-fill" style="width:' + p + '%; background:' + progressColorGuru(p) + ';"></div></div>' +
+        '<span class="progress-figure">' + filled + '/' + total + ' · ' + p + '%</span>' +
+        '</div>';
+    }
+
+    function chipDoneGuru(label) { return '<span class="chip chip--aktif">' + escapeHtml(label) + '</span>'; }
+    function chipPendingGuru(label) { return '<span class="chip chip--danger">' + escapeHtml(label) + '</span>'; }
+    function chipMutedGuru(label) { return '<span class="chip chip--muted">' + escapeHtml(label) + '</span>'; }
+
+    // Bungkus satu blok tugas (tabel + judul + deskripsi) jadi kartu section
+    // yang seragam dipakai oleh semua kategori tugas di Dashboard Saya.
+    function taskSectionHtml(opts) {
+      // opts: { icon, title, desc, bodyHtml }
+      return '<div class="task-section">' +
+        '<div class="task-section__head"><div>' +
+        '<div class="task-section__title"><i data-lucide="' + opts.icon + '"></i>' + escapeHtml(opts.title) + '</div>' +
+        '<div class="task-section__desc">' + escapeHtml(opts.desc) + '</div>' +
+        '</div></div>' +
+        '<div class="task-section__body">' + opts.bodyHtml + '</div>' +
+        '</div>';
+    }
+
+    async function renderDashboardGuru() {
+      content.innerHTML = renderPlaceholder('Memuat...', 'Menghitung semua tugas kamu di tahun ajaran ini.');
+
+      var adaTugasApapun = penugasan.length > 0 || !!waliKelas || daftarPembinaEkskul.length > 0 || daftarPjKoku.length > 0;
+      if (!adaTugasApapun) {
+        content.innerHTML = renderPlaceholder('Belum ada penugasan', 'Kamu belum ditugaskan apa pun (mengajar, wali kelas, pembina ekstrakurikuler, atau PJ kokurikuler) di tahun ajaran ini. Hubungi admin kalau ini keliru.');
+        return;
+      }
+
+      // ---------- Kumpulkan semua kelas_id yang relevan sekaligus, biar ----------
+      // cukup satu query siswa_kelas untuk semua kebutuhan (mengajar, wali
+      // kelas, dan PJ kokurikuler yang lingkupnya kelas tertentu).
+      var kelasIdSet = {};
+      penugasan.forEach(function (p) { kelasIdSet[p.kelas.id] = true; });
+      if (waliKelas) kelasIdSet[waliKelas.kelas.id] = true;
+      daftarPjKoku.forEach(function (pj) { if (pj.kelas) kelasIdSet[pj.kelas.id] = true; });
+      var kelasIds = Object.keys(kelasIdSet);
+
+      var kelasSiswaMap = {};
+      if (kelasIds.length) {
+        var siswaKelasRes = await supabaseClient
+          .from('siswa_kelas').select('siswa_id, kelas_id')
+          .eq('tahun_ajaran_id', tahunAktif.id).in('kelas_id', kelasIds);
+        (siswaKelasRes.data || []).forEach(function (r) {
+          (kelasSiswaMap[r.kelas_id] = kelasSiswaMap[r.kelas_id] || []).push(r.siswa_id);
+        });
+      }
+
+      var mapelIds = Array.from(new Set(penugasan.map(function (p) { return p.mapel.id; })));
+
+      // ================= 1) NILAI RAPOR ==============
+      var rowsNilai = [];
+      var sectionNilaiHtml = '';
+      if (penugasan.length) {
+        var nilaiRes = await supabaseClient
+          .from('nilai').select('siswa_id, mapel_id, nilai')
+          .eq('tahun_ajaran_id', tahunAktif.id).eq('jenis', 'rapor').in('mapel_id', mapelIds);
+        var nilaiMap = {}; // key: mapelId|siswaId -> true kalau nilai rapor sudah diisi
+        (nilaiRes.data || []).forEach(function (r) {
+          if (r.nilai === null || r.nilai === undefined) return;
+          nilaiMap[r.mapel_id + '|' + r.siswa_id] = true;
+        });
+
+        rowsNilai = penugasan.map(function (p) {
+          var siswaIds = kelasSiswaMap[p.kelas.id] || [];
+          var total = siswaIds.length;
+          var filled = 0;
+          siswaIds.forEach(function (sid) { if (nilaiMap[p.mapel.id + '|' + sid]) filled++; });
+          return { mapel: p.mapel.nama, kelas: p.kelas.nama, jumlahSiswa: siswaIds.length, filled: filled, total: total, p: p };
+        });
+
+        var totalFilled = rowsNilai.reduce(function (s, r) { return s + r.filled; }, 0);
+        var totalSlot = rowsNilai.reduce(function (s, r) { return s + r.total; }, 0);
+        var selesaiPenuh = rowsNilai.filter(function (r) { return r.total > 0 && r.filled === r.total; }).length;
+
+        var statHtml =
+          '<div class="stat-grid">' +
+          '<div class="stat-card"><div class="stat-card__label"><i data-lucide="book-open"></i>Mapel &amp; Kelas Diampu</div>' +
+          '<div class="stat-card__value">' + rowsNilai.length + '</div>' +
+          '<div class="stat-card__sub">kombinasi mapel &amp; kelas</div></div>' +
+          '<div class="stat-card"><div class="stat-card__label"><i data-lucide="percent"></i>Progres Nilai Rapor</div>' +
+          '<div class="stat-card__value">' + pctOf(totalFilled, totalSlot) + '%</div>' +
+          '<div class="stat-card__sub">' + totalFilled + ' dari ' + totalSlot + ' slot nilai terisi</div></div>' +
+          '<div class="stat-card"><div class="stat-card__label"><i data-lucide="check-check"></i>Kelas Selesai 100%</div>' +
+          '<div class="stat-card__value">' + selesaiPenuh + '</div>' +
+          '<div class="stat-card__sub">dari ' + rowsNilai.length + ' kelas yang diampu</div></div>' +
+          '</div>';
+
+        var rowsNilaiSorted = rowsNilai.slice().sort(function (a, b) { return pctOf(a.filled, a.total) - pctOf(b.filled, b.total); });
+        var rowsNilaiHtml = rowsNilaiSorted.map(function (r) {
+          return '<tr><td>' + escapeHtml(r.mapel) + '</td><td>' + escapeHtml(r.kelas) + '</td>' +
+            '<td>' + r.jumlahSiswa + ' siswa</td><td>' + progressBarHtmlGuru(r.filled, r.total) + '</td>' +
+            '<td><button class="btn-small" data-nilai-idx="' + rowsNilai.indexOf(r) + '">Isi Nilai</button></td></tr>';
+        }).join('');
+
+        sectionNilaiHtml = statHtml + taskSectionHtml({
+          icon: 'clipboard-list',
+          title: 'Input Nilai Rapor',
+          desc: 'Progres pengisian nilai rapor per mapel & kelas yang kamu ampu.',
+          bodyHtml: '<div class="table-wrap"><table class="data-table"><thead><tr><th>Mapel</th><th>Kelas</th><th>Jumlah Siswa</th><th>Progres Nilai</th><th></th></tr></thead>' +
+            '<tbody>' + rowsNilaiHtml + '</tbody></table></div>'
+        });
+      }
+
+      // ================= 2) TUJUAN PEMBELAJARAN — BUAT TP (per mapel) ==============
+      var rowsTpBank = [];
+      var sectionTpBankHtml = '';
+      var tpBankByMapel = {}; // mapelId -> array of {semester, is_aktif}
+      if (penugasan.length) {
+        var tpBankRes = await supabaseClient
+          .from('tujuan_pembelajaran').select('mapel_id, semester, is_aktif')
+          .eq('guru_id', user.id).eq('tahun_ajaran_id', tahunAktif.id).in('mapel_id', mapelIds);
+        (tpBankRes.data || []).forEach(function (r) {
+          (tpBankByMapel[r.mapel_id] = tpBankByMapel[r.mapel_id] || []).push(r);
+        });
+
+        var mapelUnikList = [];
+        var seenMapel = {};
+        penugasan.forEach(function (p) {
+          if (seenMapel[p.mapel.id]) return;
+          seenMapel[p.mapel.id] = true;
+          mapelUnikList.push(p.mapel);
+        });
+
+        rowsTpBank = mapelUnikList.map(function (m) {
+          var daftar = tpBankByMapel[m.id] || [];
+          var aktif = daftar.filter(function (t) { return t.is_aktif; }).length;
+          return { mapel: m, total: daftar.length, aktif: aktif };
+        });
+        rowsTpBank.sort(function (a, b) { return a.aktif - b.aktif; });
+
+        var rowsTpBankHtml = rowsTpBank.map(function (r, i) {
+          var status = r.total === 0
+            ? chipPendingGuru('Belum ada TP')
+            : (r.aktif > 0 ? chipDoneGuru(r.aktif + ' TP Aktif') : chipMutedGuru(r.total + ' TP (semua tidak aktif)'));
+          return '<tr><td>' + escapeHtml(r.mapel.nama) + '</td><td>' + status + '</td>' +
+            '<td><button class="btn-small btn-small--primary" data-tpbank-idx="' + i + '">Buat / Kelola TP</button></td></tr>';
+        }).join('');
+
+        sectionTpBankHtml = taskSectionHtml({
+          icon: 'target',
+          title: 'Buat Tujuan Pembelajaran (TP)',
+          desc: 'Susun bank Tujuan Pembelajaran untuk tiap mapel yang kamu ampu, sebelum bisa memilihkan TP ke siswa.',
+          bodyHtml: '<div class="table-wrap"><table class="data-table"><thead><tr><th>Mapel</th><th>Status TP</th><th></th></tr></thead>' +
+            '<tbody>' + rowsTpBankHtml + '</tbody></table></div>'
+        });
+      }
+
+      // ================= 3) TUJUAN PEMBELAJARAN — PILIH TP (per mapel & kelas) ==============
+      var rowsTpPilih = [];
+      var sectionTpPilihHtml = '';
+      if (penugasan.length) {
+        var tpSiswaRes = await supabaseClient
+          .from('tujuan_pembelajaran_siswa').select('siswa_id, mapel_id, kelas_id')
+          .eq('guru_id', user.id).eq('tahun_ajaran_id', tahunAktif.id).in('mapel_id', mapelIds);
+        var tpSiswaMap = {}; // key: mapelId|kelasId -> Set(siswaId)
+        (tpSiswaRes.data || []).forEach(function (r) {
+          var key = r.mapel_id + '|' + r.kelas_id;
+          (tpSiswaMap[key] = tpSiswaMap[key] || new Set()).add(r.siswa_id);
+        });
+
+        rowsTpPilih = penugasan.map(function (p) {
+          var semesterKe = hitungSemesterKe(p.kelas.tingkat, tahunAktif.semester);
+          var daftarTp = tpBankByMapel[p.mapel.id] || [];
+          var tpAktifSemester = daftarTp.filter(function (t) { return t.semester === semesterKe && t.is_aktif; }).length;
+          var siswaIds = kelasSiswaMap[p.kelas.id] || [];
+          var total = siswaIds.length;
+          var terpilihSet = tpSiswaMap[p.mapel.id + '|' + p.kelas.id] || new Set();
+          var filled = siswaIds.filter(function (sid) { return terpilihSet.has(sid); }).length;
+          return { mapel: p.mapel.nama, kelas: p.kelas.nama, total: total, filled: filled, tpAktifSemester: tpAktifSemester, p: p };
+        });
+        rowsTpPilih.sort(function (a, b) { return pctOf(a.filled, a.total) - pctOf(b.filled, b.total); });
+
+        var rowsTpPilihHtml = rowsTpPilih.map(function (r, i) {
+          if (r.tpAktifSemester === 0) {
+            return '<tr><td>' + escapeHtml(r.mapel) + '</td><td>' + escapeHtml(r.kelas) + '</td>' +
+              '<td colspan="2">' + chipMutedGuru('TP belum tersedia untuk semester ini') + '</td><td>—</td></tr>';
+          }
+          return '<tr><td>' + escapeHtml(r.mapel) + '</td><td>' + escapeHtml(r.kelas) + '</td>' +
+            '<td>' + r.total + ' siswa</td><td>' + progressBarHtmlGuru(r.filled, r.total) + '</td>' +
+            '<td><button class="btn-small" data-tppilih-idx="' + i + '">Pilih TP</button></td></tr>';
+        }).join('');
+
+        sectionTpPilihHtml = taskSectionHtml({
+          icon: 'list-checks',
+          title: 'Pilih Tujuan Pembelajaran per Siswa',
+          desc: 'Tandai TP capaian Baik/Kurang untuk tiap siswa di kelas yang kamu ampu, sesuai semester berjalan.',
+          bodyHtml: '<div class="table-wrap"><table class="data-table"><thead><tr><th>Mapel</th><th>Kelas</th><th>Jumlah Siswa</th><th>Progres</th><th></th></tr></thead>' +
+            '<tbody>' + rowsTpPilihHtml + '</tbody></table></div>'
+        });
+      }
+
+      // ================= 4) NILAI EKSTRAKURIKULER (kalau pembina) ==============
+      var rowsEkskul = [];
+      var sectionEkskulHtml = '';
+      if (daftarPembinaEkskul.length) {
+        var ekskulIds = daftarPembinaEkskul.map(function (pb) { return pb.ekstrakurikuler.id; });
+        var pesertaRes = await supabaseClient
+          .from('ekstrakurikuler_siswa').select('siswa_id, ekstrakurikuler_id')
+          .eq('tahun_ajaran_id', tahunAktif.id).in('ekstrakurikuler_id', ekskulIds);
+        var pesertaByEkskul = {};
+        (pesertaRes.data || []).forEach(function (r) {
+          (pesertaByEkskul[r.ekstrakurikuler_id] = pesertaByEkskul[r.ekstrakurikuler_id] || []).push(r.siswa_id);
+        });
+
+        var nilaiEkskulRes = await supabaseClient
+          .from('nilai_ekstrakurikuler').select('siswa_id, ekstrakurikuler_id, predikat')
+          .eq('tahun_ajaran_id', tahunAktif.id).in('ekstrakurikuler_id', ekskulIds);
+        var nilaiEkskulSet = {}; // key: ekskulId -> Set(siswaId) yang predikatnya sudah diisi
+        (nilaiEkskulRes.data || []).forEach(function (r) {
+          if (!r.predikat) return;
+          var key = r.ekstrakurikuler_id;
+          (nilaiEkskulSet[key] = nilaiEkskulSet[key] || new Set()).add(r.siswa_id);
+        });
+
+        rowsEkskul = daftarPembinaEkskul.map(function (pb) {
+          var siswaIds = pesertaByEkskul[pb.ekstrakurikuler.id] || [];
+          var total = siswaIds.length;
+          var filledSet = nilaiEkskulSet[pb.ekstrakurikuler.id] || new Set();
+          var filled = siswaIds.filter(function (sid) { return filledSet.has(sid); }).length;
+          return { ekskul: pb.ekstrakurikuler, total: total, filled: filled };
+        });
+        rowsEkskul.sort(function (a, b) { return pctOf(a.filled, a.total) - pctOf(b.filled, b.total); });
+
+        var rowsEkskulHtml = rowsEkskul.map(function (r, i) {
+          return '<tr><td>' + escapeHtml(r.ekskul.nama) + '</td><td>' + r.total + ' siswa</td>' +
+            '<td>' + progressBarHtmlGuru(r.filled, r.total) + '</td>' +
+            '<td><button class="btn-small" data-ekskul-idx="' + i + '">Isi Nilai</button></td></tr>';
+        }).join('');
+
+        sectionEkskulHtml = taskSectionHtml({
+          icon: 'medal',
+          title: 'Nilai Ekstrakurikuler (Pembina)',
+          desc: 'Isi Predikat & Deskripsi capaian tiap peserta di kegiatan ekstrakurikuler yang kamu bina.',
+          bodyHtml: rowsEkskul.length
+            ? '<div class="table-wrap"><table class="data-table"><thead><tr><th>Kegiatan</th><th>Jumlah Peserta</th><th>Progres</th><th></th></tr></thead><tbody>' + rowsEkskulHtml + '</tbody></table></div>'
+            : '<div class="task-section__empty">Belum ada kegiatan ekstrakurikuler yang kamu bina.</div>'
+        });
+      }
+
+      // ================= 5) NILAI KOKURIKULER (kalau PJ) ==============
+      var rowsKoku = [];
+      var sectionKokuHtml = '';
+      if (daftarPjKoku.length) {
+        var namaKegiatanUniq = Array.from(new Set(daftarPjKoku.map(function (pj) { return pj.nama_kegiatan; })));
+        var adaLingkupSemuaKelas = daftarPjKoku.some(function (pj) { return !pj.kelas; });
+
+        var totalSemuaSiswaCount = 0;
+        if (adaLingkupSemuaKelas) {
+          var semuaSiswaRes = await supabaseClient
+            .from('siswa_kelas').select('siswa_id', { count: 'exact', head: true })
+            .eq('tahun_ajaran_id', tahunAktif.id);
+          totalSemuaSiswaCount = semuaSiswaRes.count || 0;
+        }
+
+        var kokuFilledByKelas = {}; // key: namaKegiatan|kelasId -> Set(siswaId) berdeskripsi
+        var kokuFilledAll = {};     // key: namaKegiatan -> Set(siswaId) berdeskripsi (lintas kelas)
+        if (namaKegiatanUniq.length) {
+          var nilaiKokuRes = await supabaseClient
+            .from('nilai_kokurikuler').select('siswa_id, kelas_id, nama_kegiatan, deskripsi')
+            .eq('tahun_ajaran_id', tahunAktif.id).in('nama_kegiatan', namaKegiatanUniq);
+          (nilaiKokuRes.data || []).forEach(function (r) {
+            if (!r.deskripsi || !r.deskripsi.trim()) return;
+            var keyKelas = r.nama_kegiatan + '|' + r.kelas_id;
+            (kokuFilledByKelas[keyKelas] = kokuFilledByKelas[keyKelas] || new Set()).add(r.siswa_id);
+            (kokuFilledAll[r.nama_kegiatan] = kokuFilledAll[r.nama_kegiatan] || new Set()).add(r.siswa_id);
+          });
+        }
+
+        rowsKoku = daftarPjKoku.map(function (pj) {
+          var total, filled;
+          if (pj.kelas) {
+            var siswaIds = kelasSiswaMap[pj.kelas.id] || [];
+            total = siswaIds.length;
+            var filledSet = kokuFilledByKelas[pj.nama_kegiatan + '|' + pj.kelas.id] || new Set();
+            filled = siswaIds.filter(function (sid) { return filledSet.has(sid); }).length;
+          } else {
+            total = totalSemuaSiswaCount;
+            filled = (kokuFilledAll[pj.nama_kegiatan] || new Set()).size;
+          }
+          return { namaKegiatan: pj.nama_kegiatan, labelKelas: pj.kelas ? pj.kelas.nama : 'Semua Kelas', total: total, filled: filled, pj: pj };
+        });
+        rowsKoku.sort(function (a, b) { return pctOf(a.filled, a.total) - pctOf(b.filled, b.total); });
+
+        var rowsKokuHtml = rowsKoku.map(function (r, i) {
+          return '<tr><td>' + escapeHtml(r.namaKegiatan) + '</td><td>' + escapeHtml(r.labelKelas) + '</td>' +
+            '<td>' + r.total + ' siswa</td><td>' + progressBarHtmlGuru(r.filled, r.total) + '</td>' +
+            '<td><button class="btn-small" data-koku-idx="' + i + '">Isi Kokurikuler</button></td></tr>';
+        }).join('');
+
+        sectionKokuHtml = taskSectionHtml({
+          icon: 'sprout',
+          title: 'Nilai Kokurikuler (Penanggung Jawab)',
+          desc: 'Isi Deskripsi capaian kokurikuler tiap siswa untuk kegiatan yang kamu jadi PJ-nya.',
+          bodyHtml: '<div class="table-wrap"><table class="data-table"><thead><tr><th>Kegiatan</th><th>Lingkup Kelas</th><th>Jumlah Siswa</th><th>Progres</th><th></th></tr></thead>' +
+            '<tbody>' + rowsKokuHtml + '</tbody></table></div>'
+        });
+      }
+
+      // ================= 6) PRESENSI KELAS (kalau wali kelas) ==============
+      var sectionPresensiHtml = '';
+      if (waliKelas) {
+        var siswaWaliIds = kelasSiswaMap[waliKelas.kelas.id] || [];
+        var totalWali = siswaWaliIds.length;
+        var filledWali = 0;
+        if (siswaWaliIds.length) {
+          var rekapRes = await supabaseClient
+            .from('rekap_presensi').select('siswa_id')
+            .eq('kelas_id', waliKelas.kelas.id).eq('tahun_ajaran_id', tahunAktif.id).in('siswa_id', siswaWaliIds);
+          filledWali = (rekapRes.data || []).length;
+        }
+
+        var rowsPresensiHtml = '<tr><td>' + escapeHtml(waliKelas.kelas.nama) + '</td>' +
+          '<td>' + totalWali + ' siswa</td><td>' + progressBarHtmlGuru(filledWali, totalWali) + '</td>' +
+          '<td><button class="btn-small" id="btnDashPresensi">Isi Presensi</button></td></tr>';
+
+        sectionPresensiHtml = taskSectionHtml({
+          icon: 'calendar-check',
+          title: 'Presensi Kelas (Wali Kelas)',
+          desc: 'Isi rekap jumlah Sakit, Izin, dan Tanpa Keterangan (Alpha) tiap siswa di kelas ' + waliKelas.kelas.nama + '.',
+          bodyHtml: '<div class="table-wrap"><table class="data-table"><thead><tr><th>Kelas</th><th>Jumlah Siswa</th><th>Progres</th><th></th></tr></thead>' +
+            '<tbody>' + rowsPresensiHtml + '</tbody></table></div>'
+        });
+      }
+
+      // ---------- Rangkai semua section jadi satu halaman ----------
+      var ringkasanPeranHtml =
+        '<div class="stat-grid">' +
+        '<div class="stat-card"><div class="stat-card__label"><i data-lucide="book-open"></i>Mapel Diampu</div>' +
+        '<div class="stat-card__value">' + mapelIds.length + '</div>' +
+        '<div class="stat-card__sub">' + rowsNilai.length + ' kombinasi mapel &amp; kelas</div></div>' +
+        '<div class="stat-card"><div class="stat-card__label"><i data-lucide="users"></i>Wali Kelas</div>' +
+        '<div class="stat-card__value">' + (waliKelas ? waliKelas.kelas.nama : '—') + '</div>' +
+        '<div class="stat-card__sub">' + (waliKelas ? 'kamu wali kelas ini' : 'bukan wali kelas') + '</div></div>' +
+        '<div class="stat-card"><div class="stat-card__label"><i data-lucide="medal"></i>Pembina Ekskul</div>' +
+        '<div class="stat-card__value">' + daftarPembinaEkskul.length + '</div>' +
+        '<div class="stat-card__sub">kegiatan dibina</div></div>' +
+        '<div class="stat-card"><div class="stat-card__label"><i data-lucide="sprout"></i>PJ Kokurikuler</div>' +
+        '<div class="stat-card__value">' + daftarPjKoku.length + '</div>' +
+        '<div class="stat-card__sub">penugasan PJ</div></div>' +
+        '</div>';
+
+      content.innerHTML =
+        '<div class="panel-head"><div><div class="panel-head__title">Dashboard Saya</div>' +
+        '<div class="panel-head__desc">Semua tugas kamu — Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + ' Semester ' + escapeHtml(tahunAktif.semester) + '.</div></div></div>' +
+        ringkasanPeranHtml +
+        sectionTpBankHtml +
+        sectionTpPilihHtml +
+        sectionNilaiHtml +
+        sectionEkskulHtml +
+        sectionKokuHtml +
+        sectionPresensiHtml +
+        '<div class="panel-note">Progres nilai rapor & TP dihitung per mapel/kelas yang kamu ampu. Progres ekstrakurikuler & kokurikuler dihitung dari peserta/siswa yang jadi tanggung jawabmu. Progres presensi dihitung dari siswa yang datanya sudah pernah disimpan.</div>';
+
+      lucide.createIcons();
+
+      content.querySelectorAll('button[data-nilai-idx]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var r = rowsNilai[parseInt(btn.dataset.nilaiIdx, 10)];
+          var target = Array.prototype.find.call(document.querySelectorAll('#menuMengajar .menu-item'), function (el) {
+            return el.querySelector('.menu-item__title').textContent === r.mapel && el.querySelector('.menu-item__sub').textContent === r.kelas;
+          });
+          if (target) { setActiveMenuItem(target); }
+          renderInputNilai(r.p);
+        });
+      });
+
+      content.querySelectorAll('button[data-tpbank-idx]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var r = rowsTpBank[parseInt(btn.dataset.tpbankIdx, 10)];
+          var itemTujuanEl = document.getElementById('menuTujuan').querySelector('.menu-item');
+          if (itemTujuanEl) { setActiveMenuItem(itemTujuanEl); }
+          renderTujuanPembelajaran(r.mapel);
+        });
+      });
+
+      content.querySelectorAll('button[data-tppilih-idx]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var r = rowsTpPilih[parseInt(btn.dataset.tppilihIdx, 10)];
+          var itemPilihEl = document.getElementById('menuTujuan').querySelectorAll('.menu-item')[1];
+          if (itemPilihEl) { setActiveMenuItem(itemPilihEl); }
+          renderPilihTujuanPembelajaran(r.p);
+        });
+      });
+
+      content.querySelectorAll('button[data-ekskul-idx]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var r = rowsEkskul[parseInt(btn.dataset.ekskulIdx, 10)];
+          var target = Array.prototype.find.call(document.querySelectorAll('#menuEkskul .menu-item'), function (el) {
+            var sub = el.querySelector('.menu-item__sub');
+            return sub && sub.textContent === r.ekskul.nama;
+          });
+          if (target) { setActiveMenuItem(target); }
+          renderNilaiEkstrakurikuler(r.ekskul);
+        });
+      });
+
+      content.querySelectorAll('button[data-koku-idx]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var r = rowsKoku[parseInt(btn.dataset.kokuIdx, 10)];
+          var target = Array.prototype.find.call(document.querySelectorAll('#menuKokurikuler .menu-item'), function (el) {
+            var sub = el.querySelector('.menu-item__sub');
+            return sub && sub.textContent === (r.namaKegiatan + ' — ' + r.labelKelas);
+          });
+          if (target) { setActiveMenuItem(target); }
+          renderNilaiKokurikulerPJ({ id: r.pj.id, nama_kegiatan: r.pj.nama_kegiatan, kelas: r.pj.kelas || null });
+        });
+      });
+
+      var btnDashPresensi = document.getElementById('btnDashPresensi');
+      if (btnDashPresensi) {
+        btnDashPresensi.addEventListener('click', function () {
+          var itemsWali = document.getElementById('menuWaliKelas').querySelectorAll('.menu-item');
+          if (itemsWali[1]) { setActiveMenuItem(itemsWali[1]); }
+          renderPresensi(waliKelas);
+        });
+      }
+    }
+
+    document.getElementById('menuDashboardGuru').addEventListener('click', function (e) {
+      e.preventDefault();
+      setActiveMenuItem(document.getElementById('menuDashboardGuru'));
+      renderDashboardGuru();
+    });
+
+    // ================= GURU MAPEL: Input Nilai =================
+    // ================= NAVIGASI: Pilih Mapel lalu Pilih Kelas (dropdown) =================
+    // Dipakai bersama oleh menu "Mengajar", "Tujuan Pembelajaran", dan
+    // "Pilih Tujuan Pembelajaran" — supaya guru dengan banyak penugasan
+    // tidak perlu men-scroll daftar panjang, cukup pilih mapel dulu lalu
+    // kelasnya baru muncul di dropdown kedua.
+    function renderPilihMapelKelas(opts) {
+      var mapelUnik = [];
+      var mapelSeen = {};
+      opts.list.forEach(function (p) {
+        if (!mapelSeen[p.mapel.id]) { mapelSeen[p.mapel.id] = true; mapelUnik.push(p.mapel); }
+      });
+      mapelUnik.sort(function (a, b) { return a.nama.localeCompare(b.nama); });
+
+      content.innerHTML =
+        '<div class="panel-head"><div><div class="panel-head__title">' + escapeHtml(opts.title) + '</div>' +
+        '<div class="panel-head__desc">' + escapeHtml(opts.desc) + '</div></div></div>' +
+        '<div class="add-form">' +
+        '<div class="field"><label>Pilih Mapel</label><select id="selPilihMapel"><option value="">— Pilih Mapel —</option>' +
+        mapelUnik.map(function (m) { return '<option value="' + m.id + '">' + escapeHtml(m.nama) + '</option>'; }).join('') +
+        '</select></div>' +
+        '<div class="field"><label>Pilih Kelas</label><select id="selPilihKelas" disabled><option value="">— Pilih mapel dulu —</option></select></div>' +
+        '</div>';
+
+      var selMapel = content.querySelector('#selPilihMapel');
+      var selKelas = content.querySelector('#selPilihKelas');
+
+      selMapel.addEventListener('change', function () {
+        var mapelId = selMapel.value;
+        if (!mapelId) {
+          selKelas.disabled = true;
+          selKelas.innerHTML = '<option value="">— Pilih mapel dulu —</option>';
+          return;
+        }
+        var kelasCocok = opts.list.filter(function (p) { return String(p.mapel.id) === mapelId; });
+        kelasCocok.sort(function (a, b) { return a.kelas.nama.localeCompare(b.kelas.nama); });
+        selKelas.disabled = false;
+        selKelas.innerHTML = '<option value="">— Pilih Kelas —</option>' +
+          kelasCocok.map(function (p) { return '<option value="' + p.kelas.id + '">' + escapeHtml(p.kelas.nama) + '</option>'; }).join('');
+      });
+
+      selKelas.addEventListener('change', function () {
+        var mapelId = selMapel.value;
+        var kelasId = selKelas.value;
+        if (!mapelId || !kelasId) return;
+        var p = opts.list.filter(function (p) { return String(p.mapel.id) === mapelId && String(p.kelas.id) === kelasId; })[0];
+        if (p) opts.onPilih(p);
+      });
+    }
+
+    // ================= NAVIGASI: Pilih Mapel saja (dropdown) =================
+    // Dipakai khusus menu "Tujuan Pembelajaran" — TP sekarang tidak
+    // terikat kelas, jadi guru cukup pilih mapel yang diajarnya.
+    function renderPilihMapelSaja(opts) {
+      var mapelUnik = [];
+      var mapelSeen = {};
+      opts.list.forEach(function (p) {
+        if (!mapelSeen[p.mapel.id]) { mapelSeen[p.mapel.id] = true; mapelUnik.push(p.mapel); }
+      });
+      mapelUnik.sort(function (a, b) { return a.nama.localeCompare(b.nama); });
+
+      content.innerHTML =
+        '<div class="panel-head"><div><div class="panel-head__title">' + escapeHtml(opts.title) + '</div>' +
+        '<div class="panel-head__desc">' + escapeHtml(opts.desc) + '</div></div></div>' +
+        '<div class="add-form">' +
+        '<div class="field"><label>Pilih Mapel</label><select id="selPilihMapelSaja"><option value="">— Pilih Mapel —</option>' +
+        mapelUnik.map(function (m) { return '<option value="' + m.id + '">' + escapeHtml(m.nama) + '</option>'; }).join('') +
+        '</select></div>' +
+        '</div>';
+
+      document.getElementById('selPilihMapelSaja').addEventListener('change', function () {
+        var mapelId = this.value;
+        if (!mapelId) return;
+        var mapel = mapelUnik.filter(function (m) { return String(m.id) === mapelId; })[0];
+        if (mapel) opts.onPilih(mapel);
+      });
+    }
+
+    async function renderInputNilai(p) {
+      content.innerHTML = renderPlaceholder('Memuat...', 'Mengambil data siswa kelas ' + p.kelas.nama + '.');
+
+      var siswaList = await ambilSiswaKelas(p.kelas.id);
+      if (!siswaList.length) {
+        content.innerHTML = renderPlaceholder('Input Nilai — ' + p.mapel.nama, 'Belum ada siswa yang ditempatkan di kelas ' + p.kelas.nama + ' pada tahun ajaran ini.');
+        return;
+      }
+      var siswaIds = siswaList.map(function (s) { return s.id; });
+
+      // Nilai rapor (jenis 'rapor') + narasi capaian pembelajaran, tersimpan di baris yang sama.
+      var nilaiRes = await supabaseClient
+        .from('nilai')
+        .select('siswa_id, nilai, capaian_pembelajaran')
+        .eq('mapel_id', p.mapel.id)
+        .eq('tahun_ajaran_id', tahunAktif.id)
+        .eq('jenis', 'rapor')
+        .in('siswa_id', siswaIds);
+      var nilaiMap = {};
+      (nilaiRes.data || []).forEach(function (r) { nilaiMap[r.siswa_id] = r; });
+
+      // Tujuan Pembelajaran yang sudah dicentang guru per siswa (baik/kurang),
+      // dipakai untuk menyusun otomatis teks Capaian Pembelajaran.
+      // TP tidak lagi terikat kelas_id — diambil semua TP mapel ini di
+      // tahun ajaran aktif (termasuk yang sudah dinonaktifkan), supaya
+      // TP yang sudah pernah dicentang guru tetap tampil narasinya.
+      var tpRes = await supabaseClient
+        .from('tujuan_pembelajaran')
+        .select('id, kode, deskripsi')
+        .eq('guru_id', user.id)
+        .eq('mapel_id', p.mapel.id)
+        .eq('tahun_ajaran_id', tahunAktif.id);
+      var tpById = {};
+      (tpRes.data || []).forEach(function (t) { tpById[t.id] = t; });
+
+      var pilihanRes = await supabaseClient
+        .from('tujuan_pembelajaran_siswa')
+        .select('siswa_id, tp_id, kategori')
+        .eq('guru_id', user.id)
+        .eq('mapel_id', p.mapel.id)
+        .eq('kelas_id', p.kelas.id)
+        .eq('tahun_ajaran_id', tahunAktif.id)
+        .in('siswa_id', siswaIds);
+      var pilihanMap = {}; // siswaId -> { baik: [tp,...], kurang: [tp,...] }
+      (pilihanRes.data || []).forEach(function (r) {
+        var tp = tpById[r.tp_id];
+        if (!tp) return;
+        pilihanMap[r.siswa_id] = pilihanMap[r.siswa_id] || { baik: [], kurang: [] };
+        pilihanMap[r.siswa_id][r.kategori].push(tp);
+      });
+
+      // Menggabungkan daftar deskripsi Tujuan Pembelajaran jadi satu kalimat:
+      // 1 item -> apa adanya; 2 item -> "A dan B"; >2 item -> "A, B, dan C".
+      function gabungTujuanNaratif(daftar) {
+        if (!daftar.length) return '';
+        if (daftar.length === 1) return daftar[0];
+        if (daftar.length === 2) return daftar[0] + ' dan ' + daftar[1];
+        return daftar.slice(0, -1).join(', ') + ', dan ' + daftar[daftar.length - 1];
+      }
+
+      function teksDariTujuan(siswaId) {
+        var pil = pilihanMap[siswaId];
+        if (!pil || (!pil.baik.length && !pil.kurang.length)) return '';
+        var bagian = [];
+        if (pil.baik.length) {
+          bagian.push('Menunjukkan penguasaan yang sangat baik dalam ' +
+            gabungTujuanNaratif(pil.baik.map(function (t) { return t.deskripsi; })) + '.');
+        }
+        if (pil.kurang.length) {
+          bagian.push('Perlu peningkatan pemahaman dalam ' +
+            gabungTujuanNaratif(pil.kurang.map(function (t) { return t.deskripsi; })) + '.');
+        }
+        return bagian.join(' ');
+      }
+
+      function inputNilaiHtml(s) {
+        var n = nilaiMap[s.id];
+        var v = (n && n.nilai !== undefined && n.nilai !== null) ? n.nilai : '';
+        return '<input type="number" min="0" max="100" step="0.01" class="nilai-input" data-siswa="' + s.id + '" value="' + v + '">';
+      }
+
+      function capaianTextareaHtml(s) {
+        var n = nilaiMap[s.id];
+        var tersimpan = (n && n.capaian_pembelajaran !== undefined && n.capaian_pembelajaran !== null) ? n.capaian_pembelajaran : '';
+        var awal = tersimpan !== '' ? tersimpan : teksDariTujuan(s.id);
+        var adaTujuan = !!(pilihanMap[s.id] && (pilihanMap[s.id].baik.length || pilihanMap[s.id].kurang.length));
+        return '<textarea class="capaian-input" data-siswa="' + s.id + '" rows="2" placeholder="Belum ada Tujuan Pembelajaran dipilih untuk siswa ini.">' + escapeHtml(awal) + '</textarea>' +
+          (adaTujuan ? '<button type="button" class="btn-small" data-ambil-tp="' + s.id + '" style="margin-top:4px;">↺ Ambil dari TP Terpilih</button>' : '');
+      }
+
+      var isPAI = isPendidikanAgama(p.mapel.nama);
+      var kolomMapel = isPAI ? '<th>Mapel (sesuai agama)</th>' : '';
+
+      var NILAI_EXCEL_COLUMNS = [
+        { header: 'NIS' },
+        { header: 'Nama' },
+        { header: 'Nilai Rapor' },
+        { header: 'Capaian Pembelajaran' }
+      ];
+
+      var rowsHtml = siswaList.map(function (s, i) {
+        var selMapel = isPAI
+          ? '<td>' + (s.agama ? escapeHtml(namaMapelUntukSiswa(p.mapel.nama, s.agama)) : '<span style="color:var(--ink-soft);">Agama belum diisi</span>') + '</td>'
+          : '';
+        return '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(s.nis || '—') + '</td><td>' + escapeHtml(s.nama) + '</td>' + selMapel +
+          '<td style="max-width:100px;">' + inputNilaiHtml(s) + '</td>' +
+          '<td style="min-width:320px;">' + capaianTextareaHtml(s) + '</td></tr>';
+      }).join('');
+
+      content.innerHTML =
+        '<div class="panel-head"><div><div class="panel-head__title">Input Nilai — ' + escapeHtml(p.mapel.nama) + '</div>' +
+        '<div class="panel-head__desc">Kelas ' + escapeHtml(p.kelas.nama) + ', Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + '. Nilai Rapor 0–100. Capaian Pembelajaran otomatis tersusun dari Tujuan Pembelajaran yang dicentang di menu "Pilih Tujuan Pembelajaran" — boleh disunting manual di sini sebelum disimpan.' +
+        (isPAI ? ' Nama mapel di rapor otomatis menyesuaikan agama tiap siswa.' : '') + '</div></div>' +
+        '<button class="btn-small btn-small--primary" id="btnSimpanNilai">Simpan Semua Nilai</button></div>' +
+        '<div class="toolbar">' +
+        '<button class="btn-small" id="btnAmbilTpSemua">↺ Ambil dari TP Terpilih (Semua Siswa)</button>' +
+        '<button class="btn-small" id="btnKosongkanSemua">🗑 Kosongkan Semua Nilai & Capaian</button>' +
+        '<button class="btn-small" id="btnExportNilai">⬇ Unduh Data (Excel)</button>' +
+        '<button class="btn-small" id="btnTemplateNilai">⬇ Unduh Template Excel</button>' +
+        '<button class="btn-small" id="btnImportNilai">⬆ Import dari Excel</button>' +
+        '<input type="file" id="fileImportNilai" accept=".xlsx,.xls" style="display:none;">' +
+        '</div>' +
+        '<div id="importSummaryNilai"></div>' +
+        '<div id="nilaiMsg"></div>' +
+        '<div class="table-wrap"><table class="data-table"><thead><tr><th>No</th><th>NIS</th><th>Nama</th>' + kolomMapel + '<th>Nilai Rapor</th><th>Capaian Pembelajaran</th></tr></thead>' +
+        '<tbody>' + rowsHtml + '</tbody></table></div>';
+
+      content.querySelectorAll('button[data-ambil-tp]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var sid = btn.dataset.ambilTp;
+          var ta = content.querySelector('.capaian-input[data-siswa="' + sid + '"]');
+          if (ta) ta.value = teksDariTujuan(sid);
+        });
+      });
+
+      // ---------- Ambil dari TP Terpilih (Semua Siswa) ----------
+      // Mengisi ulang kolom Capaian Pembelajaran untuk SEMUA siswa yang
+      // sudah punya TP tercentang di menu "Pilih Tujuan Pembelajaran",
+      // sekaligus dalam satu klik (tidak perlu satu-satu per siswa).
+      // Siswa yang belum punya TP tercentang dilewati (tidak diubah).
+      document.getElementById('btnAmbilTpSemua').addEventListener('click', function () {
+        var siswaAdaTp = siswaList.filter(function (s) {
+          var pil = pilihanMap[s.id];
+          return !!(pil && (pil.baik.length || pil.kurang.length));
+        });
+
+        if (!siswaAdaTp.length) {
+          alert('Belum ada siswa yang punya Tujuan Pembelajaran tercentang di menu "Pilih Tujuan Pembelajaran" untuk mapel & kelas ini.');
+          return;
+        }
+
+        var konfirmasi = confirm(
+          'Isi ulang Capaian Pembelajaran untuk ' + siswaAdaTp.length + ' siswa yang sudah punya TP tercentang?\n\n' +
+          'Teks yang sudah ada di kolom Capaian Pembelajaran siswa tsb akan DITIMPA dengan narasi otomatis dari TP terpilih. ' +
+          'Siswa yang belum punya TP tercentang tidak akan diubah.'
+        );
+        if (!konfirmasi) return;
+
+        var diisi = 0;
+        siswaAdaTp.forEach(function (s) {
+          var ta = content.querySelector('.capaian-input[data-siswa="' + s.id + '"]');
+          if (!ta) return;
+          ta.value = teksDariTujuan(s.id);
+          diisi++;
+        });
+
+        document.getElementById('nilaiMsg').innerHTML =
+          '<div class="import-summary">Capaian Pembelajaran berhasil diisi otomatis dari TP terpilih untuk ' + diisi + ' siswa. Jangan lupa klik "Simpan Semua Nilai" untuk menyimpannya.</div>';
+      });
+
+      // ---------- Kosongkan Semua Nilai & Capaian ----------
+      // Mengosongkan SEMUA kolom Nilai Rapor dan Capaian Pembelajaran yang
+      // sedang tampil di layar (untuk seluruh siswa di kelas ini), supaya
+      // guru bisa mulai input ulang dari kosong. Belum tersimpan ke
+      // database sampai tombol "Simpan Semua Nilai" diklik.
+      document.getElementById('btnKosongkanSemua').addEventListener('click', function () {
+        var konfirmasi = confirm(
+          'Kosongkan Nilai Rapor dan Capaian Pembelajaran untuk SEMUA ' + siswaList.length + ' siswa di kelas ini?\n\n' +
+          'Ini hanya mengosongkan tampilan di layar — data belum benar-benar terhapus dari sistem sampai kamu klik "Simpan Semua Nilai".'
+        );
+        if (!konfirmasi) return;
+
+        content.querySelectorAll('.nilai-input').forEach(function (inp) { inp.value = ''; });
+        content.querySelectorAll('.capaian-input').forEach(function (ta) { ta.value = ''; });
+
+        document.getElementById('nilaiMsg').innerHTML =
+          '<div class="import-summary">Semua Nilai Rapor dan Capaian Pembelajaran di layar sudah dikosongkan. Klik "Simpan Semua Nilai" untuk menyimpan perubahan ini.</div>';
+      });
+
+      // ---------- Unduh Data (Excel) ----------
+      // Mengekspor nilai yang sedang tampil di layar (termasuk yang
+      // belum disimpan), supaya bisa diedit di Excel lalu di-import ulang.
+      document.getElementById('btnExportNilai').addEventListener('click', function () {
+        var rows = siswaList.map(function (s) {
+          var nilaiInp = content.querySelector('.nilai-input[data-siswa="' + s.id + '"]');
+          var capaianInp = content.querySelector('.capaian-input[data-siswa="' + s.id + '"]');
+          return {
+            'NIS': s.nis || '',
+            'Nama': s.nama,
+            'Nilai Rapor': nilaiInp && nilaiInp.value !== '' ? Number(nilaiInp.value) : '',
+            'Capaian Pembelajaran': capaianInp ? capaianInp.value : ''
+          };
+        });
+        var ws = XLSX.utils.json_to_sheet(rows, { header: NILAI_EXCEL_COLUMNS.map(function (c) { return c.header; }) });
+        var wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Nilai');
+        XLSX.writeFile(wb, 'nilai_' + p.mapel.nama.replace(/[^a-z0-9]/gi, '_') + '_' + p.kelas.nama.replace(/[^a-z0-9]/gi, '_') + '.xlsx');
+      });
+
+      // ---------- Unduh Template ----------
+      // Template sudah berisi NIS & Nama sesuai roster kelas ini, tinggal
+      // diisi Nilai Rapor & Capaian Pembelajaran lalu di-import kembali.
+      document.getElementById('btnTemplateNilai').addEventListener('click', function () {
+        var headers = NILAI_EXCEL_COLUMNS.map(function (c) { return c.header; });
+        var rows = siswaList.map(function (s) {
+          return { 'NIS': s.nis || '', 'Nama': s.nama, 'Nilai Rapor': '', 'Capaian Pembelajaran': '' };
+        });
+        var ws = XLSX.utils.json_to_sheet(rows, { header: headers });
+        var wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Template Nilai');
+        XLSX.writeFile(wb, 'template_import_nilai_' + p.mapel.nama.replace(/[^a-z0-9]/gi, '_') + '_' + p.kelas.nama.replace(/[^a-z0-9]/gi, '_') + '.xlsx');
+      });
+
+      // ---------- Import Excel ----------
+      document.getElementById('btnImportNilai').addEventListener('click', function () {
+        document.getElementById('fileImportNilai').click();
+      });
+
+      document.getElementById('fileImportNilai').addEventListener('change', function (e) {
+        var file = e.target.files[0];
+        if (!file) return;
+
+        var reader = new FileReader();
+        reader.onload = async function (evt) {
+          var data = new Uint8Array(evt.target.result);
+          var wb = XLSX.read(data, { type: 'array', cellDates: true });
+          var sheet = wb.Sheets[wb.SheetNames[0]];
+          var rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+          var siswaByNis = {};
+          siswaList.forEach(function (s) { if (s.nis) siswaByNis[String(s.nis).trim()] = s; });
+
+          var ditambah = 0, diperbarui = 0, dilewati = 0;
+          var pesan = [];
+
+          for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            var nis = String(row['NIS'] || '').trim();
+            if (!nis) { dilewati++; pesan.push('Baris ' + (i + 2) + ': dilewati (NIS belum diisi).'); continue; }
+
+            var siswa = siswaByNis[nis];
+            if (!siswa) { dilewati++; pesan.push('Baris ' + (i + 2) + ': dilewati (NIS ' + nis + ' tidak ditemukan di kelas ' + p.kelas.nama + ').'); continue; }
+
+            var nilaiRaw = row['Nilai Rapor'];
+            var vNilai = (nilaiRaw === '' || nilaiRaw === undefined || nilaiRaw === null) ? null : parseFloat(nilaiRaw);
+            if (vNilai !== null && isNaN(vNilai)) vNilai = null;
+            var vCapaian = String(row['Capaian Pembelajaran'] || '').trim();
+
+            if (vNilai === null && !vCapaian) { dilewati++; pesan.push('Baris ' + (i + 2) + ' (' + siswa.nama + '): dilewati, Nilai Rapor & Capaian Pembelajaran kosong.'); continue; }
+
+            var sudahAda = !!(nilaiMap[siswa.id] && (nilaiMap[siswa.id].nilai !== null && nilaiMap[siswa.id].nilai !== undefined));
+            var res = await supabaseClient.from('nilai').upsert({
+              siswa_id: siswa.id,
+              mapel_id: p.mapel.id,
+              tahun_ajaran_id: tahunAktif.id,
+              jenis: 'rapor',
+              nilai: vNilai,
+              capaian_pembelajaran: vCapaian || null,
+              guru_id: user.id,
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'siswa_id,mapel_id,tahun_ajaran_id,jenis' });
+
+            if (res.error) { dilewati++; pesan.push('Baris ' + (i + 2) + ' (' + siswa.nama + '): gagal simpan — ' + res.error.message); continue; }
+
+            sudahAda ? diperbarui++ : ditambah++;
+
+            // Refleksikan langsung ke tabel yang sedang tampil, biar guru
+            // lihat hasilnya tanpa perlu muat ulang halaman.
+            nilaiMap[siswa.id] = { siswa_id: siswa.id, nilai: vNilai, capaian_pembelajaran: vCapaian || null };
+            var nilaiInp = content.querySelector('.nilai-input[data-siswa="' + siswa.id + '"]');
+            var capaianInp = content.querySelector('.capaian-input[data-siswa="' + siswa.id + '"]');
+            if (nilaiInp) nilaiInp.value = vNilai === null ? '' : vNilai;
+            if (capaianInp) capaianInp.value = vCapaian || '';
+          }
+
+          var ringkasan = ditambah + ' nilai ditambahkan, ' + diperbarui + ' nilai diperbarui, ' + dilewati + ' baris dilewati.';
+          document.getElementById('importSummaryNilai').innerHTML =
+            '<div class="import-summary"><strong>Hasil import:</strong> ' + escapeHtml(ringkasan) +
+            (pesan.length ? '\n\n' + escapeHtml(pesan.join('\n')) : '') + '</div>';
+
+          document.getElementById('fileImportNilai').value = '';
+        };
+        reader.readAsArrayBuffer(file);
+      });
+
+      document.getElementById('btnSimpanNilai').addEventListener('click', async function () {
+        var btn = this;
+        btn.disabled = true;
+        btn.textContent = 'Menyimpan...';
+
+        var jobs = [];
+        siswaList.forEach(function (s) {
+          var nilaiInp = content.querySelector('.nilai-input[data-siswa="' + s.id + '"]');
+          var capaianInp = content.querySelector('.capaian-input[data-siswa="' + s.id + '"]');
+          var vNilai = nilaiInp.value.trim();
+          var vCapaian = capaianInp.value.trim();
+          var sudahPunyaData = !!nilaiMap[s.id];
+          // Lewati hanya kalau memang belum pernah ada data tersimpan DAN
+          // kolomnya masih kosong — supaya tidak bikin baris kosong baru
+          // untuk siswa yang belum pernah diisi sama sekali. Tapi kalau
+          // siswa ini SUDAH punya data tersimpan lalu dikosongkan (mis.
+          // lewat tombol "Kosongkan Semua Nilai & Capaian"), tetap harus
+          // dikirim supaya nilai lama di database ikut terhapus/null-kan.
+          if (vNilai === '' && vCapaian === '' && !sudahPunyaData) return;
+
+          jobs.push(supabaseClient.from('nilai').upsert({
+            siswa_id: s.id,
+            mapel_id: p.mapel.id,
+            tahun_ajaran_id: tahunAktif.id,
+            jenis: 'rapor',
+            nilai: vNilai === '' ? null : parseFloat(vNilai),
+            capaian_pembelajaran: vCapaian === '' ? null : vCapaian,
+            guru_id: user.id,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'siswa_id,mapel_id,tahun_ajaran_id,jenis' }));
+        });
+
+        var hasil = await Promise.all(jobs);
+        var gagal = hasil.filter(function (r) { return r.error; });
+
+        btn.disabled = false;
+        btn.textContent = 'Simpan Semua Nilai';
+        document.getElementById('nilaiMsg').innerHTML = gagal.length
+          ? '<div class="import-summary">Tersimpan, tapi ' + gagal.length + ' baris gagal disimpan (' + gagal[0].error.message + ').</div>'
+          : '<div class="import-summary">' + jobs.length + ' data siswa berhasil disimpan.</div>';
+      });
+    }
+
+    // ================= GURU MAPEL: Susun Tujuan Pembelajaran =================
+    // Revisi: TP disusun per MAPEL saja (tidak perlu pilih kelas lagi).
+    // Setiap TP ditandai Semester (1–6, sama penomoran dengan Leger
+    // Nilai 6 Semester) dan status Aktif/Tidak Aktif.
+    var TP_EXCEL_COLUMNS = [
+      { key: 'kode', header: 'Kode' },
+      { key: 'deskripsi', header: 'Deskripsi' },
+      { key: 'urutan', header: 'Urutan' },
+      { key: 'semester', header: 'Semester' },
+      { key: 'status', header: 'Status' }
+    ];
+
+    function opsiSemesterHtml(selected) {
+      var opts = '';
+      for (var s = 1; s <= 6; s++) {
+        opts += '<option value="' + s + '"' + (Number(selected) === s ? ' selected' : '') + '>Semester ' + s + '</option>';
+      }
+      return opts;
+    }
+
+    function opsiStatusHtml(isAktif) {
+      return '<option value="aktif"' + (isAktif ? ' selected' : '') + '>Aktif</option>' +
+        '<option value="tidak"' + (!isAktif ? ' selected' : '') + '>Tidak Aktif</option>';
+    }
+
+    function statusChipHtml(isAktif) {
+      return isAktif ? '<span class="chip chip--aktif">Aktif</span>' : '<span class="chip chip--muted">Tidak Aktif</span>';
+    }
+
+    async function renderTujuanPembelajaran(mapel) {
+      content.innerHTML = renderPlaceholder('Memuat...', 'Mengambil daftar Tujuan Pembelajaran ' + mapel.nama + '.');
+
+      content.innerHTML =
+        '<div class="panel-head"><div><div class="panel-head__title">Tujuan Pembelajaran — ' + escapeHtml(mapel.nama) + '</div>' +
+        '<div class="panel-head__desc">Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + '. TP tidak terikat kelas tertentu — tandai Semester (1–6) dan status Aktif/Tidak Aktif tiap TP; urutan menentukan tampilan TP di daftar pilihan per siswa.</div></div></div>' +
+        '<form class="add-form" id="formTujuan">' +
+        '<div class="field"><label>Kode</label><input type="text" id="tpKode" placeholder="TP.1"></div>' +
+        '<div class="field" style="flex:2;min-width:260px;"><label>Deskripsi</label><input type="text" id="tpDeskripsi" placeholder="Uraian tujuan pembelajaran" required></div>' +
+        '<div class="field" style="max-width:100px;"><label>Urutan</label><input type="number" id="tpUrutan" min="0" step="1" placeholder="0"></div>' +
+        '<div class="field" style="max-width:150px;"><label>Semester</label><select id="tpSemester">' + opsiSemesterHtml(1) + '</select></div>' +
+        '<div class="field" style="max-width:140px;"><label>Status</label><select id="tpStatus">' + opsiStatusHtml(true) + '</select></div>' +
+        '<button type="submit" class="btn-small btn-small--primary">Tambah</button>' +
+        '</form>' +
+        '<div class="toolbar">' +
+        '<button class="btn-small" id="btnExportTujuan">⬇ Unduh Data (Excel)</button>' +
+        '<button class="btn-small" id="btnTemplateTujuan">⬇ Unduh Template Excel</button>' +
+        '<button class="btn-small" id="btnImportTujuan">⬆ Import dari Excel</button>' +
+        '<input type="file" id="fileImportTujuan" accept=".xlsx,.xls" style="display:none;">' +
+        '</div>' +
+        '<div id="importSummaryTujuan"></div>' +
+        '<div class="table-wrap"><table class="data-table"><thead><tr><th>Semester</th><th>Urutan</th><th>Kode</th><th>Deskripsi</th><th>Status</th><th></th></tr></thead><tbody id="tpBody"></tbody></table></div>';
+
+      document.getElementById('formTujuan').addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var deskripsi = document.getElementById('tpDeskripsi').value.trim();
+        if (!deskripsi) return;
+        var res = await supabaseClient.from('tujuan_pembelajaran').insert({
+          guru_id: user.id,
+          mapel_id: mapel.id,
+          tahun_ajaran_id: tahunAktif.id,
+          kode: document.getElementById('tpKode').value.trim() || null,
+          deskripsi: deskripsi,
+          urutan: parseInt(document.getElementById('tpUrutan').value, 10) || 0,
+          semester: parseInt(document.getElementById('tpSemester').value, 10) || 1,
+          is_aktif: document.getElementById('tpStatus').value === 'aktif'
+        });
+        if (res.error) { alert('Gagal menambah: ' + res.error.message); return; }
+        renderTujuanPembelajaran(mapel);
+      });
+
+      async function muatUlangTujuan() {
+        var listRes = await supabaseClient
+          .from('tujuan_pembelajaran')
+          .select('id, kode, deskripsi, urutan, semester, is_aktif')
+          .eq('guru_id', user.id)
+          .eq('mapel_id', mapel.id)
+          .eq('tahun_ajaran_id', tahunAktif.id)
+          .order('semester')
+          .order('urutan')
+          .order('created_at');
+        var rows = listRes.data || [];
+        var body = document.getElementById('tpBody');
+        body.innerHTML = rows.length ? '' : '<tr><td colspan="6">Belum ada Tujuan Pembelajaran. Tambahkan lewat form di atas, atau import dari Excel.</td></tr>';
+        rows.forEach(function (r) {
+          var tr = document.createElement('tr');
+          tr.innerHTML =
+            '<td>Semester ' + r.semester + '</td><td>' + r.urutan + '</td><td>' + escapeHtml(r.kode || '—') + '</td><td>' + escapeHtml(r.deskripsi) + '</td>' +
+            '<td>' + statusChipHtml(r.is_aktif) + '</td>' +
+            '<td><button class="btn-small" data-toggle-id="' + r.id + '">' + (r.is_aktif ? 'Nonaktifkan' : 'Aktifkan') + '</button> ' +
+            '<button class="btn-small" data-edit-id="' + r.id + '">Edit</button> ' +
+            '<button class="btn-small btn-small--danger" data-id="' + r.id + '">Hapus</button></td>';
+          body.appendChild(tr);
+
+          tr.querySelector('[data-edit-id]').addEventListener('click', function () {
+            bukaModalTujuan(r);
+          });
+        });
+        body.querySelectorAll('button[data-toggle-id]').forEach(function (btn) {
+          btn.addEventListener('click', async function () {
+            var idAktif = btn.dataset.toggleId;
+            var baris = rows.filter(function (r) { return r.id === idAktif; })[0];
+            if (!baris) return;
+            var res = await supabaseClient.from('tujuan_pembelajaran').update({ is_aktif: !baris.is_aktif }).eq('id', idAktif);
+            if (res.error) { alert('Gagal mengubah status: ' + res.error.message); return; }
+            daftarTujuanTerkini = await muatUlangTujuan();
+          });
+        });
+        body.querySelectorAll('button[data-id]').forEach(function (btn) {
+          btn.addEventListener('click', async function () {
+            if (!confirm('Hapus Tujuan Pembelajaran ini? Pilihan siswa yang memakai TP ini juga akan terhapus.')) return;
+            await supabaseClient.from('tujuan_pembelajaran').delete().eq('id', btn.dataset.id);
+            daftarTujuanTerkini = await muatUlangTujuan();
+          });
+        });
+        return rows;
+      }
+
+      var daftarTujuanTerkini = await muatUlangTujuan();
+
+      // ---------- Modal Edit ----------
+      function bukaModalTujuan(existing) {
+        var overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.innerHTML =
+          '<div class="modal-box">' +
+          '<div class="modal-box__head"><div class="modal-box__title">Edit Tujuan Pembelajaran</div>' +
+          '<button type="button" class="modal-box__close" id="modalCloseBtn">×</button></div>' +
+          '<form id="formModalTujuan">' +
+          '<div class="form-grid">' +
+          '<div class="field"><label>Kode</label><input type="text" id="f_tpKode" value="' + escapeHtml(existing.kode || '') + '"></div>' +
+          '<div class="field"><label>Urutan</label><input type="number" id="f_tpUrutan" min="0" step="1" value="' + existing.urutan + '"></div>' +
+          '<div class="field"><label>Semester</label><select id="f_tpSemester">' + opsiSemesterHtml(existing.semester) + '</select></div>' +
+          '<div class="field"><label>Status</label><select id="f_tpStatus">' + opsiStatusHtml(existing.is_aktif) + '</select></div>' +
+          '<div class="field" style="grid-column:1 / -1;"><label>Deskripsi</label><input type="text" id="f_tpDeskripsi" value="' + escapeHtml(existing.deskripsi) + '" required></div>' +
+          '</div>' +
+          '<div class="modal-box__actions">' +
+          '<button type="button" class="btn-small" id="modalCancelBtn">Batal</button>' +
+          '<button type="submit" class="btn-small btn-small--primary">Simpan</button>' +
+          '</div>' +
+          '</form>' +
+          '</div>';
+        document.body.appendChild(overlay);
+
+        function tutup() { overlay.remove(); }
+        document.getElementById('modalCloseBtn').addEventListener('click', tutup);
+        document.getElementById('modalCancelBtn').addEventListener('click', tutup);
+        overlay.addEventListener('click', function (e) { if (e.target === overlay) tutup(); });
+
+        document.getElementById('formModalTujuan').addEventListener('submit', async function (e) {
+          e.preventDefault();
+          var deskripsi = document.getElementById('f_tpDeskripsi').value.trim();
+          if (!deskripsi) return;
+          var payload = {
+            kode: document.getElementById('f_tpKode').value.trim() || null,
+            deskripsi: deskripsi,
+            urutan: parseInt(document.getElementById('f_tpUrutan').value, 10) || 0,
+            semester: parseInt(document.getElementById('f_tpSemester').value, 10) || 1,
+            is_aktif: document.getElementById('f_tpStatus').value === 'aktif'
+          };
+          var res = await supabaseClient.from('tujuan_pembelajaran').update(payload).eq('id', existing.id);
+          if (res.error) { alert('Gagal menyimpan: ' + res.error.message); return; }
+          tutup();
+          daftarTujuanTerkini = await muatUlangTujuan();
+        });
+      }
+
+      // ---------- Unduh Data (Excel) ----------
+      document.getElementById('btnExportTujuan').addEventListener('click', function () {
+        var rows = daftarTujuanTerkini.map(function (r) {
+          return {
+            'Kode': r.kode === null || r.kode === undefined ? '' : r.kode,
+            'Deskripsi': r.deskripsi,
+            'Urutan': r.urutan,
+            'Semester': r.semester,
+            'Status': r.is_aktif ? 'Aktif' : 'Tidak Aktif'
+          };
+        });
+        var ws = XLSX.utils.json_to_sheet(rows, { header: TP_EXCEL_COLUMNS.map(function (c) { return c.header; }) });
+        var wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Tujuan Pembelajaran');
+        XLSX.writeFile(wb, 'tujuan_pembelajaran_' + mapel.nama.replace(/[^a-z0-9]/gi, '_') + '.xlsx');
+      });
+
+      // ---------- Unduh Template ----------
+      document.getElementById('btnTemplateTujuan').addEventListener('click', function () {
+        var headers = TP_EXCEL_COLUMNS.map(function (c) { return c.header; });
+        var contoh = { 'Kode': 'TP.1', 'Deskripsi': 'Menjelaskan konsep dasar ...', 'Urutan': 1, 'Semester': 1, 'Status': 'Aktif' };
+        var ws = XLSX.utils.json_to_sheet([contoh], { header: headers });
+        var wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Template Tujuan');
+        XLSX.writeFile(wb, 'template_import_tujuan_pembelajaran.xlsx');
+      });
+
+      // ---------- Import Excel ----------
+      document.getElementById('btnImportTujuan').addEventListener('click', function () {
+        document.getElementById('fileImportTujuan').click();
+      });
+
+      document.getElementById('fileImportTujuan').addEventListener('change', function (e) {
+        var file = e.target.files[0];
+        if (!file) return;
+
+        var reader = new FileReader();
+        reader.onload = async function (evt) {
+          var data = new Uint8Array(evt.target.result);
+          var wb = XLSX.read(data, { type: 'array', cellDates: true });
+          var sheet = wb.Sheets[wb.SheetNames[0]];
+          var rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+          var tujuanByKode = {};
+          daftarTujuanTerkini.forEach(function (r) {
+            if (r.kode) tujuanByKode[r.kode.trim().toLowerCase()] = r;
+          });
+
+          var ditambah = 0, diperbarui = 0, dilewati = 0;
+          var pesan = [];
+
+          for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            var kode = String(row['Kode'] || '').trim();
+            var deskripsi = String(row['Deskripsi'] || '').trim();
+            var urutanRaw = row['Urutan'];
+            var urutan = parseInt(urutanRaw, 10);
+            if (isNaN(urutan)) urutan = 0;
+            var semester = parseInt(row['Semester'], 10);
+            if (isNaN(semester) || semester < 1 || semester > 6) semester = 1;
+            var statusRaw = String(row['Status'] || '').trim().toLowerCase();
+            var isAktif = statusRaw !== 'tidak aktif' && statusRaw !== 'nonaktif' && statusRaw !== 'tidak';
+
+            if (!deskripsi) {
+              dilewati++;
+              pesan.push('Baris ' + (i + 2) + ': dilewati (Deskripsi belum diisi).');
+              continue;
+            }
+
+            var payload = {
+              guru_id: user.id,
+              mapel_id: mapel.id,
+              tahun_ajaran_id: tahunAktif.id,
+              kode: kode || null,
+              deskripsi: deskripsi,
+              urutan: urutan,
+              semester: semester,
+              is_aktif: isAktif
+            };
+
+            var existing = kode ? tujuanByKode[kode.toLowerCase()] : null;
+            if (existing) {
+              var upd = await supabaseClient.from('tujuan_pembelajaran').update(payload).eq('id', existing.id);
+              if (upd.error) { dilewati++; pesan.push('Baris ' + (i + 2) + ' (' + kode + '): gagal update — ' + upd.error.message); continue; }
+              diperbarui++;
+            } else {
+              var ins = await supabaseClient.from('tujuan_pembelajaran').insert(payload);
+              if (ins.error) { dilewati++; pesan.push('Baris ' + (i + 2) + (kode ? ' (' + kode + ')' : '') + ': gagal tambah — ' + ins.error.message); continue; }
+              ditambah++;
+            }
+          }
+
+          var ringkasan = ditambah + ' TP ditambahkan, ' + diperbarui + ' TP diperbarui, ' + dilewati + ' baris dilewati.';
+          document.getElementById('importSummaryTujuan').innerHTML =
+            '<div class="import-summary"><strong>Hasil import:</strong> ' + escapeHtml(ringkasan) +
+            (pesan.length ? '\n\n' + escapeHtml(pesan.join('\n')) : '') + '</div>';
+
+          document.getElementById('fileImportTujuan').value = '';
+          daftarTujuanTerkini = await muatUlangTujuan();
+        };
+        reader.readAsArrayBuffer(file);
+      });
+    }
+
+
+    // ================= GURU MAPEL: Pilih Tujuan Pembelajaran per Siswa =================
+    async function renderPilihTujuanPembelajaran(p) {
+      content.innerHTML = renderPlaceholder('Memuat...', 'Mengambil daftar siswa & Tujuan Pembelajaran ' + p.mapel.nama + ' — ' + p.kelas.nama + '.');
+
+      var siswaList = await ambilSiswaKelas(p.kelas.id);
+      if (!siswaList.length) {
+        content.innerHTML = renderPlaceholder('Pilih Tujuan Pembelajaran — ' + p.mapel.nama, 'Belum ada siswa di kelas ' + p.kelas.nama + ' pada tahun ajaran ini.');
+        return;
+      }
+
+      // TP tidak lagi terikat kelas — disaring lewat Semester (1–6) hasil
+      // Tingkat kelas ini + Semester tahun ajaran aktif, dan hanya yang
+      // berstatus Aktif yang muncul di daftar pilihan.
+      var semesterKe = hitungSemesterKe(p.kelas.tingkat, tahunAktif.semester);
+      var tpRes = await supabaseClient
+        .from('tujuan_pembelajaran')
+        .select('id, kode, deskripsi, urutan, semester')
+        .eq('guru_id', user.id)
+        .eq('mapel_id', p.mapel.id)
+        .eq('tahun_ajaran_id', tahunAktif.id)
+        .eq('is_aktif', true)
+        .eq('semester', semesterKe)
+        .order('urutan')
+        .order('created_at');
+      var tpList = tpRes.data || [];
+
+      if (!tpList.length) {
+        content.innerHTML =
+          '<div class="panel-head"><div><div class="panel-head__title">Pilih Tujuan Pembelajaran — ' + escapeHtml(p.mapel.nama) + '</div>' +
+          '<div class="panel-head__desc">Kelas ' + escapeHtml(p.kelas.nama) + (semesterKe ? ' · Semester ' + semesterKe : '') + '.</div></div></div>' +
+          '<div class="panel-note">Belum ada Tujuan Pembelajaran berstatus Aktif untuk Semester ' + (semesterKe || '—') + ' di mapel ini. Susun atau aktifkan dulu TP-nya di menu "Tujuan Pembelajaran".</div>';
+        return;
+      }
+
+      var siswaIds = siswaList.map(function (s) { return s.id; });
+      var pilihanRes = await supabaseClient
+        .from('tujuan_pembelajaran_siswa')
+        .select('siswa_id, tp_id, kategori')
+        .eq('guru_id', user.id)
+        .eq('mapel_id', p.mapel.id)
+        .eq('kelas_id', p.kelas.id)
+        .eq('tahun_ajaran_id', tahunAktif.id)
+        .in('siswa_id', siswaIds);
+
+      // pilihanMap[siswaId][kategori] = Set(tpId)
+      var pilihanMap = {};
+      (pilihanRes.data || []).forEach(function (r) {
+        pilihanMap[r.siswa_id] = pilihanMap[r.siswa_id] || { baik: new Set(), kurang: new Set() };
+        pilihanMap[r.siswa_id][r.kategori].add(r.tp_id);
+      });
+
+      var urutanSiswa = siswaList.slice(); // default: sudah urut nama (dari ambilSiswaKelas)
+
+      // Satu TP cuma boleh dicentang di salah satu sisi (Baik ATAU Kurang)
+      // untuk siswa yang sama. Kalau sudah dicentang di satu sisi, sisi
+      // lawan untuk TP yang sama otomatis dikunci (disabled) sampai
+      // centangnya di sisi ini dihapus dulu.
+      function checklistHtml(siswaId, kategori) {
+        var setTerpilih = (pilihanMap[siswaId] && pilihanMap[siswaId][kategori]) || new Set();
+        var kategoriLawan = kategori === 'baik' ? 'kurang' : 'baik';
+        var setLawan = (pilihanMap[siswaId] && pilihanMap[siswaId][kategoriLawan]) || new Set();
+        return '<div class="tp-checklist">' + tpList.map(function (tp) {
+          var isChecked = setTerpilih.has(tp.id);
+          var isDisabled = !isChecked && setLawan.has(tp.id);
+          var checked = isChecked ? ' checked' : '';
+          var disabled = isDisabled ? ' disabled' : '';
+          var label = (tp.kode ? '<strong>' + escapeHtml(tp.kode) + '</strong> — ' : '') + escapeHtml(tp.deskripsi);
+          return '<label class="tp-checklist__item' + (isDisabled ? ' tp-checklist__item--disabled' : '') + '"><input type="checkbox" class="tp-check" data-siswa="' + siswaId + '" data-kategori="' + kategori + '" data-tp="' + tp.id + '"' + checked + disabled + '> <span>' + label + '</span></label>';
+        }).join('') + '</div>';
+      }
+
+      function renderTabelSiswa() {
+        var rowsHtml = urutanSiswa.map(function (s, i) {
+          return '<tr data-row-siswa="' + s.id + '"><td>' + (i + 1) + '</td><td>' + escapeHtml(s.nis || '—') + '</td><td>' + escapeHtml(s.nama) + '</td>' +
+            '<td>' + checklistHtml(s.id, 'baik') + '</td>' +
+            '<td>' + checklistHtml(s.id, 'kurang') + '</td>' +
+            '<td><span class="tp-status" data-status-siswa="' + s.id + '"></span></td></tr>';
+        }).join('');
+
+        content.innerHTML =
+          '<div class="panel-head"><div><div class="panel-head__title">Pilih Tujuan Pembelajaran — ' + escapeHtml(p.mapel.nama) + '</div>' +
+          '<div class="panel-head__desc">Kelas ' + escapeHtml(p.kelas.nama) + (semesterKe ? ' · Semester ' + semesterKe : '') + ', Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + '. Centang TP yang sesuai untuk tiap siswa — boleh lebih dari satu TP per siswa. Satu TP hanya boleh dicentang di salah satu sisi, Baik ATAU Kurang (kalau sudah dicentang di satu sisi, sisi lawan terkunci sampai centangnya dihapus dulu). Minimal 1 TP wajib dicentang per siswa.</div></div>' +
+          '<div class="field" style="min-width:200px;margin:0;"><label>Urutkan Siswa</label>' +
+          '<select id="urutkanSiswa"><option value="nama">Nama (A–Z)</option><option value="nis">NIS</option><option value="belum">Belum Lengkap Dulu</option></select></div>' +
+          '<button class="btn-small btn-small--primary" id="btnSimpanTujuanSiswa">Simpan Semua Pilihan</button></div>' +
+          '<div id="tujuanSiswaMsg"></div>' +
+          '<div class="table-wrap"><table class="data-table data-table--tp"><thead><tr><th>No</th><th>NIS</th><th>Nama</th>' +
+          '<th>Tujuan Pembelajaran — Capaian Baik</th><th>Tujuan Pembelajaran — Capaian Kurang</th><th>Status</th></tr></thead>' +
+          '<tbody id="tpSiswaBody">' + rowsHtml + '</tbody></table></div>';
+
+        perbaruiSemuaStatus();
+
+        document.getElementById('urutkanSiswa').addEventListener('change', function () {
+          var mode = this.value;
+          if (mode === 'nama') {
+            urutanSiswa.sort(function (a, b) { return a.nama.localeCompare(b.nama); });
+          } else if (mode === 'nis') {
+            urutanSiswa.sort(function (a, b) { return (a.nis || '').localeCompare(b.nis || ''); });
+          } else if (mode === 'belum') {
+            urutanSiswa.sort(function (a, b) {
+              return hitungTerpilih(a.id) - hitungTerpilih(b.id) || a.nama.localeCompare(b.nama);
+            });
+          }
+          renderTabelSiswa();
+        });
+
+        document.getElementById('btnSimpanTujuanSiswa').addEventListener('click', simpanSemuaPilihan);
+      }
+
+      function hitungTerpilih(siswaId) {
+        var p2 = pilihanMap[siswaId];
+        if (!p2) return 0;
+        return p2.baik.size + p2.kurang.size;
+      }
+
+      function statusSiswa(siswaId) {
+        var total = hitungTerpilih(siswaId);
+        return total > 0
+          ? '<span style="color:var(--success);font-weight:600;">✓ ' + total + ' TP dipilih</span>'
+          : '<span style="color:var(--danger);font-weight:600;">Belum ada TP dipilih</span>';
+      }
+
+      function perbaruiSemuaStatus() {
+        siswaList.forEach(function (s) {
+          var el = document.querySelector('[data-status-siswa="' + s.id + '"]');
+          if (el) el.innerHTML = statusSiswa(s.id);
+        });
+      }
+
+      content.addEventListener('change', function (e) {
+        if (!e.target.classList || !e.target.classList.contains('tp-check')) return;
+        var sid = e.target.dataset.siswa, kat = e.target.dataset.kategori, tid = e.target.dataset.tp;
+        var katLawan = kat === 'baik' ? 'kurang' : 'baik';
+        pilihanMap[sid] = pilihanMap[sid] || { baik: new Set(), kurang: new Set() };
+        if (e.target.checked) { pilihanMap[sid][kat].add(tid); } else { pilihanMap[sid][kat].delete(tid); }
+
+        // Kunci/buka checkbox TP yang sama di sisi lawan (Baik <-> Kurang).
+        var lawanEl = document.querySelector('.tp-check[data-siswa="' + sid + '"][data-kategori="' + katLawan + '"][data-tp="' + tid + '"]');
+        if (lawanEl) {
+          lawanEl.disabled = e.target.checked;
+          var lawanLabel = lawanEl.closest('.tp-checklist__item');
+          if (lawanLabel) lawanLabel.classList.toggle('tp-checklist__item--disabled', e.target.checked);
+        }
+
+        var statusEl = document.querySelector('[data-status-siswa="' + sid + '"]');
+        if (statusEl) statusEl.innerHTML = statusSiswa(sid);
+      });
+
+      async function simpanSemuaPilihan() {
+        var kosong = siswaList.filter(function (s) { return hitungTerpilih(s.id) === 0; });
+        if (kosong.length) {
+          alert('Belum bisa disimpan: ' + kosong.length + ' siswa belum punya TP tercentang (baik/kurang). Minimal 1 TP wajib dicentang per siswa:\n' +
+            kosong.slice(0, 10).map(function (s) { return '- ' + s.nama; }).join('\n') + (kosong.length > 10 ? '\n...' : ''));
+          return;
+        }
+
+        var btn = document.getElementById('btnSimpanTujuanSiswa');
+        btn.disabled = true;
+        btn.textContent = 'Menyimpan...';
+
+        // Hapus dulu semua pilihan lama utk kombinasi guru+mapel+kelas+tahun ini,
+        // lalu simpan ulang dari state saat ini (lebih sederhana & konsisten
+        // daripada diff baris per baris).
+        var hapusRes = await supabaseClient
+          .from('tujuan_pembelajaran_siswa')
+          .delete()
+          .eq('guru_id', user.id)
+          .eq('mapel_id', p.mapel.id)
+          .eq('kelas_id', p.kelas.id)
+          .eq('tahun_ajaran_id', tahunAktif.id)
+          .in('siswa_id', siswaIds);
+
+        if (hapusRes.error) {
+          btn.disabled = false;
+          btn.textContent = 'Simpan Semua Pilihan';
+          document.getElementById('tujuanSiswaMsg').innerHTML = '<div class="import-summary">Gagal menyimpan: ' + escapeHtml(hapusRes.error.message) + '</div>';
+          return;
+        }
+
+        var baris = [];
+        siswaList.forEach(function (s) {
+          var pil = pilihanMap[s.id] || { baik: new Set(), kurang: new Set() };
+          ['baik', 'kurang'].forEach(function (kat) {
+            pil[kat].forEach(function (tpId) {
+              baris.push({
+                siswa_id: s.id,
+                tp_id: tpId,
+                guru_id: user.id,
+                mapel_id: p.mapel.id,
+                kelas_id: p.kelas.id,
+                tahun_ajaran_id: tahunAktif.id,
+                kategori: kat
+              });
+            });
+          });
+        });
+
+        var insRes = baris.length ? await supabaseClient.from('tujuan_pembelajaran_siswa').insert(baris) : { error: null };
+
+        btn.disabled = false;
+        btn.textContent = 'Simpan Semua Pilihan';
+        document.getElementById('tujuanSiswaMsg').innerHTML = insRes.error
+          ? '<div class="import-summary">Gagal menyimpan: ' + escapeHtml(insRes.error.message) + '</div>'
+          : '<div class="import-summary">Pilihan Tujuan Pembelajaran untuk ' + siswaList.length + ' siswa berhasil disimpan.</div>';
+      }
+
+      renderTabelSiswa();
+    }
+
+    // ================= WALI KELAS: Rekap Nilai =================
+    async function renderRekapNilai(wk) {
+      content.innerHTML = renderPlaceholder('Memuat...', 'Menyusun rekap nilai kelas ' + wk.kelas.nama + '.');
+
+      var siswaList = await ambilSiswaKelas(wk.kelas.id);
+      if (!siswaList.length) {
+        content.innerHTML = renderPlaceholder('Rekap Nilai — ' + wk.kelas.nama, 'Belum ada siswa di kelas ini pada tahun ajaran aktif.');
+        return;
+      }
+      var siswaIds = siswaList.map(function (s) { return s.id; });
+
+      var penugasanRes = await supabaseClient
+        .from('penugasan_guru')
+        .select('mapel:mapel_id(id, nama)')
+        .eq('kelas_id', wk.kelas.id)
+        .eq('tahun_ajaran_id', tahunAktif.id);
+      var mapelMap = {};
+      (penugasanRes.data || []).forEach(function (r) { if (r.mapel) mapelMap[r.mapel.id] = r.mapel.nama; });
+      var mapelList = Object.keys(mapelMap)
+        .map(function (id) { return { id: id, nama: mapelMap[id] }; })
+        .sort(function (a, b) { return a.nama.localeCompare(b.nama); });
+
+      if (!mapelList.length) {
+        content.innerHTML = renderPlaceholder('Rekap Nilai — ' + wk.kelas.nama, 'Belum ada mata pelajaran yang ditugaskan untuk kelas ini di tahun ajaran aktif.');
+        return;
+      }
+
+      var nilaiRes = await supabaseClient
+        .from('nilai')
+        .select('siswa_id, mapel_id, nilai')
+        .eq('tahun_ajaran_id', tahunAktif.id)
+        .eq('jenis', 'rapor')
+        .in('siswa_id', siswaIds);
+      var nilaiMap = {};
+      (nilaiRes.data || []).forEach(function (r) {
+        if (!nilaiMap[r.siswa_id]) nilaiMap[r.siswa_id] = {};
+        nilaiMap[r.siswa_id][r.mapel_id] = r;
+      });
+
+      var adaMapelAgama = mapelList.some(function (m) { return isPendidikanAgama(m.nama); });
+      var headerMapel = mapelList.map(function (m) {
+        return '<th>' + escapeHtml(m.nama) + (isPendidikanAgama(m.nama) ? ' *' : '') + '</th>';
+      }).join('');
+      var rowsHtml = siswaList.map(function (s, i) {
+        var cells = mapelList.map(function (m) {
+          var n = (nilaiMap[s.id] && nilaiMap[s.id][m.id]) || {};
+          var nilaiTampil = (n.nilai === undefined || n.nilai === null) ? '—' : n.nilai;
+          var labelAgama = isPendidikanAgama(m.nama)
+            ? '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:2px;">' + escapeHtml(s.agama || 'agama belum diisi') + '</div>'
+            : '';
+          return '<td style="text-align:center;">' + labelAgama + nilaiTampil + '</td>';
+        }).join('');
+        return '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(s.nama) + '</td>' + cells + '</tr>';
+      }).join('');
+
+      content.innerHTML =
+        '<div class="panel-head"><div><div class="panel-head__title">Rekap Nilai — ' + escapeHtml(wk.kelas.nama) + '</div>' +
+        '<div class="panel-head__desc">Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + ' — per mata pelajaran.</div></div></div>' +
+        '<div class="table-wrap"><table class="data-table"><thead><tr><th>No</th><th>Nama</th>' + headerMapel + '</tr></thead>' +
+        '<tbody>' + rowsHtml + '</tbody></table></div>' +
+        (adaMapelAgama ? '<div class="panel-note">* Nama mapel otomatis menyesuaikan agama tiap siswa saat dicetak di rapor (contoh: siswa Buddha → "Pendidikan Agama Buddha dan Budi Pekerti").</div>' : '');
+    }
+
+    // ================= WALI KELAS: Presensi =================
+    // Presensi disederhanakan: wali kelas cukup input JUMLAH akhir
+    // Sakit / Izin / Tanpa Keterangan (Alpha) per siswa untuk satu
+    // tahun ajaran — bukan mencatat kehadiran harian satu-satu.
+    async function renderPresensi(wk) {
+      content.innerHTML = renderPlaceholder('Memuat...', 'Menyiapkan presensi kelas ' + wk.kelas.nama + '.');
+
+      var siswaList = await ambilSiswaKelas(wk.kelas.id);
+      if (!siswaList.length) {
+        content.innerHTML = renderPlaceholder('Presensi — ' + wk.kelas.nama, 'Belum ada siswa di kelas ini pada tahun ajaran aktif.');
+        return;
+      }
+      var siswaIds = siswaList.map(function (s) { return s.id; });
+
+      var rekapRes = await supabaseClient
+        .from('rekap_presensi')
+        .select('siswa_id, jumlah_sakit, jumlah_izin, jumlah_alpha')
+        .eq('kelas_id', wk.kelas.id)
+        .eq('tahun_ajaran_id', tahunAktif.id)
+        .in('siswa_id', siswaIds);
+      var rekapMap = {};
+      (rekapRes.data || []).forEach(function (r) { rekapMap[r.siswa_id] = r; });
+
+      function angkaInputHtml(cls, siswaId, val) {
+        return '<input type="number" min="0" step="1" class="' + cls + '" data-siswa="' + siswaId + '" value="' + (val || 0) + '" style="width:70px;text-align:center;">';
+      }
+
+      var rowsHtml = siswaList.map(function (s, i) {
+        var r = rekapMap[s.id] || {};
+        return '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(s.nis || '—') + '</td><td>' + escapeHtml(s.nama) + '</td>' +
+          '<td style="text-align:center;">' + angkaInputHtml('presensi-sakit', s.id, r.jumlah_sakit) + '</td>' +
+          '<td style="text-align:center;">' + angkaInputHtml('presensi-izin', s.id, r.jumlah_izin) + '</td>' +
+          '<td style="text-align:center;">' + angkaInputHtml('presensi-alpha', s.id, r.jumlah_alpha) + '</td></tr>';
+      }).join('');
+
+      content.innerHTML =
+        '<div class="panel-head"><div><div class="panel-head__title">Presensi — ' + escapeHtml(wk.kelas.nama) + '</div>' +
+        '<div class="panel-head__desc">Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + '. Isi jumlah Sakit, Izin, dan Tanpa Keterangan (Alpha) tiap siswa sepanjang tahun ajaran ini.</div></div>' +
+        '<button class="btn-small btn-small--primary" id="btnSimpanPresensi">Simpan Presensi</button></div>' +
+        '<div id="presensiMsg"></div>' +
+        '<div class="table-wrap"><table class="data-table"><thead><tr><th>No</th><th>NIS</th><th>Nama</th><th>Sakit</th><th>Izin</th><th>Tanpa Keterangan</th></tr></thead>' +
+        '<tbody>' + rowsHtml + '</tbody></table></div>';
+
+      document.getElementById('btnSimpanPresensi').addEventListener('click', async function () {
+        var btn = this;
+        btn.disabled = true;
+        btn.textContent = 'Menyimpan...';
+
+        function angka(sel, siswaId) {
+          var el = content.querySelector(sel + '[data-siswa="' + siswaId + '"]');
+          var v = parseInt(el.value, 10);
+          return isNaN(v) || v < 0 ? 0 : v;
+        }
+
+        var jobs = siswaList.map(function (s) {
+          return supabaseClient.from('rekap_presensi').upsert({
+            siswa_id: s.id,
+            kelas_id: wk.kelas.id,
+            tahun_ajaran_id: tahunAktif.id,
+            jumlah_sakit: angka('.presensi-sakit', s.id),
+            jumlah_izin: angka('.presensi-izin', s.id),
+            jumlah_alpha: angka('.presensi-alpha', s.id),
+            dicatat_oleh: user.id,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'siswa_id,kelas_id,tahun_ajaran_id' });
+        });
+
+        var hasil = await Promise.all(jobs);
+        var gagal = hasil.filter(function (r) { return r.error; });
+
+        btn.disabled = false;
+        btn.textContent = 'Simpan Presensi';
+        document.getElementById('presensiMsg').innerHTML = gagal.length
+          ? '<div class="import-summary">Tersimpan, tapi ' + gagal.length + ' baris gagal (' + gagal[0].error.message + ').</div>'
+          : '<div class="import-summary">Presensi ' + jobs.length + ' siswa berhasil disimpan.</div>';
+      });
+    }
+
+    // ================= PEMBINA EKSTRAKURIKULER: Nilai Ekstrakurikuler =================
+    // Peserta ekstrakurikuler tidak terikat satu kelas — bisa lintas kelas —
+    // jadi daftar siswa diambil dari tabel ekstrakurikuler_siswa langsung
+    // (bukan lewat ambilSiswaKelas), dan nama kelas tiap siswa ikut
+    // ditampilkan supaya pembina bisa mengenali siswa lintas kelas.
+    async function renderNilaiEkstrakurikuler(ekskul) {
+      content.innerHTML = renderPlaceholder('Memuat...', 'Mengambil daftar peserta ' + ekskul.nama + '.');
+
+      var pesertaRes = await supabaseClient
+        .from('ekstrakurikuler_siswa')
+        .select('siswa:siswa_id(id, nis, nama)')
+        .eq('ekstrakurikuler_id', ekskul.id)
+        .eq('tahun_ajaran_id', tahunAktif.id);
+      var siswaList = (pesertaRes.data || []).map(function (r) { return r.siswa; }).filter(Boolean);
+      siswaList.sort(function (a, b) { return a.nama.localeCompare(b.nama); });
+
+      if (!siswaList.length) {
+        content.innerHTML = renderPlaceholder('Nilai Ekstrakurikuler — ' + ekskul.nama,
+          'Belum ada siswa yang ditetapkan sebagai peserta ' + ekskul.nama + ' pada tahun ajaran ini. Hubungi admin untuk menetapkan peserta di menu "Ekstrakurikuler".');
+        return;
+      }
+
+      var siswaIds = siswaList.map(function (s) { return s.id; });
+
+      // Nama kelas tiap siswa (untuk ditampilkan saja, siswa ekskul lintas kelas).
+      var skRes = await supabaseClient
+        .from('siswa_kelas')
+        .select('siswa_id, kelas:kelas_id(nama)')
+        .eq('tahun_ajaran_id', tahunAktif.id)
+        .in('siswa_id', siswaIds);
+      var kelasNamaMap = {};
+      (skRes.data || []).forEach(function (r) { if (r.kelas) kelasNamaMap[r.siswa_id] = r.kelas.nama; });
+
+      var nilaiRes = await supabaseClient
+        .from('nilai_ekstrakurikuler')
+        .select('siswa_id, predikat, deskripsi')
+        .eq('ekstrakurikuler_id', ekskul.id)
+        .eq('tahun_ajaran_id', tahunAktif.id)
+        .in('siswa_id', siswaIds);
+      var nilaiMap = {};
+      (nilaiRes.data || []).forEach(function (r) { nilaiMap[r.siswa_id] = r; });
+
+      var OPSI_PREDIKAT = ['Sangat Baik', 'Baik', 'Cukup', 'Kurang'];
+
+      function predikatSelectHtml(s) {
+        var current = (nilaiMap[s.id] && nilaiMap[s.id].predikat) || '';
+        var opts = '<option value="">— Pilih —</option>' + OPSI_PREDIKAT.map(function (p) {
+          return '<option value="' + p + '"' + (p === current ? ' selected' : '') + '>' + p + '</option>';
+        }).join('');
+        return '<select class="ekskul-predikat" data-siswa="' + s.id + '">' + opts + '</select>';
+      }
+
+      function deskripsiTextareaHtml(s) {
+        var current = (nilaiMap[s.id] && nilaiMap[s.id].deskripsi) || '';
+        return '<textarea class="ekskul-deskripsi" data-siswa="' + s.id + '" rows="2" placeholder="Deskripsi capaian siswa di kegiatan ini...">' + escapeHtml(current) + '</textarea>';
+      }
+
+      var rowsHtml = siswaList.map(function (s, i) {
+        return '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(s.nis || '—') + '</td><td>' + escapeHtml(s.nama) + '</td>' +
+          '<td>' + escapeHtml(kelasNamaMap[s.id] || '—') + '</td>' +
+          '<td style="min-width:150px;">' + predikatSelectHtml(s) + '</td>' +
+          '<td style="min-width:300px;">' + deskripsiTextareaHtml(s) + '</td></tr>';
+      }).join('');
+
+      content.innerHTML =
+        '<div class="panel-head"><div><div class="panel-head__title">Nilai Ekstrakurikuler — ' + escapeHtml(ekskul.nama) + '</div>' +
+        '<div class="panel-head__desc">Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + '. Isi Predikat dan Deskripsi untuk tiap peserta.</div></div>' +
+        '<button class="btn-small btn-small--primary" id="btnSimpanEkskul">Simpan Semua Nilai</button></div>' +
+        '<div id="ekskulNilaiMsg"></div>' +
+        '<div class="table-wrap"><table class="data-table"><thead><tr><th>No</th><th>NIS</th><th>Nama</th><th>Kelas</th><th>Predikat</th><th>Deskripsi</th></tr></thead>' +
+        '<tbody>' + rowsHtml + '</tbody></table></div>';
+
+      document.getElementById('btnSimpanEkskul').addEventListener('click', async function () {
+        var btn = this;
+        btn.disabled = true;
+        btn.textContent = 'Menyimpan...';
+
+        var jobs = [];
+        siswaList.forEach(function (s) {
+          var selPredikat = content.querySelector('.ekskul-predikat[data-siswa="' + s.id + '"]');
+          var taDeskripsi = content.querySelector('.ekskul-deskripsi[data-siswa="' + s.id + '"]');
+          var vPredikat = selPredikat.value;
+          var vDeskripsi = taDeskripsi.value.trim();
+          var sudahPunyaData = !!nilaiMap[s.id];
+          if (!vPredikat && !vDeskripsi && !sudahPunyaData) return; // belum pernah diisi, lewati
+
+          jobs.push(supabaseClient.from('nilai_ekstrakurikuler').upsert({
+            siswa_id: s.id,
+            ekstrakurikuler_id: ekskul.id,
+            tahun_ajaran_id: tahunAktif.id,
+            predikat: vPredikat === '' ? null : vPredikat,
+            deskripsi: vDeskripsi === '' ? null : vDeskripsi,
+            guru_id: user.id,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'siswa_id,ekstrakurikuler_id,tahun_ajaran_id' }));
+        });
+
+        var hasil = await Promise.all(jobs);
+        var gagal = hasil.filter(function (r) { return r.error; });
+
+        btn.disabled = false;
+        btn.textContent = 'Simpan Semua Nilai';
+        document.getElementById('ekskulNilaiMsg').innerHTML = gagal.length
+          ? '<div class="import-summary">Tersimpan, tapi ' + gagal.length + ' baris gagal disimpan (' + gagal[0].error.message + ').</div>'
+          : '<div class="import-summary">' + jobs.length + ' data peserta berhasil disimpan.</div>';
+      });
+    }
+
+    // ================= WALI KELAS: Rekap Ekstrakurikuler (baca saja) =================
+    // Menampilkan, untuk tiap siswa di kelas yang diampu wali kelas,
+    // semua kegiatan ekstrakurikuler yang diikutinya beserta Predikat
+    // & Deskripsi yang sudah diisi pembina — dipakai untuk cetak rapor.
+    async function renderRekapEkstrakurikulerKelas(wk) {
+      content.innerHTML = renderPlaceholder('Memuat...', 'Menyusun rekap ekstrakurikuler kelas ' + wk.kelas.nama + '.');
+
+      var siswaList = await ambilSiswaKelas(wk.kelas.id);
+      if (!siswaList.length) {
+        content.innerHTML = renderPlaceholder('Rekap Ekstrakurikuler — ' + wk.kelas.nama, 'Belum ada siswa di kelas ini pada tahun ajaran aktif.');
+        return;
+      }
+      var siswaIds = siswaList.map(function (s) { return s.id; });
+
+      var pesertaRes = await supabaseClient
+        .from('ekstrakurikuler_siswa')
+        .select('siswa_id, ekstrakurikuler:ekstrakurikuler_id(id, nama)')
+        .eq('tahun_ajaran_id', tahunAktif.id)
+        .in('siswa_id', siswaIds);
+      var peserta = (pesertaRes.data || []).filter(function (r) { return r.ekstrakurikuler; });
+
+      var ekskulIds = peserta.map(function (r) { return r.ekstrakurikuler.id; });
+      var nilaiMap = {};
+      if (ekskulIds.length) {
+        var nilaiRes = await supabaseClient
+          .from('nilai_ekstrakurikuler')
+          .select('siswa_id, ekstrakurikuler_id, predikat, deskripsi')
+          .eq('tahun_ajaran_id', tahunAktif.id)
+          .in('siswa_id', siswaIds);
+        (nilaiRes.data || []).forEach(function (r) { nilaiMap[r.siswa_id + '|' + r.ekstrakurikuler_id] = r; });
+      }
+
+      var perSiswa = {};
+      siswaList.forEach(function (s) { perSiswa[s.id] = []; });
+      peserta.forEach(function (r) {
+        var n = nilaiMap[r.siswa_id + '|' + r.ekstrakurikuler.id] || {};
+        perSiswa[r.siswa_id].push({ nama: r.ekstrakurikuler.nama, predikat: n.predikat, deskripsi: n.deskripsi });
+      });
+
+      var rowsHtml = siswaList.map(function (s, i) {
+        var kegiatan = perSiswa[s.id];
+        var kegiatanHtml = kegiatan.length ? kegiatan.map(function (k) {
+          return '<div style="margin-bottom:6px;"><strong>' + escapeHtml(k.nama) + '</strong>' +
+            (k.predikat ? ' — ' + escapeHtml(k.predikat) : ' — <em>belum dinilai</em>') +
+            (k.deskripsi ? '<div style="font-size:12px;color:var(--ink-soft);">' + escapeHtml(k.deskripsi) + '</div>' : '') + '</div>';
+        }).join('') : '<span style="color:var(--ink-soft);">— tidak ikut ekstrakurikuler —</span>';
+        return '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(s.nis || '—') + '</td><td>' + escapeHtml(s.nama) + '</td><td>' + kegiatanHtml + '</td></tr>';
+      }).join('');
+
+      content.innerHTML =
+        '<div class="panel-head"><div><div class="panel-head__title">Rekap Ekstrakurikuler — ' + escapeHtml(wk.kelas.nama) + '</div>' +
+        '<div class="panel-head__desc">Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + '. Data ini diisi pembina masing-masing kegiatan — tampilan di sini bersifat baca saja.</div></div></div>' +
+        '<div class="table-wrap"><table class="data-table"><thead><tr><th>No</th><th>NIS</th><th>Nama</th><th>Kegiatan Ekstrakurikuler</th></tr></thead>' +
+        '<tbody>' + rowsHtml + '</tbody></table></div>';
+    }
+
+    // ================= PJ KOKURIKULER: Nilai Kokurikuler =================
+    // pj = { id, nama_kegiatan, kelas: {id, nama} | null }. Nama kegiatan
+    // sudah ditetapkan Admin saat menugaskan PJ (lihat menu Admin →
+    // Penugasan Guru → Penanggung Jawab Kokurikuler), jadi di sini guru
+    // hanya mengisi Deskripsi per siswa. kelas === null berarti lingkup
+    // "Semua Kelas" — daftar siswa diambil lintas seluruh kelas.
+    async function renderNilaiKokurikulerPJ(pj) {
+      var labelKelas = pj.kelas ? pj.kelas.nama : 'Semua Kelas';
+      content.innerHTML = renderPlaceholder('Memuat...', 'Mengambil daftar siswa untuk kegiatan ' + pj.nama_kegiatan + '.');
+
+      var siswaList = pj.kelas ? await ambilSiswaKelas(pj.kelas.id) : await ambilSemuaSiswa();
+      if (!siswaList.length) {
+        content.innerHTML = renderPlaceholder('Nilai Kokurikuler — ' + escapeHtml(pj.nama_kegiatan), 'Belum ada siswa pada tahun ajaran aktif.');
+        return;
+      }
+
+      var nilaiQuery = supabaseClient
+        .from('nilai_kokurikuler')
+        .select('id, siswa_id, deskripsi')
+        .eq('nama_kegiatan', pj.nama_kegiatan)
+        .eq('tahun_ajaran_id', tahunAktif.id);
+      if (pj.kelas) nilaiQuery = nilaiQuery.eq('kelas_id', pj.kelas.id);
+      var nilaiRes = await nilaiQuery;
+      var nilaiMap = {};
+      (nilaiRes.data || []).forEach(function (r) { nilaiMap[r.siswa_id] = r; });
+
+      var showKelasCol = !pj.kelas;
+      var rowsHtml = siswaList.map(function (s, i) {
+        var n = nilaiMap[s.id] || {};
+        var kelasIdSiswa = s.kelasId || (pj.kelas ? pj.kelas.id : '');
+        return '<tr data-siswa="' + s.id + '" data-kelas="' + kelasIdSiswa + '" data-db-id="' + (n.id || '') + '">' +
+          '<td>' + (i + 1) + '</td><td>' + escapeHtml(s.nis || '—') + '</td><td>' + escapeHtml(s.nama) + '</td>' +
+          (showKelasCol ? '<td>' + escapeHtml(s.kelasNama || '—') + '</td>' : '') +
+          '<td style="min-width:300px;"><textarea class="koku-deskripsi" rows="2" placeholder="Deskripsi capaian kokurikuler siswa...">' + escapeHtml(n.deskripsi || '') + '</textarea></td></tr>';
+      }).join('');
+
+      content.innerHTML =
+        '<div class="panel-head"><div><div class="panel-head__title">Nilai Kokurikuler — ' + escapeHtml(pj.nama_kegiatan) + '</div>' +
+        '<div class="panel-head__desc">Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + ' &middot; ' + escapeHtml(labelKelas) + '. Isi Deskripsi capaian kokurikuler tiap siswa.</div></div>' +
+        '<button class="btn-small btn-small--primary" id="btnSimpanKoku">Simpan Semua Nilai</button></div>' +
+        '<div id="kokuNilaiMsg"></div>' +
+        '<div class="table-wrap"><table class="data-table"><thead><tr><th>No</th><th>NIS</th><th>Nama</th>' + (showKelasCol ? '<th>Kelas</th>' : '') + '<th>Deskripsi</th></tr></thead>' +
+        '<tbody>' + rowsHtml + '</tbody></table></div>';
+
+      document.getElementById('btnSimpanKoku').addEventListener('click', async function () {
+        var btn = this;
+        btn.disabled = true;
+        btn.textContent = 'Menyimpan...';
+
+        var jobs = [];
+        content.querySelectorAll('tr[data-siswa]').forEach(function (tr) {
+          var siswaId = tr.dataset.siswa;
+          var kelasId = tr.dataset.kelas;
+          var dbId = tr.dataset.dbId;
+          var vDeskripsi = tr.querySelector('.koku-deskripsi').value.trim();
+          var sudahPunyaData = !!dbId;
+          if (!vDeskripsi && !sudahPunyaData) return; // belum pernah diisi & masih kosong, lewati
+          if (!vDeskripsi && sudahPunyaData) {
+            jobs.push(supabaseClient.from('nilai_kokurikuler').delete().eq('id', dbId));
+            return;
+          }
+          jobs.push(supabaseClient.from('nilai_kokurikuler').upsert({
+            siswa_id: siswaId,
+            kelas_id: kelasId,
+            tahun_ajaran_id: tahunAktif.id,
+            nama_kegiatan: pj.nama_kegiatan,
+            deskripsi: vDeskripsi,
+            guru_id: user.id,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'siswa_id,nama_kegiatan,kelas_id,tahun_ajaran_id' }));
+        });
+
+        var hasil = await Promise.all(jobs);
+        var gagal = hasil.filter(function (r) { return r.error; });
+
+        btn.disabled = false;
+        btn.textContent = 'Simpan Semua Nilai';
+        document.getElementById('kokuNilaiMsg').innerHTML = gagal.length
+          ? '<div class="import-summary">Tersimpan, tapi ' + gagal.length + ' baris gagal disimpan (' + gagal[0].error.message + ').</div>'
+          : '<div class="import-summary">' + jobs.length + ' data siswa berhasil disimpan.</div>';
+
+        renderNilaiKokurikulerPJ(pj);
+      });
+    }
+
+    // ================= WALI KELAS: Rekap Kokurikuler (baca saja) =================
+    // Menampilkan, untuk tiap siswa di kelas yang diampu wali kelas, semua
+    // kegiatan kokurikuler yang tercatat (bisa lebih dari satu kegiatan per
+    // siswa) beserta Deskripsi yang sudah diisi PJ Kokurikuler masing-masing
+    // kegiatan — dipakai untuk cetak rapor.
+    async function renderRekapKokurikulerKelas(wk) {
+      content.innerHTML = renderPlaceholder('Memuat...', 'Menyusun rekap kokurikuler kelas ' + wk.kelas.nama + '.');
+
+      var siswaList = await ambilSiswaKelas(wk.kelas.id);
+      if (!siswaList.length) {
+        content.innerHTML = renderPlaceholder('Rekap Kokurikuler — ' + wk.kelas.nama, 'Belum ada siswa di kelas ini pada tahun ajaran aktif.');
+        return;
+      }
+      var siswaIds = siswaList.map(function (s) { return s.id; });
+
+      var nilaiRes = await supabaseClient
+        .from('nilai_kokurikuler')
+        .select('siswa_id, nama_kegiatan, deskripsi')
+        .eq('kelas_id', wk.kelas.id)
+        .eq('tahun_ajaran_id', tahunAktif.id)
+        .in('siswa_id', siswaIds);
+
+      var perSiswa = {};
+      siswaList.forEach(function (s) { perSiswa[s.id] = []; });
+      (nilaiRes.data || []).forEach(function (r) {
+        if (!perSiswa[r.siswa_id]) perSiswa[r.siswa_id] = [];
+        perSiswa[r.siswa_id].push(r);
+      });
+
+      var rowsHtml = siswaList.map(function (s, i) {
+        var kegiatan = perSiswa[s.id];
+        var kegiatanHtml = kegiatan.length ? kegiatan.map(function (k) {
+          return '<div style="margin-bottom:6px;"><strong>' + escapeHtml(k.nama_kegiatan || 'Tanpa nama kegiatan') + '</strong>' +
+            (k.deskripsi ? '<div style="font-size:12px;color:var(--ink-soft);">' + escapeHtml(k.deskripsi) + '</div>' : '') + '</div>';
+        }).join('') : '<span style="color:var(--ink-soft);">— belum mengikuti kokurikuler —</span>';
+        return '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(s.nis || '—') + '</td><td>' + escapeHtml(s.nama) + '</td><td>' + kegiatanHtml + '</td></tr>';
+      }).join('');
+
+      content.innerHTML =
+        '<div class="panel-head"><div><div class="panel-head__title">Rekap Kokurikuler — ' + escapeHtml(wk.kelas.nama) + '</div>' +
+        '<div class="panel-head__desc">Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + '. Data ini diisi guru Penanggung Jawab (PJ) Kokurikuler masing-masing kegiatan — tampilan di sini bersifat baca saja.</div></div></div>' +
+        '<div class="table-wrap"><table class="data-table"><thead><tr><th>No</th><th>NIS</th><th>Nama</th><th>Kegiatan Kokurikuler</th></tr></thead>' +
+        '<tbody>' + rowsHtml + '</tbody></table></div>';
+    }
+
+
+    // ================= WALI KELAS: Cetak Rapor =================
+    // Menggabungkan Nilai Rapor + Capaian Pembelajaran per mapel,
+    // Nilai Ekstrakurikuler, Nilai Kokurikuler, dan rekap Presensi
+    // (Sakit/Izin/Alpha) satu siswa, dalam tampilan siap cetak
+    // (tombol "Cetak" memanggil window.print()).
+    async function renderCetakRapor(wk) {
+      content.innerHTML = renderPlaceholder('Memuat...', 'Menyiapkan data cetak rapor kelas ' + wk.kelas.nama + '.');
+
+      var siswaList = await ambilSiswaKelas(wk.kelas.id);
+      if (!siswaList.length) {
+        content.innerHTML = renderPlaceholder('Cetak Rapor — ' + wk.kelas.nama, 'Belum ada siswa di kelas ini pada tahun ajaran aktif.');
+        return;
+      }
+
+      var optsSiswa = siswaList.map(function (s) {
+        return '<option value="' + s.id + '">' + escapeHtml(s.nama) + (s.nis ? ' (' + escapeHtml(s.nis) + ')' : '') + '</option>';
+      }).join('');
+
+      content.innerHTML =
+        '<div class="panel-head"><div><div class="panel-head__title">Cetak Rapor — ' + escapeHtml(wk.kelas.nama) + '</div>' +
+        '<div class="panel-head__desc">Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + '. Pilih siswa, lalu klik Cetak.</div></div>' +
+        '<div style="display:flex;gap:8px;align-items:center;" class="no-print">' +
+        '<select id="cetakSiswaSelect" style="min-width:220px;">' + optsSiswa + '</select>' +
+        '<button class="btn-small btn-small--primary" id="btnCetakRapor"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak</button>' +
+        '</div></div>' +
+        '<div id="cetakRaporArea"></div>';
+      lucide.createIcons();
+
+      async function muatRapor(siswaId) {
+        var siswa = siswaList.find(function (s) { return s.id === siswaId; });
+        var area = document.getElementById('cetakRaporArea');
+        area.innerHTML = '<div class="panel-note">Memuat data rapor ' + escapeHtml(siswa.nama) + '...</div>';
+
+        // Mapel yang diajarkan di kelas ini + nilai rapor & capaian siswa ybs.
+        var penugasanRes = await supabaseClient
+          .from('penugasan_guru')
+          .select('mapel:mapel_id(id, nama)')
+          .eq('kelas_id', wk.kelas.id)
+          .eq('tahun_ajaran_id', tahunAktif.id);
+        var mapelMap = {};
+        (penugasanRes.data || []).forEach(function (r) { if (r.mapel) mapelMap[r.mapel.id] = r.mapel.nama; });
+        var mapelList = Object.keys(mapelMap)
+          .map(function (id) { return { id: id, nama: mapelMap[id] }; })
+          .sort(function (a, b) { return a.nama.localeCompare(b.nama); });
+
+        var nilaiRes = await supabaseClient
+          .from('nilai')
+          .select('mapel_id, nilai, capaian_pembelajaran')
+          .eq('siswa_id', siswaId)
+          .eq('tahun_ajaran_id', tahunAktif.id)
+          .eq('jenis', 'rapor');
+        var nilaiMap = {};
+        (nilaiRes.data || []).forEach(function (r) { nilaiMap[r.mapel_id] = r; });
+
+        var nilaiRowsHtml = mapelList.map(function (m, i) {
+          var n = nilaiMap[m.id] || {};
+          var namaTampil = namaMapelUntukSiswa(m.nama, siswa.agama);
+          return '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(namaTampil) + '</td>' +
+            '<td style="text-align:center;">' + (n.nilai === undefined || n.nilai === null ? '—' : n.nilai) + '</td>' +
+            '<td>' + escapeHtml(n.capaian_pembelajaran || '—') + '</td></tr>';
+        }).join('');
+
+        // Ekstrakurikuler siswa ybs.
+        var ekskulRes = await supabaseClient
+          .from('ekstrakurikuler_siswa')
+          .select('ekstrakurikuler:ekstrakurikuler_id(id, nama)')
+          .eq('siswa_id', siswaId)
+          .eq('tahun_ajaran_id', tahunAktif.id);
+        var ekskulList = (ekskulRes.data || []).filter(function (r) { return r.ekstrakurikuler; }).map(function (r) { return r.ekstrakurikuler; });
+        var ekskulNilaiMap = {};
+        if (ekskulList.length) {
+          var ekskulNilaiRes = await supabaseClient
+            .from('nilai_ekstrakurikuler')
+            .select('ekstrakurikuler_id, predikat, deskripsi')
+            .eq('siswa_id', siswaId)
+            .eq('tahun_ajaran_id', tahunAktif.id);
+          (ekskulNilaiRes.data || []).forEach(function (r) { ekskulNilaiMap[r.ekstrakurikuler_id] = r; });
+        }
+        var ekskulRowsHtml = ekskulList.length ? ekskulList.map(function (ek, i) {
+          var n = ekskulNilaiMap[ek.id] || {};
+          return '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(ek.nama) + '</td><td style="text-align:center;">' + escapeHtml(n.predikat || '—') + '</td><td>' + escapeHtml(n.deskripsi || '—') + '</td></tr>';
+        }).join('') : '<tr><td colspan="4" style="text-align:center;color:var(--ink-soft);">Tidak mengikuti ekstrakurikuler.</td></tr>';
+
+        // Kokurikuler kelas ybs (bisa lebih dari satu kegiatan per siswa).
+        var kokuRes = await supabaseClient
+          .from('nilai_kokurikuler')
+          .select('nama_kegiatan, deskripsi')
+          .eq('siswa_id', siswaId)
+          .eq('kelas_id', wk.kelas.id)
+          .eq('tahun_ajaran_id', tahunAktif.id);
+        var kokuList = kokuRes.data || [];
+        var kokuRowsHtml = kokuList.length ? kokuList.map(function (k, i) {
+          return '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(k.nama_kegiatan || '—') + '</td><td>' + escapeHtml(k.deskripsi || '—') + '</td></tr>';
+        }).join('') : '<tr><td colspan="3" style="text-align:center;color:var(--ink-soft);">Tidak mengikuti kokurikuler.</td></tr>';
+
+        // Rekap presensi (jumlah langsung, diisi wali kelas di menu Presensi).
+        var presensiRes = await supabaseClient
+          .from('rekap_presensi')
+          .select('jumlah_sakit, jumlah_izin, jumlah_alpha')
+          .eq('siswa_id', siswaId)
+          .eq('kelas_id', wk.kelas.id)
+          .eq('tahun_ajaran_id', tahunAktif.id)
+          .maybeSingle();
+        var rp = presensiRes.data || {};
+        var tally = { sakit: rp.jumlah_sakit || 0, izin: rp.jumlah_izin || 0, alpha: rp.jumlah_alpha || 0 };
+
+        area.innerHTML =
+          '<div class="rapor-cetak">' +
+          '<div class="rapor-cetak__head">' +
+          '<div class="rapor-cetak__school">SMK Widya Mandala Tambak</div>' +
+          '<div>Rapor Peserta Didik — Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + ', Semester ' + escapeHtml(tahunAktif.semester) + '</div>' +
+          '</div>' +
+          '<table class="rapor-cetak__biodata"><tr><td>Nama</td><td>: ' + escapeHtml(siswa.nama) + '</td><td>Kelas</td><td>: ' + escapeHtml(wk.kelas.nama) + '</td></tr>' +
+          '<tr><td>NIS / NISN</td><td>: ' + escapeHtml(siswa.nis || '—') + '</td><td>Wali Kelas</td><td>: ' + escapeHtml(nama) + '</td></tr></table>' +
+
+          '<div class="rapor-cetak__section-title">A. Nilai Akademik</div>' +
+          '<table class="data-table"><thead><tr><th>No</th><th>Mata Pelajaran</th><th>Nilai</th><th>Capaian Pembelajaran</th></tr></thead>' +
+          '<tbody>' + (nilaiRowsHtml || '<tr><td colspan="4" style="text-align:center;color:var(--ink-soft);">Belum ada nilai.</td></tr>') + '</tbody></table>' +
+
+          '<div class="rapor-cetak__section-title">B. Ekstrakurikuler</div>' +
+          '<table class="data-table"><thead><tr><th>No</th><th>Kegiatan</th><th>Predikat</th><th>Deskripsi</th></tr></thead>' +
+          '<tbody>' + ekskulRowsHtml + '</tbody></table>' +
+
+          '<div class="rapor-cetak__section-title">C. Kokurikuler</div>' +
+          '<table class="data-table"><thead><tr><th>No</th><th>Nama Kegiatan</th><th>Deskripsi</th></tr></thead>' +
+          '<tbody>' + kokuRowsHtml + '</tbody></table>' +
+
+          '<div class="rapor-cetak__section-title">D. Presensi</div>' +
+          '<table class="data-table"><thead><tr><th>Sakit</th><th>Izin</th><th>Alpha</th></tr></thead>' +
+          '<tbody><tr><td style="text-align:center;">' + tally.sakit + '</td><td style="text-align:center;">' + tally.izin + '</td><td style="text-align:center;">' + tally.alpha + '</td></tr></tbody></table>' +
+          '</div>';
+      }
+
+      document.getElementById('cetakSiswaSelect').addEventListener('change', function () {
+        muatRapor(this.value);
+      });
+      document.getElementById('btnCetakRapor').addEventListener('click', function () {
+        window.print();
+      });
+
+      await muatRapor(siswaList[0].id);
     }
 
     function setActiveMenuItem(el) {

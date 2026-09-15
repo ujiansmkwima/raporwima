@@ -67,32 +67,80 @@ create table if not exists public.mata_pelajaran (
   id uuid primary key default gen_random_uuid(),
   kode text unique,
   nama text not null,
-  kkm integer not null default 75      -- kriteria ketuntasan minimal
+  kkm integer not null default 75,      -- kriteria ketuntasan minimal
+  urutan_rapor integer,                 -- urutan tampil mapel ini di rapor
+  berlaku_untuk text not null default 'semua' check (berlaku_untuk in ('semua', 'tertentu')),
+  jenis_mapel text not null default 'umum' check (jenis_mapel in ('umum', 'kejuruan'))  -- A. Mata Pelajaran Umum / B. Mata Pelajaran Kejuruan
+);
+
+-- Kelas mana saja yang memakai mapel ini, KALAU berlaku_untuk = 'tertentu'
+-- (mapel produktif/kejuruan). Kalau berlaku_untuk = 'semua', tabel ini
+-- tidak perlu diisi untuk mapel tersebut.
+create table if not exists public.mapel_kelas (
+  id uuid primary key default gen_random_uuid(),
+  mapel_id uuid not null references public.mata_pelajaran(id) on delete cascade,
+  kelas_id uuid not null references public.kelas(id) on delete cascade,
+  unique (mapel_id, kelas_id)
 );
 
 create table if not exists public.kelas (
   id uuid primary key default gen_random_uuid(),
-  nama text not null,                  -- contoh: 'X TKJ 1'
+  nama text not null,                  -- contoh: 'XI ANM 1'
   tingkat integer not null,             -- 10, 11, 12
-  jurusan text
+  program_keahlian text,               -- contoh: 'Agribisnis Ternak'
+  konsentrasi_keahlian text            -- contoh: 'Agribisnis Ternak Ruminansia'
 );
 
 create table if not exists public.siswa (
   id uuid primary key default gen_random_uuid(),
+
+  -- Data peserta didik
   nis text unique,
   nisn text unique,
   nama text not null,
-  jenis_kelamin text check (jenis_kelamin in ('L', 'P')),
+  tempat_lahir text,
   tanggal_lahir date,
+  jenis_kelamin text check (jenis_kelamin in ('L', 'P')),
+  agama text,
+  status_keluarga text,          -- contoh: Anak Kandung / Anak Tiri / Anak Angkat
+  anak_ke integer,
+  alamat_siswa text,
+  no_telp_siswa text,
+
+  -- Data sekolah asal & masuk
+  sekolah_asal text,
+  kelas_masuk text,              -- kelas saat pertama masuk (riwayat, bukan kelas berjalan)
+  tanggal_masuk date,
+
+  -- Data orang tua
+  nama_ayah text,
+  nama_ibu text,
+  alamat_ortu text,
+  no_telp_ortu text,
+  pekerjaan_ayah text,
+  pekerjaan_ibu text,
+
+  -- Data wali
+  nama_wali text,
+  alamat_wali text,
+  no_telp_wali text,
+  pekerjaan_wali text,
+
   status text not null default 'aktif' check (status in ('aktif', 'lulus', 'pindah', 'keluar'))
 );
 
 alter table public.mata_pelajaran enable row level security;
+alter table public.mapel_kelas enable row level security;
 alter table public.kelas enable row level security;
 alter table public.siswa enable row level security;
 
 create policy "Semua user login boleh baca mata_pelajaran" on public.mata_pelajaran for select using (auth.uid() is not null);
 create policy "Admin kelola mata_pelajaran" on public.mata_pelajaran for all
+  using (exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'))
+  with check (exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'));
+
+create policy "Semua user login boleh baca mapel_kelas" on public.mapel_kelas for select using (auth.uid() is not null);
+create policy "Admin kelola mapel_kelas" on public.mapel_kelas for all
   using (exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'))
   with check (exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'));
 
@@ -183,6 +231,47 @@ create policy "Guru baca status wali kelas miliknya" on public.wali_kelas for se
 using (guru_id = auth.uid());
 
 create policy "Admin kelola wali_kelas" on public.wali_kelas for all
+using (exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'))
+with check (exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'));
+
+
+-- =========================================================
+-- 5b. PJ_KOKURIKULER — penanggung jawab kokurikuler per kegiatan,
+--    per tahun ajaran. Sama seperti wali_kelas (penugasan
+--    tambahan di atas akun guru), TAPI satu kegiatan boleh
+--    punya LEBIH DARI SATU penanggung jawab (tidak dibatasi 1:1
+--    seperti wali kelas), dan satu guru boleh jadi PJ di lebih
+--    dari satu kegiatan/kelas. Tiap penugasan terikat ke SATU
+--    nama kegiatan kokurikuler (mis. "P5 - Kearifan Lokal"), dan
+--    lingkupnya bisa kelas tertentu (kelas_id diisi) atau Semua
+--    Kelas (kelas_id NULL — PJ menilai siswa lintas semua kelas).
+-- =========================================================
+create table if not exists public.pj_kokurikuler (
+  id uuid primary key default gen_random_uuid(),
+  guru_id uuid not null references public.profiles(id) on delete cascade,
+  nama_kegiatan text not null,
+  kelas_id uuid references public.kelas(id) on delete cascade, -- null = Semua Kelas
+  tahun_ajaran_id uuid not null references public.tahun_ajaran(id) on delete cascade
+);
+
+-- Dua unique index terpisah (bukan satu "unique(...)" biasa) karena NULL
+-- tidak dianggap bentrok dengan NULL lain di batasan unik standar SQL.
+create unique index if not exists ux_pj_koku_kelas_tertentu
+  on public.pj_kokurikuler (guru_id, nama_kegiatan, kelas_id, tahun_ajaran_id)
+  where kelas_id is not null;
+create unique index if not exists ux_pj_koku_semua_kelas
+  on public.pj_kokurikuler (guru_id, nama_kegiatan, tahun_ajaran_id)
+  where kelas_id is null;
+
+alter table public.pj_kokurikuler enable row level security;
+
+create policy "Guru baca status pj kokurikuler miliknya" on public.pj_kokurikuler for select
+using (guru_id = auth.uid());
+
+create policy "Semua user login boleh baca pj_kokurikuler" on public.pj_kokurikuler for select
+using (auth.uid() is not null);
+
+create policy "Admin kelola pj_kokurikuler" on public.pj_kokurikuler for all
 using (exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'))
 with check (exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'));
 

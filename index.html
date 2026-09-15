@@ -3,10 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Masuk — E-Rapor SMK</title>
+<title>Masuk — E-Rapor SMK Widya Mandala Tambak</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=3">
+<script src="https://unpkg.com/lucide@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-client.js"></script>
 </head>
@@ -14,45 +15,50 @@
 
 <div class="login-shell">
 
-  <div class="login-brand">
-    <div class="login-brand__rule"></div>
-    <div class="login-brand__mark">E-Rapor SMK</div>
+  <form class="login-card" id="loginForm">
 
-    <div>
-      <div class="login-brand__headline">Satu tempat untuk nilai, presensi, dan rapor.</div>
-      <div class="login-brand__sub">
-        Sistem pencatatan nilai pengetahuan, keterampilan, sikap, hingga
-        PKL — terhubung untuk guru dan admin sekolah.
+    <div class="login-card__icon">
+      <img src="assets/logo.png" alt="Logo SMK Widya Mandala Tambak">
+    </div>
+
+    <div class="login-card__title">Masuk ke E-Rapor</div>
+    <div class="login-card__sub">SMK Widya Mandala Tambak — Banyumas<br>Sistem Penilaian Akademik</div>
+
+    <div class="field">
+      <label for="email">Email</label>
+      <input type="email" id="email" name="email" placeholder="nama@sekolah.sch.id" autocomplete="username">
+    </div>
+
+    <div class="field">
+      <label for="password">Kata sandi</label>
+      <div style="position:relative;">
+        <input type="password" id="password" name="password" placeholder="••••••••" autocomplete="current-password" style="padding-right:42px;">
+        <button type="button" onclick="togglePassword()" style="position:absolute; top:0; right:0; bottom:0; width:40px; display:flex; align-items:center; justify-content:center; background:none; border:none; color:var(--ink-faint); cursor:pointer;">
+          <i data-lucide="eye" id="eyeIcon" style="width:18px; height:18px;"></i>
+        </button>
       </div>
     </div>
 
-    <div class="login-brand__foot">© <span id="year"></span> E-Rapor SMK</div>
-  </div>
+    <button type="submit" class="btn-primary" id="submitBtn">Masuk</button>
 
-  <div class="login-panel">
-    <form class="login-card" id="loginForm">
-      <div class="login-card__title">Masuk</div>
-      <div class="login-card__sub">Masukkan akun sekolah kamu untuk melanjutkan.</div>
+    <div class="login-card__note" id="loginNote">Peran (guru/admin) ditentukan otomatis berdasarkan akun kamu di Supabase.</div>
 
-      <div class="field">
-        <label for="email">Email</label>
-        <input type="email" id="email" name="email" placeholder="nama@sekolah.sch.id" autocomplete="username">
-      </div>
-
-      <div class="field">
-        <label for="password">Kata sandi</label>
-        <input type="password" id="password" name="password" placeholder="••••••••" autocomplete="current-password">
-      </div>
-
-      <button type="submit" class="btn-primary" id="submitBtn">Masuk</button>
-
-      <div class="login-card__note" id="loginNote">Peran (guru/admin) ditentukan otomatis berdasarkan akun kamu di Supabase.</div>
-    </form>
-  </div>
+    <div class="login-card__foot">© <span id="year"></span> SMK Widya Mandala Tambak</div>
+  </form>
 
 </div>
 
 <script>
+  lucide.createIcons();
+
+  function togglePassword() {
+    var input = document.getElementById('password');
+    var icon = document.getElementById('eyeIcon');
+    input.type = input.type === 'password' ? 'text' : 'password';
+    icon.setAttribute('data-lucide', input.type === 'password' ? 'eye' : 'eye-off');
+    lucide.createIcons();
+  }
+
   document.getElementById('year').textContent = new Date().getFullYear();
 
   var form = document.getElementById('loginForm');
