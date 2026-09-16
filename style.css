@@ -1113,7 +1113,16 @@ a { color: inherit; text-decoration: none; }
 }
 
 .rc-value {
-  font-weight: 600;
+  font-weight: 700;
+}
+
+/* Semua teks tebal di dalam kartu rapor (nama kepsek, wali kelas, nama
+   kegiatan kokurikuler, dsb pakai <strong>) disamakan beratnya dengan
+   .rc-value/th supaya tidak ada yang terlihat "kurang tebal" saat
+   dibandingkan berdampingan (browser/​font bisa render <strong> polos
+   sedikit lebih tipis daripada font-weight custom di atas). */
+.rapor-cetak strong {
+  font-weight: 700;
 }
 
 /* ---- Tabel Nilai Akademik ---- */
@@ -1228,6 +1237,7 @@ a { color: inherit; text-decoration: none; }
 .rapor-cetak__kehadiran td {
   padding: 4px 8px;
   font-size: 13px;
+  border: 1px solid #000;
 }
 
 .rapor-cetak__kehadiran .rc-label {

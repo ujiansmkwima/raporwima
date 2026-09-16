@@ -10,6 +10,7 @@
 <script src="https://unpkg.com/lucide@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="supabase-client.js"></script>
 </head>
 <body>
@@ -2432,16 +2433,19 @@
             '<td>' + escapeHtml(s.nama) + '</td>' +
             '<td class="tc-center">' +
             '<button class="btn-small btn-cetak-preview" data-id="' + s.id + '"><i data-lucide="eye" style="width:14px;height:14px;"></i> Preview</button> ' +
-            '<button class="btn-small btn-small--primary btn-cetak-satu" data-id="' + s.id + '"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak</button>' +
+            '<button class="btn-small btn-small--primary btn-cetak-satu" data-id="' + s.id + '"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak</button> ' +
+            '<button class="btn-small btn-unduh-satu" data-id="' + s.id + '"><i data-lucide="download" style="width:14px;height:14px;"></i> Unduh PDF</button>' +
             '</td></tr>';
         }).join('');
 
         content.innerHTML =
           '<div class="panel-head"><div><div class="panel-head__title">Cetak Rapor — ' + escapeHtml(wk.kelas.nama) + '</div>' +
-          '<div class="panel-head__desc">Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + '. Klik Preview untuk melihat, Cetak untuk mencetak/menyimpan PDF satu siswa lewat jendela cetak browser, atau centang beberapa lalu Cetak Terpilih.</div></div>' +
+          '<div class="panel-head__desc">Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + '. Klik Preview untuk melihat, Cetak untuk mencetak/menyimpan PDF satu siswa lewat jendela cetak browser, Unduh PDF untuk langsung mengunduh file PDF, atau centang beberapa lalu Cetak Terpilih/Unduh Terpilih.</div></div>' +
           '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
           '<button class="btn-small" id="btnCetakTerpilih"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak Terpilih</button>' +
           '<button class="btn-small btn-small--primary" id="btnCetakSemua"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak Semua</button>' +
+          '<button class="btn-small" id="btnUnduhTerpilih"><i data-lucide="download" style="width:14px;height:14px;"></i> Unduh Terpilih</button>' +
+          '<button class="btn-small" id="btnUnduhSemua"><i data-lucide="download" style="width:14px;height:14px;"></i> Unduh Semua</button>' +
           '</div></div>' +
           '<div class="table-wrap no-print"><table class="data-table"><thead><tr>' +
           '<th class="tc-center"><input type="checkbox" id="checkSemuaCetak"></th>' +
@@ -2460,6 +2464,13 @@
         document.querySelectorAll('.btn-cetak-satu').forEach(function (btn) {
           btn.addEventListener('click', function () { cetakSiswa([this.getAttribute('data-id')], this); });
         });
+        document.querySelectorAll('.btn-unduh-satu').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var id = this.getAttribute('data-id');
+            var s = siswaList.find(function (x) { return x.id === id; });
+            unduhSiswaPDF([id], this, s ? s.nama : null);
+          });
+        });
         document.getElementById('btnCetakTerpilih').addEventListener('click', function () {
           var ids = Array.prototype.slice.call(document.querySelectorAll('.cetak-rapor-check:checked')).map(function (c) { return c.value; });
           if (!ids.length) { alert('Centang minimal satu siswa terlebih dahulu.'); return; }
@@ -2467,6 +2478,14 @@
         });
         document.getElementById('btnCetakSemua').addEventListener('click', function () {
           cetakSiswa(siswaList.map(function (s) { return s.id; }), this);
+        });
+        document.getElementById('btnUnduhTerpilih').addEventListener('click', function () {
+          var ids = Array.prototype.slice.call(document.querySelectorAll('.cetak-rapor-check:checked')).map(function (c) { return c.value; });
+          if (!ids.length) { alert('Centang minimal satu siswa terlebih dahulu.'); return; }
+          unduhSiswaPDF(ids, this, 'Rapor_' + wk.kelas.nama + '_Terpilih');
+        });
+        document.getElementById('btnUnduhSemua').addEventListener('click', function () {
+          unduhSiswaPDF(siswaList.map(function (s) { return s.id; }), this, 'Rapor_' + wk.kelas.nama);
         });
       }
 
@@ -2481,10 +2500,12 @@
           '<div class="no-print" style="display:flex;gap:8px;margin:14px 0;align-items:center;flex-wrap:wrap;">' +
           '<button class="btn-small" id="btnKembaliDaftarCetak"><i data-lucide="arrow-left" style="width:14px;height:14px;"></i> Kembali ke Daftar</button>' +
           '<button class="btn-small btn-small--primary" id="btnCetakDariPreview"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak</button>' +
+          '<button class="btn-small" id="btnUnduhDariPreview"><i data-lucide="download" style="width:14px;height:14px;"></i> Unduh PDF</button>' +
           '</div>' + html;
         lucide.createIcons();
         document.getElementById('btnKembaliDaftarCetak').addEventListener('click', renderDaftarSiswa);
         document.getElementById('btnCetakDariPreview').addEventListener('click', function () { cetakSiswa([siswaId], this); });
+        document.getElementById('btnUnduhDariPreview').addEventListener('click', function () { unduhSiswaPDF([siswaId], this, siswaRingkas.nama); });
         area.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
 
@@ -2515,6 +2536,59 @@
           window.print();
         } catch (err) {
           alert('Gagal menyiapkan cetak: ' + (err && err.message ? err.message : err));
+        } finally {
+          if (triggerBtn) { triggerBtn.disabled = false; triggerBtn.innerHTML = teksAsliBtn; lucide.createIcons(); }
+        }
+      }
+
+      // Susun kartu rapor untuk 1/beberapa siswa (sama seperti cetakSiswa),
+      // lalu langsung buat & unduh file PDF-nya (tanpa lewat jendela cetak
+      // browser) memakai html2pdf.js. Elemen ber-kelas "no-print" (mis.
+      // hint "Untuk mengisi/mengubah Catatan Wali Kelas...") disembunyikan
+      // sementara supaya tidak ikut ter-capture ke PDF, lalu dikembalikan
+      // setelah selesai. Nama file: nama siswa (unduh satu-satu/preview)
+      // atau namaFile yang diberikan pemanggil (unduh terpilih/semua).
+      async function unduhSiswaPDF(idList, triggerBtn, namaFile) {
+        var teksAsliBtn = triggerBtn ? triggerBtn.innerHTML : null;
+        if (triggerBtn) { triggerBtn.disabled = true; triggerBtn.innerHTML = 'Menyiapkan PDF...'; }
+
+        try {
+          var htmlParts = [];
+          for (var i = 0; i < idList.length; i++) {
+            htmlParts.push(await buatKartuRapor(idList[i]));
+          }
+          var area = document.getElementById('cetakRaporArea');
+          area.innerHTML = htmlParts.join('');
+
+          // Beri jeda sesaat supaya browser sempat me-render (termasuk
+          // logo watermark) sebelum di-capture ke PDF.
+          await new Promise(function (resolve) { setTimeout(resolve, 150); });
+
+          var elHiddenSementara = Array.prototype.slice.call(area.querySelectorAll('.no-print'));
+          elHiddenSementara.forEach(function (el) { el.style.display = 'none'; });
+
+          var namaFileAman = (namaFile || 'Rapor').replace(/[\\/:*?"<>|]/g, '-');
+          try {
+            await html2pdf()
+              .set({
+                // margin 12.7mm = 0.5 inci di semua sisi, setara preset
+                // "Narrow" di Word, dan sama dengan margin @page di CSS
+                // yang dipakai jalur Cetak (window.print()) supaya hasil
+                // Unduh PDF & Cetak konsisten.
+                margin: 12.7,
+                filename: namaFileAman + '.pdf',
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                pagebreak: { before: '.rapor-cetak + .rapor-cetak' }
+              })
+              .from(area)
+              .save();
+          } finally {
+            elHiddenSementara.forEach(function (el) { el.style.display = ''; });
+          }
+        } catch (err) {
+          alert('Gagal membuat PDF: ' + (err && err.message ? err.message : err));
         } finally {
           if (triggerBtn) { triggerBtn.disabled = false; triggerBtn.innerHTML = teksAsliBtn; lucide.createIcons(); }
         }
