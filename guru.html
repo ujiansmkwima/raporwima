@@ -2538,14 +2538,32 @@
             namaFile = 'Rapor_' + namaFileAman(wk.kelas.nama) + '_' + idList.length + '_siswa.pdf';
           }
 
-          await html2pdf().set({
+          var workerPdf = html2pdf().set({
             margin: 12.7,
             filename: namaFile,
             image: { type: 'jpeg', quality: 0.98 },
             html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', scrollX: 0, scrollY: 0, windowWidth: kerja.scrollWidth, windowHeight: kerja.scrollHeight },
             jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
             pagebreak: { mode: ['css'] }
-          }).from(kerja).save();
+          }).from(kerja);
+
+          // --- MODE DIAGNOSA SEMENTARA ---
+          // Ambil kanvas hasil tangkapan html2canvas dan buka sebagai
+          // gambar PNG di tab baru, SEBELUM dijadikan PDF. Ini untuk
+          // memastikan apakah masalahnya di tahap "memotret" elemen
+          // (html2canvas) atau di tahap "menyusun jadi PDF" (jsPDF).
+          // Hapus blok ini setelah masalah PDF kosong selesai diperbaiki.
+          var debugCanvas = await workerPdf.toCanvas();
+          console.log('[DEBUG] Ukuran kanvas hasil tangkapan:', debugCanvas.width, 'x', debugCanvas.height);
+          var debugDataUrl = debugCanvas.toDataURL('image/png');
+          var debugWin = window.open();
+          if (debugWin) {
+            debugWin.document.write('<title>DEBUG kanvas rapor</title><img src="' + debugDataUrl + '" style="max-width:100%;">');
+          } else {
+            console.log('[DEBUG] Popup diblokir, ini data URL kanvas (tempel di address bar tab baru untuk lihat):', debugDataUrl.substring(0, 200) + '...(dipotong)');
+          }
+          // --- lanjut proses normal jadi PDF & unduh ---
+          await workerPdf.save();
         } catch (err) {
           alert('Gagal membuat PDF: ' + (err && err.message ? err.message : err));
         } finally {
