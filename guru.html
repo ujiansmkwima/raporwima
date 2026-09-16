@@ -10,7 +10,6 @@
 <script src="https://unpkg.com/lucide@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="supabase-client.js"></script>
 </head>
 <body>
@@ -51,7 +50,7 @@
     <div class="sidebar__section-label" id="labelWaliKelas" style="display:none;">Wali Kelas</div>
     <nav class="menu-list" id="menuWaliKelas"></nav>
 
-    <div class="sidebar__section-label" id="labelCetakRapor" style="display:none;">Unduh Rapor</div>
+    <div class="sidebar__section-label" id="labelCetakRapor" style="display:none;">Cetak Rapor</div>
     <nav class="menu-list" id="menuCetakRapor"></nav>
 
     <div class="sidebar__footer">
@@ -299,7 +298,7 @@
       var itemCetak = document.createElement('a');
       itemCetak.href = '#';
       itemCetak.className = 'menu-item';
-      itemCetak.innerHTML = '<i data-lucide="download" class="menu-icon"></i><span class="menu-item__title">Unduh Rapor</span><span class="menu-item__sub">' + waliKelas.kelas.nama + '</span>';
+      itemCetak.innerHTML = '<i data-lucide="printer" class="menu-icon"></i><span class="menu-item__title">Cetak Rapor</span><span class="menu-item__sub">' + waliKelas.kelas.nama + '</span>';
       itemCetak.addEventListener('click', function (e) {
         e.preventDefault();
         setActiveMenuItem(itemCetak);
@@ -2398,15 +2397,14 @@
     // Menggabungkan Nilai Rapor + Capaian Pembelajaran per mapel,
     // Nilai Ekstrakurikuler, Nilai Kokurikuler, dan rekap Presensi
     // (Sakit/Izin/Alpha) satu siswa, dalam tampilan siap cetak
-    // (tombol "Unduh" membuat file PDF langsung lewat html2pdf.js, tanpa
-    // lewat jendela cetak browser — supaya tidak ada header/footer bawaan
-    // browser yang menampilkan alamat/URL halaman & nama aplikasi).
+    // (tombol "Cetak" memakai jendela cetak bawaan browser / window.print(),
+    // dari situ user pilih printer fisik atau "Simpan sebagai PDF").
     async function renderCetakRapor(wk) {
       content.innerHTML = renderPlaceholder('Memuat...', 'Menyiapkan data cetak rapor kelas ' + wk.kelas.nama + '.');
 
       var siswaList = await ambilSiswaKelas(wk.kelas.id);
       if (!siswaList.length) {
-        content.innerHTML = renderPlaceholder('Unduh Rapor — ' + wk.kelas.nama, 'Belum ada siswa di kelas ini pada tahun ajaran aktif.');
+        content.innerHTML = renderPlaceholder('Cetak Rapor — ' + wk.kelas.nama, 'Belum ada siswa di kelas ini pada tahun ajaran aktif.');
         return;
       }
 
@@ -2434,16 +2432,16 @@
             '<td>' + escapeHtml(s.nama) + '</td>' +
             '<td class="tc-center">' +
             '<button class="btn-small btn-cetak-preview" data-id="' + s.id + '"><i data-lucide="eye" style="width:14px;height:14px;"></i> Preview</button> ' +
-            '<button class="btn-small btn-small--primary btn-cetak-satu" data-id="' + s.id + '"><i data-lucide="download" style="width:14px;height:14px;"></i> Unduh</button>' +
+            '<button class="btn-small btn-small--primary btn-cetak-satu" data-id="' + s.id + '"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak</button>' +
             '</td></tr>';
         }).join('');
 
         content.innerHTML =
-          '<div class="panel-head"><div><div class="panel-head__title">Unduh Rapor — ' + escapeHtml(wk.kelas.nama) + '</div>' +
-          '<div class="panel-head__desc">Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + '. Klik Preview untuk melihat, Unduh untuk mengunduh PDF satu siswa, atau centang beberapa lalu Unduh Terpilih.</div></div>' +
+          '<div class="panel-head"><div><div class="panel-head__title">Cetak Rapor — ' + escapeHtml(wk.kelas.nama) + '</div>' +
+          '<div class="panel-head__desc">Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + '. Klik Preview untuk melihat, Cetak untuk mencetak/menyimpan PDF satu siswa lewat jendela cetak browser, atau centang beberapa lalu Cetak Terpilih.</div></div>' +
           '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
-          '<button class="btn-small" id="btnCetakTerpilih"><i data-lucide="download" style="width:14px;height:14px;"></i> Unduh Terpilih</button>' +
-          '<button class="btn-small btn-small--primary" id="btnCetakSemua"><i data-lucide="download" style="width:14px;height:14px;"></i> Unduh Semua</button>' +
+          '<button class="btn-small" id="btnCetakTerpilih"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak Terpilih</button>' +
+          '<button class="btn-small btn-small--primary" id="btnCetakSemua"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak Semua</button>' +
           '</div></div>' +
           '<div class="table-wrap no-print"><table class="data-table"><thead><tr>' +
           '<th class="tc-center"><input type="checkbox" id="checkSemuaCetak"></th>' +
@@ -2460,20 +2458,20 @@
           btn.addEventListener('click', function () { tampilkanPreview(this.getAttribute('data-id')); });
         });
         document.querySelectorAll('.btn-cetak-satu').forEach(function (btn) {
-          btn.addEventListener('click', function () { unduhSiswa([this.getAttribute('data-id')], this); });
+          btn.addEventListener('click', function () { cetakSiswa([this.getAttribute('data-id')], this); });
         });
         document.getElementById('btnCetakTerpilih').addEventListener('click', function () {
           var ids = Array.prototype.slice.call(document.querySelectorAll('.cetak-rapor-check:checked')).map(function (c) { return c.value; });
           if (!ids.length) { alert('Centang minimal satu siswa terlebih dahulu.'); return; }
-          unduhSiswa(ids, this);
+          cetakSiswa(ids, this);
         });
         document.getElementById('btnCetakSemua').addEventListener('click', function () {
-          unduhSiswa(siswaList.map(function (s) { return s.id; }), this);
+          cetakSiswa(siswaList.map(function (s) { return s.id; }), this);
         });
       }
 
-      // Tampilkan hasil rapor 1 siswa di layar (tanpa langsung mengunduh),
-      // dengan tombol Kembali ke daftar dan Unduh dari sini.
+      // Tampilkan hasil rapor 1 siswa di layar (tanpa langsung mencetak),
+      // dengan tombol Kembali ke daftar dan Cetak dari sini.
       async function tampilkanPreview(siswaId) {
         var siswaRingkas = siswaList.find(function (s) { return s.id === siswaId; });
         var area = document.getElementById('cetakRaporArea');
@@ -2482,92 +2480,42 @@
         area.innerHTML =
           '<div class="no-print" style="display:flex;gap:8px;margin:14px 0;align-items:center;flex-wrap:wrap;">' +
           '<button class="btn-small" id="btnKembaliDaftarCetak"><i data-lucide="arrow-left" style="width:14px;height:14px;"></i> Kembali ke Daftar</button>' +
-          '<button class="btn-small btn-small--primary" id="btnCetakDariPreview"><i data-lucide="download" style="width:14px;height:14px;"></i> Unduh</button>' +
+          '<button class="btn-small btn-small--primary" id="btnCetakDariPreview"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak</button>' +
           '</div>' + html;
         lucide.createIcons();
         document.getElementById('btnKembaliDaftarCetak').addEventListener('click', renderDaftarSiswa);
-        document.getElementById('btnCetakDariPreview').addEventListener('click', function () { unduhSiswa([siswaId], this); });
+        document.getElementById('btnCetakDariPreview').addEventListener('click', function () { cetakSiswa([siswaId], this); });
         area.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
 
       // Susun kartu rapor untuk 1 atau beberapa siswa sekaligus (dipakai
-      // oleh tombol Unduh per baris, Unduh Terpilih, dan Unduh Semua),
-      // lalu buat file PDF langsung lewat html2pdf.js dan unduh — tanpa
-      // jendela cetak browser, jadi tidak ada header/footer/watermark
-      // alamat halaman & nama aplikasi yang biasa ditambahkan browser.
-      // Kalau lebih dari satu siswa, semua rapor digabung jadi satu file
-      // PDF, tiap siswa otomatis mulai di halaman baru.
-      // Kartu disusun di kontainer sementara di luar layar (bukan di
-      // #cetakRaporArea) supaya tampilan yang sedang dilihat user
-      // (daftar siswa / preview) tidak berubah selama proses berjalan.
-      async function unduhSiswa(idList, triggerBtn) {
+      // oleh tombol Cetak per baris, Cetak Terpilih, dan Cetak Semua),
+      // ditaruh di #cetakRaporArea (area yang sama dengan Preview), lalu
+      // panggil window.print(). CSS @media print di style.css yang
+      // menyembunyikan sidebar/topbar/tombol dan hanya menampilkan kartu
+      // rapor. Dari jendela cetak, user bisa pilih printer fisik atau
+      // "Simpan sebagai PDF". Kalau lebih dari satu siswa, tiap kartu
+      // otomatis mulai di halaman baru (lihat aturan
+      // ".rapor-cetak + .rapor-cetak" di @media print).
+      async function cetakSiswa(idList, triggerBtn) {
         var teksAsliBtn = triggerBtn ? triggerBtn.innerHTML : null;
-        if (triggerBtn) { triggerBtn.disabled = true; triggerBtn.innerHTML = 'Membuat PDF...'; }
-
-        var kerja = document.createElement('div');
-        // Pakai "absolute" (relatif ke dokumen), BUKAN "fixed" (relatif ke
-        // viewport) — kalau halaman sedang di-scroll ke bawah saat tombol
-        // Unduh diklik, elemen "fixed" bisa berakhir di luar area yang
-        // ditangkap html2canvas sehingga hasil PDF-nya kosong/putih.
-        kerja.style.position = 'absolute';
-        kerja.style.left = '-10000px';
-        kerja.style.top = '0';
-        kerja.style.width = '794px'; // kira-kira lebar A4 @ 96dpi, supaya proporsi rapi
-        kerja.style.background = '#fff';
-        document.body.appendChild(kerja);
+        if (triggerBtn) { triggerBtn.disabled = true; triggerBtn.innerHTML = 'Menyiapkan...'; }
 
         try {
           var htmlParts = [];
           for (var i = 0; i < idList.length; i++) {
             htmlParts.push(await buatKartuRapor(idList[i]));
           }
-          kerja.innerHTML = htmlParts.join('');
+          var area = document.getElementById('cetakRaporArea');
+          area.innerHTML = htmlParts.join('');
 
-          // Tandai supaya tiap kartu (kecuali yang pertama) mulai di
-          // halaman PDF baru — html2pdf.js mengenali class ini lewat
-          // opsi pagebreak.mode:'css'.
-          var kartuList = kerja.querySelectorAll('.rapor-cetak');
-          kartuList.forEach(function (el, idx) { if (idx > 0) el.classList.add('html2pdf__page-break'); });
-
-          function namaFileAman(s) { return String(s || '').replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, '_'); }
-          var namaFile;
-          if (idList.length === 1) {
-            var satuSiswa = siswaList.find(function (s) { return s.id === idList[0]; });
-            namaFile = 'Rapor_' + namaFileAman(satuSiswa ? satuSiswa.nama : 'Siswa') + '_' + namaFileAman(wk.kelas.nama) + '.pdf';
-          } else {
-            namaFile = 'Rapor_' + namaFileAman(wk.kelas.nama) + '_' + idList.length + '_siswa.pdf';
-          }
-
-          var workerPdf = html2pdf().set({
-            margin: 12.7,
-            filename: namaFile,
-            image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', scrollX: 0, scrollY: 0, windowWidth: kerja.scrollWidth, windowHeight: kerja.scrollHeight },
-            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-            pagebreak: { mode: ['css'] }
-          }).from(kerja);
-
-          // --- MODE DIAGNOSA SEMENTARA ---
-          // Ambil kanvas hasil tangkapan html2canvas dan buka sebagai
-          // gambar PNG di tab baru, SEBELUM dijadikan PDF. Ini untuk
-          // memastikan apakah masalahnya di tahap "memotret" elemen
-          // (html2canvas) atau di tahap "menyusun jadi PDF" (jsPDF).
-          // Hapus blok ini setelah masalah PDF kosong selesai diperbaiki.
-          var debugCanvas = await workerPdf.toCanvas();
-          console.log('[DEBUG] Ukuran kanvas hasil tangkapan:', debugCanvas.width, 'x', debugCanvas.height);
-          var debugDataUrl = debugCanvas.toDataURL('image/png');
-          var debugWin = window.open();
-          if (debugWin) {
-            debugWin.document.write('<title>DEBUG kanvas rapor</title><img src="' + debugDataUrl + '" style="max-width:100%;">');
-          } else {
-            console.log('[DEBUG] Popup diblokir, ini data URL kanvas (tempel di address bar tab baru untuk lihat):', debugDataUrl.substring(0, 200) + '...(dipotong)');
-          }
-          // --- lanjut proses normal jadi PDF & unduh ---
-          await workerPdf.save();
+          // Beri jeda sesaat supaya browser sempat me-render (termasuk
+          // logo watermark) sebelum jendela cetak muncul.
+          await new Promise(function (resolve) { setTimeout(resolve, 150); });
+          window.print();
         } catch (err) {
-          alert('Gagal membuat PDF: ' + (err && err.message ? err.message : err));
+          alert('Gagal menyiapkan cetak: ' + (err && err.message ? err.message : err));
         } finally {
-          document.body.removeChild(kerja);
           if (triggerBtn) { triggerBtn.disabled = false; triggerBtn.innerHTML = teksAsliBtn; lucide.createIcons(); }
         }
       }
