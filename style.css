@@ -1039,53 +1039,264 @@ a { color: inherit; text-decoration: none; }
   resize: vertical;
 }
 
-/* ---------- Cetak Rapor ---------- */
+/* ---------- Cetak Rapor ----------
+   Meniru persis format cetak resmi: header kuning #FFC000, watermark
+   logo sekolah di tengah, kotak Kokurikuler/Catatan/Tanggapan, dan
+   blok tanda tangan tiga kolom di bagian bawah. */
 .rapor-cetak {
+  position: relative;
   background: #fff;
+  color: #000;
   border: 1px solid var(--border-strong, #d8dee6);
   border-radius: var(--radius-sm, 8px);
   padding: 24px;
   margin-top: 12px;
+  font-size: 13px;
+  line-height: 1.35;
 }
 
-.rapor-cetak__head {
-  text-align: center;
-  margin-bottom: 16px;
-  border-bottom: 2px solid var(--ink, #1a1a1a);
-  padding-bottom: 12px;
+/* Saat Cetak Terpilih/Cetak Semua menumpuk beberapa kartu di layar
+   sesaat sebelum window.print() terpanggil, beri jarak antar kartu
+   supaya tidak menempel. */
+.rapor-cetak + .rapor-cetak {
+  margin-top: 28px;
 }
 
-.rapor-cetak__school {
-  font-size: 18px;
-  font-weight: 800;
-  margin-bottom: 4px;
+/* Watermark logo sekolah, mengambang di belakang seluruh isi rapor. */
+.rapor-cetak::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 340px;
+  height: 340px;
+  transform: translate(-50%, -50%);
+  background-image: url('assets/logo.png');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  opacity: 0.12;
+  pointer-events: none;
+  z-index: 0;
 }
 
+.rapor-cetak > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ---- Biodata (Nama/NISN/Sekolah/Alamat | Kelas/Fase/Semester/Tahun) ---- */
 .rapor-cetak__biodata {
   width: 100%;
-  margin-bottom: 18px;
-  font-size: 13.5px;
+  border-collapse: collapse;
+  margin-bottom: 16px;
 }
 
 .rapor-cetak__biodata td {
-  padding: 3px 6px 3px 0;
+  padding: 2px 4px;
+  vertical-align: top;
+  font-size: 13px;
+}
+
+.rc-label {
+  width: 90px;
+  white-space: nowrap;
+}
+
+.rc-label--kanan {
+  width: 110px;
+  padding-left: 24px !important;
+}
+
+.rc-colon {
+  width: 12px;
+}
+
+.rc-value {
+  font-weight: 600;
+}
+
+/* ---- Tabel Nilai Akademik ---- */
+.rapor-cetak__nilai,
+.rapor-cetak__ekskul {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 14px;
+}
+
+.rapor-cetak__nilai th,
+.rapor-cetak__ekskul th {
+  background: #FFC000;
+  color: #000;
+  font-weight: 700;
+  text-align: center;
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 13px;
+  border: 1px solid #000;
+  padding: 6px 8px;
+}
+
+.rapor-cetak__nilai td,
+.rapor-cetak__ekskul td {
+  border: 1px solid #000;
+  padding: 7px 8px;
   vertical-align: top;
 }
 
-.rapor-cetak__section-title {
-  font-weight: 700;
-  font-size: 14px;
-  margin: 18px 0 8px;
+.rc-th-no {
+  width: 42px;
 }
 
-.rapor-cetak .data-table {
-  margin-bottom: 4px;
+.rc-th-nilai {
+  width: 90px;
+}
+
+.rapor-cetak__section-row td {
+  font-weight: 700;
+  background: #fff;
+}
+
+.tc-center {
+  text-align: center;
+}
+
+.tc-soft {
+  color: var(--ink-soft, #6b7280);
+  font-weight: 400 !important;
+}
+
+/* ---- Bar judul kuning (Kokurikuler / Catatan Wali Kelas / dst) ---- */
+.rapor-cetak__bar {
+  background: #FFC000;
+  border: 1px solid #000;
+  border-bottom: none;
+  color: #000;
+  font-weight: 700;
+  text-align: center;
+  padding: 6px 8px;
+}
+
+.rapor-cetak__box {
+  border: 1px solid #000;
+  padding: 8px 10px;
+  min-height: 40px;
+  margin-bottom: 14px;
+  white-space: pre-wrap;
+}
+
+.rapor-cetak__box--tall {
+  min-height: 80px;
+}
+
+.rapor-cetak__koku-item + .rapor-cetak__koku-item {
+  margin-top: 6px;
+}
+
+/* ---- Baris Ketidakhadiran + Catatan Wali Kelas berdampingan ---- */
+.rapor-cetak__row2 {
+  display: flex;
+  gap: 20px;
+  align-items: stretch;
+  margin-bottom: 14px;
+}
+
+.rapor-cetak__col {
+  display: flex;
+  flex-direction: column;
+}
+
+.rapor-cetak__col--kehadiran {
+  flex: 0 0 34%;
+}
+
+.rapor-cetak__col--catatan {
+  flex: 1;
+}
+
+.rapor-cetak__col .rapor-cetak__box {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.rapor-cetak__kehadiran {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #000;
+}
+
+.rapor-cetak__kehadiran td {
+  padding: 4px 8px;
+  font-size: 13px;
+}
+
+.rapor-cetak__kehadiran .rc-label {
+  width: auto;
+}
+
+/* ---- Hint kecil (hanya di layar) mengarahkan ke menu Catatan Wali Kelas ---- */
+.rapor-cetak__catatan-hint {
+  font-size: 12px;
+  color: var(--ink-soft, #6b7280);
+  margin: -8px 0 14px;
+}
+
+/* ---- Footer: tanda tangan 3 kolom simetris (Orangtua/Wali, Kepala
+   Sekolah, Wali Kelas). Baris "kota, tanggal" ditaruh di atas kolom
+   Wali Kelas (rata kiri dengan kolom itu), dua kolom lain diberi
+   spacer setinggi baris tanggal supaya label ketiganya tetap sejajar. */
+.rapor-cetak__footer {
+  margin-top: 22px;
+}
+
+.rapor-cetak__footer-date,
+.rapor-cetak__footer-col-spacer {
+  margin-bottom: 6px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.rapor-cetak__footer-cols {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  text-align: left;
+  gap: 10px;
+}
+
+.rapor-cetak__footer-col {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.rapor-cetak__footer-col div:last-child {
+  white-space: nowrap;
+  font-size: 11.5px;
+}
+
+.rapor-cetak__ttd-space {
+  height: 64px;
 }
 
 /* Saat mencetak (window.print()): sembunyikan sidebar, topbar, dan semua
    kontrol interaktif (tombol, dropdown pemilih siswa), tampilkan hanya
-   kartu rapor siap cetak (#cetakRaporArea .rapor-cetak). */
+   kartu rapor siap cetak (#cetakRaporArea .rapor-cetak), dibuat semirip
+   mungkin dengan preview di layar (tetap berwarna + logo watermark
+   tetap tampak, karena warna/gambar latar biasanya dihilangkan browser
+   saat print kecuali dipaksa lewat print-color-adjust: exact). */
+@page {
+  size: A4;
+  margin: 12.7mm; /* setara "Narrow" margin di Word: 0.5 inci semua sisi */
+}
+
 @media print {
+  html, body {
+    background: #fff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
   .sidebar,
   .topbar,
   .panel-head,
@@ -1100,8 +1311,32 @@ a { color: inherit; text-decoration: none; }
     background: #fff !important;
   }
 
+  .rapor-cetak,
+  .rapor-cetak * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
   .rapor-cetak {
     border: none;
     padding: 0;
+  }
+
+  .rapor-cetak__nilai,
+  .rapor-cetak__ekskul {
+    page-break-inside: auto;
+  }
+
+  .rapor-cetak__nilai tr,
+  .rapor-cetak__ekskul tr {
+    page-break-inside: avoid;
+  }
+
+  /* Cetak Terpilih / Cetak Semua: beberapa kartu rapor (.rapor-cetak)
+     ditaruh berurutan di #cetakRaporArea — tiap kartu baru selalu
+     mulai di halaman baru. */
+  .rapor-cetak + .rapor-cetak {
+    page-break-before: always;
   }
 }

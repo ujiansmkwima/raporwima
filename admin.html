@@ -29,15 +29,16 @@
     <div class="sidebar__section-label">Menu</div>
     <nav class="menu-list" id="menuAdmin">
       <a href="#" class="menu-item" data-view="dashboard"><i data-lucide="layout-dashboard" class="menu-icon"></i><span class="menu-item__title">Dashboard</span></a>
+      <a href="#" class="menu-item" data-view="profilSekolah"><i data-lucide="school" class="menu-icon"></i><span class="menu-item__title">Profil Sekolah</span></a>
       <a href="#" class="menu-item" data-view="tahunAjaran"><i data-lucide="calendar-clock" class="menu-icon"></i><span class="menu-item__title">Tahun Ajaran</span></a>
       <a href="#" class="menu-item" data-view="kelas"><i data-lucide="door-open" class="menu-icon"></i><span class="menu-item__title">Kelas</span></a>
       <a href="#" class="menu-item" data-view="siswa"><i data-lucide="users" class="menu-icon"></i><span class="menu-item__title">Siswa</span></a>
-      <a href="#" class="menu-item" data-view="leger"><i data-lucide="layers" class="menu-icon"></i><span class="menu-item__title">Leger Nilai (6 Semester)</span></a>
       <a href="#" class="menu-item" data-view="guru"><i data-lucide="contact" class="menu-icon"></i><span class="menu-item__title">Guru</span></a>
       <a href="#" class="menu-item" data-view="mapel"><i data-lucide="book-open" class="menu-icon"></i><span class="menu-item__title">Mata Pelajaran</span></a>
       <a href="#" class="menu-item menu-item--nested" data-view="mapelTingkat"><i data-lucide="corner-down-right" class="menu-icon"></i><span class="menu-item__title">Mata Pelajaran Per Tingkat</span></a>
       <a href="#" class="menu-item" data-view="penugasan"><i data-lucide="briefcase" class="menu-icon"></i><span class="menu-item__title">Penugasan Guru</span></a>
       <a href="#" class="menu-item" data-view="ekskul"><i data-lucide="medal" class="menu-icon"></i><span class="menu-item__title">Ekstrakurikuler</span></a>
+      <a href="#" class="menu-item" data-view="leger"><i data-lucide="layers" class="menu-icon"></i><span class="menu-item__title">Leger Nilai (6 Semester)</span></a>
     </nav>
 
     <div class="sidebar__footer">
@@ -82,6 +83,103 @@
   function escapeHtml(s) {
     return (s === null || s === undefined) ? '' : String(s).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  // ---------- Helper checklist massal + hapus terpilih ----------
+  // Dipakai tabel-tabel data induk (Kelas, Siswa, Guru, Mata Pelajaran,
+  // Penugasan, Ekstrakurikuler) supaya baris bisa diceklis satu-satu atau
+  // semua sekaligus (via checkbox header) lalu dihapus bersamaan.
+  //   checkboxClass : class checkbox tiap baris (value = id baris)
+  //   selectAllId   : id checkbox "pilih semua" di header tabel
+  //   btnId         : id tombol "Hapus Terpilih"
+  //   countId       : id <span> penghitung jumlah terpilih di dalam tombol
+  //   onDelete(ids) : async, dipanggil dengan array id yang diceklis;
+  //                   bertanggung jawab menghapus data & me-render ulang panel
+  //   confirmMsg(n) : opsional, mengembalikan teks konfirmasi untuk n baris
+  function wireBulkDelete(opts) {
+    var selectAll = document.getElementById(opts.selectAllId);
+    var btn = document.getElementById(opts.btnId);
+    var countEl = opts.countId ? document.getElementById(opts.countId) : null;
+
+    function semuaChk() { return document.querySelectorAll('.' + opts.checkboxClass); }
+    function chkTerpilih() { return Array.prototype.filter.call(semuaChk(), function (c) { return c.checked; }); }
+
+    function refreshState() {
+      var terpilih = chkTerpilih();
+      var semua = semuaChk();
+      if (countEl) countEl.textContent = terpilih.length;
+      if (btn) btn.disabled = terpilih.length === 0;
+      if (selectAll) {
+        selectAll.checked = semua.length > 0 && terpilih.length === semua.length;
+        selectAll.indeterminate = terpilih.length > 0 && terpilih.length < semua.length;
+      }
+    }
+
+    Array.prototype.forEach.call(semuaChk(), function (chk) {
+      chk.addEventListener('change', refreshState);
+    });
+
+    if (selectAll) {
+      selectAll.addEventListener('change', function () {
+        Array.prototype.forEach.call(semuaChk(), function (chk) { chk.checked = selectAll.checked; });
+        refreshState();
+      });
+    }
+
+    if (btn) {
+      btn.addEventListener('click', async function () {
+        var ids = chkTerpilih().map(function (c) { return c.value; });
+        if (!ids.length) return;
+        var pesan = opts.confirmMsg ? opts.confirmMsg(ids.length) : ('Hapus ' + ids.length + ' data terpilih? Tindakan ini tidak bisa dibatalkan.');
+        if (!confirm(pesan)) return;
+        var teksAsli = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'Menghapus...';
+        try {
+          await opts.onDelete(ids);
+        } catch (err) {
+          alert('Gagal menghapus sebagian/semua data: ' + (err && err.message ? err.message : err));
+          btn.disabled = false;
+          btn.textContent = teksAsli;
+        }
+      });
+    }
+
+    refreshState();
+  }
+
+  // ---------- Helper edit baris (inline) ----------
+  // Dipakai tabel-tabel relasional (penugasan, wali kelas, PJ kokurikuler,
+  // pembina ekskul) supaya tiap baris bisa disunting langsung di tempat
+  // tanpa harus hapus lalu tambah ulang.
+  function opsiTerpilih(list, selectedId, placeholder) {
+    var awal = placeholder ? '<option value="">' + escapeHtml(placeholder) + '</option>' : '';
+    return awal + list.map(function (x) {
+      return '<option value="' + x.id + '"' + (String(x.id) === String(selectedId) ? ' selected' : '') +
+        '>' + escapeHtml(x.nama) + '</option>';
+    }).join('');
+  }
+
+  // cellsHtml: array HTML untuk tiap kolom data (tanpa kolom aksi).
+  // onSimpan(tr) boleh async dan mengembalikan string pesan error (atau
+  // null/undefined kalau berhasil).
+  function editBarisInline(tr, cellsHtml, onSimpan, onBatal) {
+    tr.innerHTML = cellsHtml.map(function (h) { return '<td>' + h + '</td>'; }).join('') +
+      '<td style="white-space:nowrap;"><button class="btn-small btn-small--primary" data-simpan>Simpan</button> ' +
+      '<button class="btn-small" data-batal>Batal</button></td>';
+
+    tr.querySelector('[data-batal]').addEventListener('click', function () { onBatal(); });
+    tr.querySelector('[data-simpan]').addEventListener('click', async function () {
+      var btn = this;
+      btn.disabled = true;
+      btn.textContent = 'Menyimpan...';
+      var pesan = await onSimpan(tr);
+      if (pesan) {
+        alert(pesan);
+        btn.disabled = false;
+        btn.textContent = 'Simpan';
+      }
     });
   }
 
@@ -259,6 +357,54 @@
   }
 
   // ================= PANEL: TAHUN AJARAN =================
+  // ================= Profil Sekolah (singleton) =================
+  // Satu baris data sekolah yang dipakai Cetak Rapor: Nama Sekolah,
+  // Kepala Sekolah, dan Kota untuk baris tanda tangan. Disimpan/​
+  // diperbarui lewat upsert onConflict=singleton, jadi selalu cuma
+  // ada 1 baris di tabel profil_sekolah.
+  async function renderProfilSekolah() {
+    content.innerHTML = '<div class="panel-head"><div><div class="panel-head__title">Profil Sekolah</div>' +
+      '<div class="panel-head__desc">Memuat data Profil Sekolah...</div></div></div>';
+
+    var res = await supabaseClient.from('profil_sekolah').select('*').maybeSingle();
+    var p = res.data || {};
+
+    content.innerHTML =
+      '<div class="panel-head"><div><div class="panel-head__title">Profil Sekolah</div>' +
+      '<div class="panel-head__desc">Data ini dipakai otomatis di kepala Cetak Rapor dan baris tanda tangan Kepala Sekolah — sekali diisi di sini, semua rapor yang dicetak wali kelas memakai data yang sama.</div></div></div>' +
+      '<form class="add-form" id="formProfilSekolah" style="flex-direction:column;align-items:stretch;max-width:520px;">' +
+      '<div class="field"><label>Nama Sekolah</label><input type="text" id="psNamaSekolah" value="' + escapeHtml(p.nama_sekolah || '') + '" placeholder="SMK Widya Mandala Tambak" required></div>' +
+      '<div class="field"><label>Alamat Sekolah</label><input type="text" id="psAlamatSekolah" value="' + escapeHtml(p.alamat_sekolah || '') + '" placeholder="Jl. ..."></div>' +
+      '<div class="field"><label>Nama Kepala Sekolah</label><input type="text" id="psKepalaSekolah" value="' + escapeHtml(p.kepala_sekolah || '') + '" placeholder="Agung Pambudi, S.E., S. Kom., M.M."></div>' +
+      '<div class="field"><label>NIP Kepala Sekolah (opsional)</label><input type="text" id="psNipKepalaSekolah" value="' + escapeHtml(p.nip_kepala_sekolah || '') + '"></div>' +
+      '<div class="field"><label>Kota (untuk baris tanda tangan, mis. "Tambak, ....... 2026")</label><input type="text" id="psKotaTtd" value="' + escapeHtml(p.kota_ttd || 'Tambak') + '" placeholder="Tambak"></div>' +
+      '<button type="submit" class="btn-small btn-small--primary" style="align-self:flex-start;">Simpan</button>' +
+      '</form>' +
+      '<div id="profilSekolahMsg" style="margin-top:10px;"></div>';
+
+    document.getElementById('formProfilSekolah').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var msg = document.getElementById('profilSekolahMsg');
+      msg.textContent = 'Menyimpan...';
+
+      var upd = await supabaseClient.from('profil_sekolah').upsert({
+        singleton: true,
+        nama_sekolah: document.getElementById('psNamaSekolah').value.trim() || 'SMK Widya Mandala Tambak',
+        alamat_sekolah: document.getElementById('psAlamatSekolah').value.trim() || null,
+        kepala_sekolah: document.getElementById('psKepalaSekolah').value.trim() || null,
+        nip_kepala_sekolah: document.getElementById('psNipKepalaSekolah').value.trim() || null,
+        kota_ttd: document.getElementById('psKotaTtd').value.trim() || 'Tambak',
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'singleton' });
+
+      if (upd.error) {
+        msg.textContent = 'Gagal menyimpan: ' + upd.error.message;
+      } else {
+        msg.textContent = 'Tersimpan.';
+      }
+    });
+  }
+
   async function renderTahunAjaran() {
     content.innerHTML =
       '<div class="panel-head"><div><div class="panel-head__title">Tahun Ajaran</div>' +
@@ -366,6 +512,14 @@
     content.innerHTML =
       '<div class="panel-head"><div><div class="panel-head__title">Kelas</div>' +
       '<div class="panel-head__desc">Daftar rombongan belajar. Tidak terikat tahun ajaran — kelas yang sama dipakai lagi tahun berikutnya.</div></div></div>' +
+      '<div class="toolbar">' +
+      '<button class="btn-small" id="btnExportKelas">⬇ Unduh Data (Excel)</button>' +
+      '<button class="btn-small" id="btnTemplateKelas">⬇ Unduh Template Excel</button>' +
+      '<button class="btn-small" id="btnImportKelas">⬆ Import dari Excel</button>' +
+      '<input type="file" id="fileImportKelas" accept=".xlsx,.xls" style="display:none;">' +
+      '<button class="btn-small btn-small--danger" id="btnHapusTerpilihKelas" disabled>🗑 Hapus Terpilih (<span id="kTerpilihCount">0</span>)</button>' +
+      '</div>' +
+      '<div id="importSummaryKelas"></div>' +
       '<form class="add-form" id="formKelas">' +
       '<div class="field"><label>Nama Kelas</label><input type="text" id="kNama" placeholder="XI ANM 1" required></div>' +
       '<div class="field"><label>Tingkat</label><select id="kTingkat"><option value="10">10</option><option value="11">11</option><option value="12">12</option></select></div>' +
@@ -373,14 +527,7 @@
       '<div class="field"><label>Konsentrasi Keahlian</label><input type="text" id="kKonsentrasiKeahlian" placeholder="Agribisnis Ternak Ruminansia"></div>' +
       '<button type="submit" class="btn-small btn-small--primary">Tambah</button>' +
       '</form>' +
-      '<div class="toolbar">' +
-      '<button class="btn-small" id="btnExportKelas">⬇ Unduh Data (Excel)</button>' +
-      '<button class="btn-small" id="btnTemplateKelas">⬇ Unduh Template Excel</button>' +
-      '<button class="btn-small" id="btnImportKelas">⬆ Import dari Excel</button>' +
-      '<input type="file" id="fileImportKelas" accept=".xlsx,.xls" style="display:none;">' +
-      '</div>' +
-      '<div id="importSummaryKelas"></div>' +
-      '<div class="table-wrap"><table class="data-table"><thead><tr><th>Nama Kelas</th><th>Tingkat</th><th>Program Keahlian</th><th>Konsentrasi Keahlian</th><th></th></tr></thead><tbody id="kBody"></tbody></table></div>';
+      '<div class="table-wrap"><table class="data-table"><thead><tr><th style="width:32px;"><input type="checkbox" id="kSelectAll"></th><th>Nama Kelas</th><th>Tingkat</th><th>Program Keahlian</th><th>Konsentrasi Keahlian</th><th></th></tr></thead><tbody id="kBody"></tbody></table></div>';
 
     document.getElementById('formKelas').addEventListener('submit', async function (e) {
       e.preventDefault();
@@ -400,10 +547,11 @@
       var listRes = await supabaseClient.from('kelas').select('id, nama, tingkat, program_keahlian, konsentrasi_keahlian').order('nama');
       var rows = listRes.data || [];
       var body = document.getElementById('kBody');
-      body.innerHTML = rows.length ? '' : '<tr><td colspan="5">Belum ada kelas.</td></tr>';
+      body.innerHTML = rows.length ? '' : '<tr><td colspan="6">Belum ada kelas.</td></tr>';
       rows.forEach(function (r) {
         var tr = document.createElement('tr');
         tr.innerHTML =
+          '<td><input type="checkbox" class="kRowChk" value="' + r.id + '"></td>' +
           '<td>' + escapeHtml(r.nama) + '</td><td>' + escapeHtml(r.tingkat) + '</td>' +
           '<td>' + escapeHtml(r.program_keahlian || '—') + '</td><td>' + escapeHtml(r.konsentrasi_keahlian || '—') + '</td>' +
           '<td><button class="btn-small" data-edit-id="' + r.id + '">Edit</button> ' +
@@ -421,6 +569,19 @@
           daftarKelasTerkini = await muatUlangKelas();
         });
       });
+
+      wireBulkDelete({
+        checkboxClass: 'kRowChk',
+        selectAllId: 'kSelectAll',
+        btnId: 'btnHapusTerpilihKelas',
+        countId: 'kTerpilihCount',
+        confirmMsg: function (n) { return 'Hapus ' + n + ' kelas terpilih? Data penempatan siswa/penugasan yang terhubung juga akan ikut terhapus.'; },
+        onDelete: async function (ids) {
+          await supabaseClient.from('kelas').delete().in('id', ids);
+          daftarKelasTerkini = await muatUlangKelas();
+        }
+      });
+
       return rows;
     }
 
@@ -597,7 +758,10 @@
       '<label style="font-weight:600;font-size:13px;display:block;margin-bottom:8px;">Pilih kelas yang memakai mapel ini</label>' +
       '<div style="display:flex;flex-wrap:wrap;gap:8px 18px;">' + kelasChecklistHtml + '</div>' +
       '</div>' +
-      '<div class="table-wrap"><table class="data-table"><thead><tr><th>Urutan</th><th>Kode</th><th>Nama Mapel</th><th>Jenis</th><th>KKM</th><th>Kelas</th><th></th></tr></thead><tbody id="mBody"></tbody></table></div>';
+      '<div class="toolbar">' +
+      '<button class="btn-small btn-small--danger" id="btnHapusTerpilihMapel" disabled>🗑 Hapus Terpilih (<span id="mTerpilihCount">0</span>)</button>' +
+      '</div>' +
+      '<div class="table-wrap"><table class="data-table"><thead><tr><th style="width:32px;"><input type="checkbox" id="mSelectAll"></th><th>Urutan</th><th>Kode</th><th>Nama Mapel</th><th>Jenis</th><th>KKM</th><th>Kelas</th><th></th></tr></thead><tbody id="mBody"></tbody></table></div>';
 
     document.getElementById('btnKeMapelTingkat').addEventListener('click', function () {
       setActiveMenu('mapelTingkat');
@@ -669,7 +833,7 @@
     }
 
     var body = document.getElementById('mBody');
-    body.innerHTML = rows.length ? '' : '<tr><td colspan="6">Belum ada mata pelajaran.</td></tr>';
+    body.innerHTML = rows.length ? '' : '<tr><td colspan="7">Belum ada mata pelajaran.</td></tr>';
     rows.forEach(function (r) {
       var kelasHtml = r.berlaku_untuk === 'tertentu'
         ? (mapelKelasMap[r.id] || []).map(escapeHtml).join(', ') || '<span style="color:var(--ink-soft);">— belum dipilih —</span>'
@@ -677,6 +841,7 @@
 
       var tr = document.createElement('tr');
       tr.innerHTML =
+        '<td><input type="checkbox" class="mRowChk" value="' + r.id + '"></td>' +
         '<td>' + escapeHtml(r.urutan_rapor === null || r.urutan_rapor === undefined ? '—' : r.urutan_rapor) + '</td>' +
         '<td>' + escapeHtml(r.kode || '—') + '</td><td>' + escapeHtml(r.nama) + '</td>' +
         '<td>' + escapeHtml(jenisLabel[r.jenis_mapel] || jenisLabel.umum) + '</td>' +
@@ -696,6 +861,18 @@
         await supabaseClient.from('mata_pelajaran').delete().eq('id', btn.dataset.id);
         renderMapel();
       });
+    });
+
+    wireBulkDelete({
+      checkboxClass: 'mRowChk',
+      selectAllId: 'mSelectAll',
+      btnId: 'btnHapusTerpilihMapel',
+      countId: 'mTerpilihCount',
+      confirmMsg: function (n) { return 'Hapus ' + n + ' mata pelajaran terpilih?'; },
+      onDelete: async function (ids) {
+        await supabaseClient.from('mata_pelajaran').delete().in('id', ids);
+        renderMapel();
+      }
     });
 
     // ---------- Modal Edit ----------
@@ -1125,14 +1302,17 @@
       '<div class="panel-head"><div><div class="panel-head__title">Siswa</div>' +
       '<div class="panel-head__desc">Data biodata siswa lengkap. Penempatan kelas berlaku untuk tahun ajaran ' + escapeHtml(tahunAktif.nama) + ' saja — tahun depan diisi ulang, riwayat tahun ini tidak hilang.</div></div></div>' +
       '<div class="toolbar">' +
-      '<button class="btn-small btn-small--primary" id="btnTambahSiswa">+ Tambah Siswa</button>' +
       '<button class="btn-small" id="btnExportSiswa">⬇ Unduh Data (Excel)</button>' +
       '<button class="btn-small" id="btnTemplateSiswa">⬇ Unduh Template Excel</button>' +
       '<button class="btn-small" id="btnImportSiswa">⬆ Import dari Excel</button>' +
       '<input type="file" id="fileImportSiswa" accept=".xlsx,.xls" style="display:none;">' +
       '</div>' +
       '<div id="importSummary"></div>' +
-      '<div class="table-wrap"><table class="data-table"><thead><tr><th>NIS</th><th>NISN</th><th>Nama</th><th>Kelas (' + escapeHtml(tahunAktif.nama) + ')</th><th></th></tr></thead><tbody id="sBody"></tbody></table></div>';
+      '<div class="toolbar">' +
+      '<button class="btn-small btn-small--primary" id="btnTambahSiswa">+ Tambah Siswa</button>' +
+      '<button class="btn-small btn-small--danger" id="btnHapusTerpilihSiswa" disabled>🗑 Hapus Terpilih (<span id="sTerpilihCount">0</span>)</button>' +
+      '</div>' +
+      '<div class="table-wrap"><table class="data-table"><thead><tr><th style="width:32px;"><input type="checkbox" id="sSelectAll"></th><th>NIS</th><th>NISN</th><th>Nama</th><th>Kelas (' + escapeHtml(tahunAktif.nama) + ')</th><th></th></tr></thead><tbody id="sBody"></tbody></table></div>';
 
     if (kelasList.length === 0) {
       content.querySelector('.panel-head').insertAdjacentHTML('afterend', '<div class="panel-note">Belum ada kelas. Tambahkan kelas dulu di menu "Kelas" supaya siswa bisa ditempatkan.</div>');
@@ -1146,7 +1326,7 @@
       (skRes.data || []).forEach(function (r) { skMap[r.siswa_id] = r.kelas_id; });
 
       var body = document.getElementById('sBody');
-      body.innerHTML = siswaList.length ? '' : '<tr><td colspan="5">Belum ada siswa.</td></tr>';
+      body.innerHTML = siswaList.length ? '' : '<tr><td colspan="6">Belum ada siswa.</td></tr>';
 
       siswaList.forEach(function (s) {
         var kelasNama = '—';
@@ -1155,6 +1335,7 @@
 
         var tr = document.createElement('tr');
         tr.innerHTML =
+          '<td><input type="checkbox" class="sRowChk" value="' + s.id + '"></td>' +
           '<td>' + escapeHtml(s.nis || '—') + '</td>' +
           '<td>' + escapeHtml(s.nisn || '—') + '</td>' +
           '<td>' + escapeHtml(s.nama) + '</td>' +
@@ -1171,6 +1352,18 @@
           await supabaseClient.from('siswa').delete().eq('id', s.id);
           muatUlangDaftar();
         });
+      });
+
+      wireBulkDelete({
+        checkboxClass: 'sRowChk',
+        selectAllId: 'sSelectAll',
+        btnId: 'btnHapusTerpilihSiswa',
+        countId: 'sTerpilihCount',
+        confirmMsg: function (n) { return 'Hapus ' + n + ' siswa terpilih beserta seluruh riwayat nilai/presensinya? Tindakan ini tidak bisa dibatalkan.'; },
+        onDelete: async function (ids) {
+          await supabaseClient.from('siswa').delete().in('id', ids);
+          daftarSiswaTerkini = await muatUlangDaftar();
+        }
       });
 
       return siswaList;
@@ -1709,6 +1902,15 @@
       '<div class="panel-head__desc">Menentukan menu & data yang muncul saat guru login. Berlaku untuk Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + '.</div></div>' +
       '<span class="panel-head__toggle-icon">☰</span></div>' +
       '<div class="collapsible-body' + clsPenugasan + '" id="bodyPenugasan">' +
+      '<div class="toolbar">' +
+      '<button class="btn-small" id="btnExportPenugasan">⬇ Unduh Data (Excel)</button>' +
+      '<button class="btn-small" id="btnExportPenugasanCeklis">⬇ Unduh Format Ceklis (Guru &times; Kelas)</button>' +
+      '<button class="btn-small" id="btnTemplatePenugasan">⬇ Unduh Template Excel</button>' +
+      '<button class="btn-small" id="btnImportPenugasan">⬆ Import dari Excel</button>' +
+      '<input type="file" id="fileImportPenugasan" accept=".xlsx,.xls" style="display:none;">' +
+      '<button class="btn-small btn-small--danger" id="btnHapusTerpilihPenugasan" disabled>🗑 Hapus Terpilih (<span id="pTerpilihCount">0</span>)</button>' +
+      '</div>' +
+      '<div id="importSummaryPenugasan"></div>' +
       '<form class="add-form" id="formPenugasan" style="flex-wrap:wrap;">' +
       '<div class="field"><label>Guru</label><select id="pGuru">' + opsi(guruList) + '</select></div>' +
       '<div class="field"><label>Kelas</label><select id="pKelasMode"><option value="semua">Semua Kelas</option><option value="tertentu">Kelas Tertentu</option></select></div>' +
@@ -1723,27 +1925,13 @@
       '<button type="submit" class="btn-small btn-small--primary" style="order:5;">Tugaskan</button>' +
       '</form>' +
       '<div id="penugasanMsg"></div>' +
-      '<div class="table-wrap"><table class="data-table"><thead><tr><th>Guru</th><th>Mata Pelajaran</th><th>Kelas</th><th></th></tr></thead><tbody id="pBody"></tbody></table></div>' +
-      '<div class="toolbar">' +
-      '<button class="btn-small" id="btnExportPenugasan">⬇ Unduh Data (Excel)</button>' +
-      '<button class="btn-small" id="btnExportPenugasanCeklis">⬇ Unduh Format Ceklis (Guru &times; Kelas)</button>' +
-      '<button class="btn-small" id="btnTemplatePenugasan">⬇ Unduh Template Excel</button>' +
-      '<button class="btn-small" id="btnImportPenugasan">⬆ Import dari Excel</button>' +
-      '<input type="file" id="fileImportPenugasan" accept=".xlsx,.xls" style="display:none;">' +
-      '</div>' +
-      '<div id="importSummaryPenugasan"></div>' +
+      '<div class="table-wrap"><table class="data-table"><thead><tr><th style="width:32px;"><input type="checkbox" id="pSelectAll"></th><th>Guru</th><th>Mata Pelajaran</th><th>Kelas</th><th></th></tr></thead><tbody id="pBody"></tbody></table></div>' +
       '</div>' +
       '<hr class="panel-divider">' +
       '<div class="panel-head panel-head--toggle" data-target="bodyWali"><div><div class="panel-head__title">Wali Kelas</div>' +
       '<div class="panel-head__desc">Guru yang ditugaskan sebagai wali kelas akan otomatis mendapat menu tambahan (rekap nilai & presensi) di dashboardnya.</div></div>' +
       '<span class="panel-head__toggle-icon">☰</span></div>' +
       '<div class="collapsible-body' + clsWali + '" id="bodyWali">' +
-      '<form class="add-form" id="formWali">' +
-      '<div class="field"><label>Guru</label><select id="wGuru">' + opsi(guruList) + '</select></div>' +
-      '<div class="field"><label>Kelas</label><select id="wKelas">' + opsi(kelasList) + '</select></div>' +
-      '<button type="submit" class="btn-small btn-small--primary">Tetapkan</button>' +
-      '</form>' +
-      '<div class="table-wrap"><table class="data-table"><thead><tr><th>Guru</th><th>Wali Kelas</th><th></th></tr></thead><tbody id="wBody"></tbody></table></div>' +
       '<div class="toolbar">' +
       '<button class="btn-small" id="btnExportWali">⬇ Unduh Data (Excel)</button>' +
       '<button class="btn-small" id="btnTemplateWali">⬇ Unduh Template Excel</button>' +
@@ -1751,19 +1939,18 @@
       '<input type="file" id="fileImportWali" accept=".xlsx,.xls" style="display:none;">' +
       '</div>' +
       '<div id="importSummaryWali"></div>' +
+      '<form class="add-form" id="formWali">' +
+      '<div class="field"><label>Guru</label><select id="wGuru">' + opsi(guruList) + '</select></div>' +
+      '<div class="field"><label>Kelas</label><select id="wKelas">' + opsi(kelasList) + '</select></div>' +
+      '<button type="submit" class="btn-small btn-small--primary">Tetapkan</button>' +
+      '</form>' +
+      '<div class="table-wrap"><table class="data-table"><thead><tr><th>Guru</th><th>Wali Kelas</th><th></th></tr></thead><tbody id="wBody"></tbody></table></div>' +
       '</div>' +
       '<hr class="panel-divider">' +
       '<div class="panel-head panel-head--toggle" data-target="bodyKoku"><div><div class="panel-head__title">Penanggung Jawab Kokurikuler</div>' +
       '<div class="panel-head__desc">Tetapkan guru sebagai penanggung jawab untuk satu nama kegiatan kokurikuler, lingkupnya bisa Semua Kelas atau satu kelas tertentu. Satu kegiatan boleh punya lebih dari satu penanggung jawab.</div></div>' +
       '<span class="panel-head__toggle-icon">☰</span></div>' +
       '<div class="collapsible-body' + clsKoku + '" id="bodyKoku">' +
-      '<form class="add-form" id="formKoku">' +
-      '<div class="field"><label>Guru</label><select id="kkGuru">' + opsi(guruList) + '</select></div>' +
-      '<div class="field"><label>Nama Kegiatan Kokurikuler</label><input type="text" id="kkNamaKegiatan" placeholder="mis. P5 - Kearifan Lokal" required></div>' +
-      '<div class="field"><label>Kelas</label><select id="kkKelas"><option value="">— Semua Kelas —</option>' + opsi(kelasList) + '</select></div>' +
-      '<button type="submit" class="btn-small btn-small--primary">Tetapkan</button>' +
-      '</form>' +
-      '<div class="table-wrap"><table class="data-table"><thead><tr><th>Nama Kegiatan</th><th>Kelas</th><th>Penanggung Jawab</th><th></th></tr></thead><tbody id="kkBody"></tbody></table></div>' +
       '<div class="toolbar">' +
       '<button class="btn-small" id="btnExportKoku">⬇ Unduh Data (Excel)</button>' +
       '<button class="btn-small" id="btnTemplateKoku">⬇ Unduh Template Excel</button>' +
@@ -1771,6 +1958,13 @@
       '<input type="file" id="fileImportKoku" accept=".xlsx,.xls" style="display:none;">' +
       '</div>' +
       '<div id="importSummaryKoku"></div>' +
+      '<form class="add-form" id="formKoku">' +
+      '<div class="field"><label>Guru</label><select id="kkGuru">' + opsi(guruList) + '</select></div>' +
+      '<div class="field"><label>Nama Kegiatan Kokurikuler</label><input type="text" id="kkNamaKegiatan" placeholder="mis. P5 - Kearifan Lokal" required></div>' +
+      '<div class="field"><label>Kelas</label><select id="kkKelas"><option value="">— Semua Kelas —</option>' + opsi(kelasList) + '</select></div>' +
+      '<button type="submit" class="btn-small btn-small--primary">Tetapkan</button>' +
+      '</form>' +
+      '<div class="table-wrap"><table class="data-table"><thead><tr><th>Nama Kegiatan</th><th>Kelas</th><th>Penanggung Jawab</th><th></th></tr></thead><tbody id="kkBody"></tbody></table></div>' +
       '</div>';
 
     document.querySelectorAll('.panel-head--toggle').forEach(function (head) {
@@ -1853,47 +2047,101 @@
 
     var listRes = await supabaseClient
       .from('penugasan_guru')
-      .select('id, guru:guru_id(nama), mapel:mapel_id(nama), kelas:kelas_id(nama)')
+      .select('id, guru_id, mapel_id, kelas_id, guru:guru_id(nama), mapel:mapel_id(nama), kelas:kelas_id(nama)')
       .eq('tahun_ajaran_id', tahunAktif.id);
     var pBody = document.getElementById('pBody');
     var pRows = listRes.data || [];
-    pBody.innerHTML = pRows.length ? '' : '<tr><td colspan="4">Belum ada penugasan di tahun ajaran ini.</td></tr>';
+    pBody.innerHTML = pRows.length ? '' : '<tr><td colspan="5">Belum ada penugasan di tahun ajaran ini.</td></tr>';
     pRows.forEach(function (r) {
       var tr = document.createElement('tr');
-      tr.innerHTML = '<td>' + escapeHtml(r.guru.nama) + '</td><td>' + escapeHtml(r.mapel.nama) + '</td><td>' + escapeHtml(r.kelas.nama) + '</td>' +
-        '<td><button class="btn-small btn-small--danger" data-id="' + r.id + '">Hapus</button></td>';
       pBody.appendChild(tr);
+      tampilBarisPenugasan(tr, r);
     });
-    pBody.querySelectorAll('button[data-id]').forEach(function (btn) {
-      btn.addEventListener('click', async function () {
-        await supabaseClient.from('penugasan_guru').delete().eq('id', btn.dataset.id);
+
+    wireBulkDelete({
+      checkboxClass: 'pRowChk',
+      selectAllId: 'pSelectAll',
+      btnId: 'btnHapusTerpilihPenugasan',
+      countId: 'pTerpilihCount',
+      confirmMsg: function (n) { return 'Hapus ' + n + ' penugasan terpilih?'; },
+      onDelete: async function (ids) {
+        await supabaseClient.from('penugasan_guru').delete().in('id', ids);
+        renderPenugasan();
+      }
+    });
+
+    function tampilBarisPenugasan(tr, r) {
+      tr.innerHTML = '<td><input type="checkbox" class="pRowChk" value="' + r.id + '"></td>' +
+        '<td>' + escapeHtml(r.guru.nama) + '</td><td>' + escapeHtml(r.mapel.nama) + '</td><td>' + escapeHtml(r.kelas.nama) + '</td>' +
+        '<td style="white-space:nowrap;"><button class="btn-small" data-edit>Edit</button> ' +
+        '<button class="btn-small btn-small--danger" data-hapus>Hapus</button></td>';
+
+      tr.querySelector('[data-hapus]').addEventListener('click', async function () {
+        if (!confirm('Hapus penugasan ini?')) return;
+        await supabaseClient.from('penugasan_guru').delete().eq('id', r.id);
         renderPenugasan();
       });
-    });
+
+      tr.querySelector('[data-edit]').addEventListener('click', function () {
+        editBarisInline(tr, [
+          '',
+          '<select data-f="guru">' + opsiTerpilih(guruList, r.guru_id) + '</select>',
+          '<select data-f="mapel">' + opsiTerpilih(mapelList, r.mapel_id) + '</select>',
+          '<select data-f="kelas">' + opsiTerpilih(kelasList, r.kelas_id) + '</select>'
+        ], async function (row) {
+          var upd = await supabaseClient.from('penugasan_guru').update({
+            guru_id: row.querySelector('[data-f="guru"]').value,
+            mapel_id: row.querySelector('[data-f="mapel"]').value,
+            kelas_id: row.querySelector('[data-f="kelas"]').value
+          }).eq('id', r.id);
+          if (upd.error) return 'Gagal menyimpan (kombinasi guru & mapel & kelas mungkin sudah ada): ' + upd.error.message;
+          renderPenugasan();
+        }, function () { tampilBarisPenugasan(tr, r); });
+      });
+    }
 
     var waliListRes = await supabaseClient
       .from('wali_kelas')
-      .select('id, guru:guru_id(nama), kelas:kelas_id(nama)')
+      .select('id, guru_id, kelas_id, guru:guru_id(nama), kelas:kelas_id(nama)')
       .eq('tahun_ajaran_id', tahunAktif.id);
     var wBody = document.getElementById('wBody');
     var wRows = waliListRes.data || [];
     wBody.innerHTML = wRows.length ? '' : '<tr><td colspan="3">Belum ada wali kelas ditetapkan di tahun ajaran ini.</td></tr>';
     wRows.forEach(function (r) {
       var tr = document.createElement('tr');
-      tr.innerHTML = '<td>' + escapeHtml(r.guru.nama) + '</td><td>' + escapeHtml(r.kelas.nama) + '</td>' +
-        '<td><button class="btn-small btn-small--danger" data-id="' + r.id + '">Hapus</button></td>';
       wBody.appendChild(tr);
+      tampilBarisWali(tr, r);
     });
-    wBody.querySelectorAll('button[data-id]').forEach(function (btn) {
-      btn.addEventListener('click', async function () {
-        await supabaseClient.from('wali_kelas').delete().eq('id', btn.dataset.id);
+
+    function tampilBarisWali(tr, r) {
+      tr.innerHTML = '<td>' + escapeHtml(r.guru.nama) + '</td><td>' + escapeHtml(r.kelas.nama) + '</td>' +
+        '<td style="white-space:nowrap;"><button class="btn-small" data-edit>Edit</button> ' +
+        '<button class="btn-small btn-small--danger" data-hapus>Hapus</button></td>';
+
+      tr.querySelector('[data-hapus]').addEventListener('click', async function () {
+        if (!confirm('Hapus penetapan wali kelas ini?')) return;
+        await supabaseClient.from('wali_kelas').delete().eq('id', r.id);
         renderPenugasan();
       });
-    });
+
+      tr.querySelector('[data-edit]').addEventListener('click', function () {
+        editBarisInline(tr, [
+          '<select data-f="guru">' + opsiTerpilih(guruList, r.guru_id) + '</select>',
+          '<select data-f="kelas">' + opsiTerpilih(kelasList, r.kelas_id) + '</select>'
+        ], async function (row) {
+          var upd = await supabaseClient.from('wali_kelas').update({
+            guru_id: row.querySelector('[data-f="guru"]').value,
+            kelas_id: row.querySelector('[data-f="kelas"]').value
+          }).eq('id', r.id);
+          if (upd.error) return 'Gagal menyimpan (satu kelas hanya 1 wali kelas, satu guru hanya wali 1 kelas per tahun): ' + upd.error.message;
+          renderPenugasan();
+        }, function () { tampilBarisWali(tr, r); });
+      });
+    }
 
     var kokuListRes = await supabaseClient
       .from('pj_kokurikuler')
-      .select('id, nama_kegiatan, guru:guru_id(nama), kelas:kelas_id(nama)')
+      .select('id, nama_kegiatan, guru_id, kelas_id, guru:guru_id(nama), kelas:kelas_id(nama)')
       .eq('tahun_ajaran_id', tahunAktif.id);
     var kkBody = document.getElementById('kkBody');
     var kkRows = kokuListRes.data || [];
@@ -1909,16 +2157,40 @@
     kkBody.innerHTML = kkRows.length ? '' : '<tr><td colspan="4">Belum ada penanggung jawab kokurikuler ditetapkan di tahun ajaran ini.</td></tr>';
     kkRows.forEach(function (r) {
       var tr = document.createElement('tr');
-      tr.innerHTML = '<td>' + escapeHtml(r.nama_kegiatan || '—') + '</td><td>' + escapeHtml(r.kelas ? r.kelas.nama : 'Semua Kelas') + '</td><td>' + escapeHtml(r.guru.nama) + '</td>' +
-        '<td><button class="btn-small btn-small--danger" data-id="' + r.id + '">Hapus</button></td>';
       kkBody.appendChild(tr);
+      tampilBarisKoku(tr, r);
     });
-    kkBody.querySelectorAll('button[data-id]').forEach(function (btn) {
-      btn.addEventListener('click', async function () {
-        await supabaseClient.from('pj_kokurikuler').delete().eq('id', btn.dataset.id);
+
+    function tampilBarisKoku(tr, r) {
+      tr.innerHTML = '<td>' + escapeHtml(r.nama_kegiatan || '—') + '</td><td>' + escapeHtml(r.kelas ? r.kelas.nama : 'Semua Kelas') + '</td><td>' + escapeHtml(r.guru.nama) + '</td>' +
+        '<td style="white-space:nowrap;"><button class="btn-small" data-edit>Edit</button> ' +
+        '<button class="btn-small btn-small--danger" data-hapus>Hapus</button></td>';
+
+      tr.querySelector('[data-hapus]').addEventListener('click', async function () {
+        if (!confirm('Hapus penanggung jawab kokurikuler ini?')) return;
+        await supabaseClient.from('pj_kokurikuler').delete().eq('id', r.id);
         renderPenugasan();
       });
-    });
+
+      tr.querySelector('[data-edit]').addEventListener('click', function () {
+        editBarisInline(tr, [
+          '<input type="text" data-f="kegiatan" value="' + escapeHtml(r.nama_kegiatan || '') + '" style="width:100%;">',
+          '<select data-f="kelas">' + opsiTerpilih(kelasList, r.kelas_id, '— Semua Kelas —') + '</select>',
+          '<select data-f="guru">' + opsiTerpilih(guruList, r.guru_id) + '</select>'
+        ], async function (row) {
+          var namaKeg = row.querySelector('[data-f="kegiatan"]').value.trim();
+          if (!namaKeg) return 'Nama kegiatan tidak boleh kosong.';
+          var kelasVal = row.querySelector('[data-f="kelas"]').value;
+          var upd = await supabaseClient.from('pj_kokurikuler').update({
+            nama_kegiatan: namaKeg,
+            kelas_id: kelasVal === '' ? null : kelasVal,
+            guru_id: row.querySelector('[data-f="guru"]').value
+          }).eq('id', r.id);
+          if (upd.error) return 'Gagal menyimpan (guru ini mungkin sudah jadi PJ kegiatan & kelas yang sama): ' + upd.error.message;
+          renderPenugasan();
+        }, function () { tampilBarisKoku(tr, r); });
+      });
+    }
 
     // ================= Excel: lookup nama -> id ================
     function petaNama(list) {
@@ -2191,6 +2463,28 @@
     return { ok: true, user_id: out.user_id };
   }
 
+  // Dipanggil dari tombol "Hapus" (satu akun) maupun "Hapus Terpilih"
+  // (banyak akun sekaligus) di menu "Guru". userIds boleh 1 id (string)
+  // atau array id.
+  async function hapusAkunGuru(userIds) {
+    var sessionRes = await supabaseClient.auth.getSession();
+    var token = sessionRes.data && sessionRes.data.session ? sessionRes.data.session.access_token : null;
+    if (!token) { window.location.href = 'index.html'; return { ok: false, error: 'Sesi login habis.' }; }
+
+    var resp = await fetch(SUPABASE_URL + '/functions/v1/admin-create-guru', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token,
+        'apikey': SUPABASE_ANON_KEY
+      },
+      body: JSON.stringify({ action: 'delete', user_ids: Array.isArray(userIds) ? userIds : [userIds] })
+    });
+    var out = await resp.json().catch(function () { return {}; });
+    if (!resp.ok) return { ok: false, error: out.error || ('HTTP ' + resp.status) };
+    return { ok: out.success !== false, deleted_count: out.deleted_count, failed: out.failed || [] };
+  }
+
   async function renderGuru() {
     var guruRes = await supabaseClient.from('profiles').select('id, nama, email, role').eq('role', 'guru').order('nama');
     var guruList = guruRes.data || [];
@@ -2199,6 +2493,15 @@
       '<div class="panel-head"><div><div class="panel-head__title">Guru</div>' +
       '<div class="panel-head__desc">Daftar akun guru beserta tugasnya' + (tahunAktif ? ' pada Tahun Ajaran ' + escapeHtml(tahunAktif.nama) : '') + ' — guru mapel biasa atau wali kelas.</div></div>' +
       '<button class="btn-small" id="btnKeGuruPenugasan">Kelola Penugasan →</button></div>' +
+      '<div class="toolbar">' +
+      '<button class="btn-small" id="btnExportGuru">⬇ Unduh Data (Excel)</button>' +
+      '<button class="btn-small" id="btnTemplateGuru">⬇ Unduh Template Excel</button>' +
+      '<button class="btn-small" id="btnImportGuru">⬆ Import dari Excel</button>' +
+      '<input type="file" id="fileImportGuru" accept=".xlsx,.xls" style="display:none;">' +
+      '<button class="btn-small btn-small--danger" id="btnHapusTerpilihGuru" disabled>🗑 Hapus Terpilih (<span id="gTerpilihCount">0</span>)</button>' +
+      '</div>' +
+      '<div class="panel-note">Import dari Excel HANYA membuat akun guru baru (tidak mengubah akun yang emailnya sudah terdaftar). Kolom Password wajib diisi (minimal 6 karakter) — guru bisa menggantinya sendiri setelah login.</div>' +
+      '<div id="importSummaryGuru"></div>' +
       '<form class="add-form" id="formGuru">' +
       '<div class="field"><label>Nama Guru</label><input type="text" id="gNama" placeholder="Nama lengkap" required></div>' +
       '<div class="field"><label>Email (untuk login)</label><input type="email" id="gEmail" placeholder="guru@sekolah.sch.id" required></div>' +
@@ -2207,14 +2510,6 @@
       '<button type="submit" class="btn-small btn-small--primary">+ Tambah Akun</button>' +
       '</form>' +
       '<div id="guruFormMsg"></div>' +
-      '<div class="toolbar">' +
-      '<button class="btn-small" id="btnExportGuru">⬇ Unduh Data (Excel)</button>' +
-      '<button class="btn-small" id="btnTemplateGuru">⬇ Unduh Template Excel</button>' +
-      '<button class="btn-small" id="btnImportGuru">⬆ Import dari Excel</button>' +
-      '<input type="file" id="fileImportGuru" accept=".xlsx,.xls" style="display:none;">' +
-      '</div>' +
-      '<div class="panel-note">Import dari Excel HANYA membuat akun guru baru (tidak mengubah akun yang emailnya sudah terdaftar). Kolom Password wajib diisi (minimal 6 karakter) — guru bisa menggantinya sendiri setelah login.</div>' +
-      '<div id="importSummaryGuru"></div>' +
       '<div id="guruBody"></div>';
 
     document.getElementById('btnKeGuruPenugasan').addEventListener('click', function () {
@@ -2401,20 +2696,56 @@
         ? tugasMengajar.map(function (t) { return escapeHtml(t); }).join('<br>')
         : '<span style="color:var(--ink-soft);">—</span>';
 
-      return '<tr><td>' + escapeHtml(g.nama) + '</td><td>' + statusChip + '</td><td>' + tugasHtml + '</td>' +
-        '<td><button class="btn-small" data-edit-id="' + g.id + '">Edit</button></td></tr>';
+      return '<tr><td><input type="checkbox" class="gRowChk" value="' + g.id + '"></td>' +
+        '<td>' + escapeHtml(g.nama) + '</td><td>' + statusChip + '</td><td>' + tugasHtml + '</td>' +
+        '<td><button class="btn-small" data-edit-id="' + g.id + '">Edit</button> ' +
+        '<button class="btn-small btn-small--danger" data-del-id="' + g.id + '">Hapus</button></td></tr>';
     }).join('');
 
     guruBody.innerHTML =
-      '<div class="table-wrap"><table class="data-table"><thead><tr><th>Nama Guru</th><th>Status</th><th>Mengajar (Mapel — Kelas)</th><th></th></tr></thead>' +
+      '<div class="table-wrap"><table class="data-table"><thead><tr><th style="width:32px;"><input type="checkbox" id="gSelectAll"></th><th>Nama Guru</th><th>Status</th><th>Mengajar (Mapel — Kelas)</th><th></th></tr></thead>' +
       '<tbody>' + rowsHtml + '</tbody></table></div>' +
-      '<div class="panel-note">"Wali Kelas" berarti guru tersebut, selain mengajar mapel, juga ditugaskan mengelola rekap nilai & presensi kelas yang bersangkutan. Satu guru hanya bisa menjadi wali 1 kelas per tahun ajaran.</div>';
+      '<div class="panel-note">"Wali Kelas" berarti guru tersebut, selain mengajar mapel, juga ditugaskan mengelola rekap nilai & presensi kelas yang bersangkutan. Satu guru hanya bisa menjadi wali 1 kelas per tahun ajaran. Menghapus akun guru juga akan ikut menghapus penugasan mengajar, status wali kelas, dan riwayat lain yang terhubung ke akun tersebut.</div>';
 
     guruBody.querySelectorAll('button[data-edit-id]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var g = guruList.find(function (x) { return x.id === btn.dataset.editId; });
         bukaModalGuru(g);
       });
+    });
+
+    guruBody.querySelectorAll('button[data-del-id]').forEach(function (btn) {
+      btn.addEventListener('click', async function () {
+        var g = guruList.find(function (x) { return x.id === btn.dataset.delId; });
+        if (!confirm('Hapus akun guru "' + (g ? g.nama : '') + '"? Penugasan mengajar, status wali kelas, dan riwayat lain yang terhubung akan ikut terhapus.')) return;
+        btn.disabled = true;
+        btn.textContent = 'Menghapus...';
+        var hasil = await hapusAkunGuru(btn.dataset.delId);
+        if (!hasil.ok) {
+          alert('Gagal menghapus: ' + (hasil.error || (hasil.failed && hasil.failed[0] && hasil.failed[0].error) || 'Terjadi kesalahan.'));
+          btn.disabled = false;
+          btn.textContent = 'Hapus';
+          return;
+        }
+        renderGuru();
+      });
+    });
+
+    wireBulkDelete({
+      checkboxClass: 'gRowChk',
+      selectAllId: 'gSelectAll',
+      btnId: 'btnHapusTerpilihGuru',
+      countId: 'gTerpilihCount',
+      confirmMsg: function (n) { return 'Hapus ' + n + ' akun guru terpilih? Penugasan mengajar, status wali kelas, dan riwayat lain yang terhubung akan ikut terhapus.'; },
+      onDelete: async function (ids) {
+        var hasil = await hapusAkunGuru(ids);
+        if (!hasil.ok && hasil.failed && hasil.failed.length) {
+          alert('Sebagian akun gagal dihapus:\n' + hasil.failed.map(function (f) { return f.user_id + ': ' + f.error; }).join('\n'));
+        } else if (!hasil.ok) {
+          alert('Gagal menghapus: ' + (hasil.error || 'Terjadi kesalahan.'));
+        }
+        renderGuru();
+      }
     });
 
     // ---------- Modal Edit ----------
@@ -2545,7 +2876,10 @@
       '<button type="submit" class="btn-small btn-small--primary">Tambah</button>' +
       '</form>' +
       '<div id="ekskulMsg"></div>' +
-      '<div class="table-wrap"><table class="data-table"><thead><tr><th>Nama Ekstrakurikuler</th><th></th></tr></thead><tbody id="ekBody"></tbody></table></div>' +
+      '<div class="toolbar">' +
+      '<button class="btn-small btn-small--danger" id="btnHapusTerpilihEkskul" disabled>🗑 Hapus Terpilih (<span id="ekTerpilihCount">0</span>)</button>' +
+      '</div>' +
+      '<div class="table-wrap"><table class="data-table"><thead><tr><th style="width:32px;"><input type="checkbox" id="ekSelectAll"></th><th>Nama Ekstrakurikuler</th><th></th></tr></thead><tbody id="ekBody"></tbody></table></div>' +
       '</div>' +
       '<hr class="panel-divider">' +
       '<div class="panel-head panel-head--toggle" data-target="bodyEkskulPeserta"><div><div class="panel-head__title">Peserta Ekstrakurikuler</div>' +
@@ -2613,31 +2947,50 @@
     });
 
     var ekBody = document.getElementById('ekBody');
-    ekBody.innerHTML = ekskulList.length ? '' : '<tr><td colspan="2">Belum ada data ekstrakurikuler.</td></tr>';
+    ekBody.innerHTML = ekskulList.length ? '' : '<tr><td colspan="3">Belum ada data ekstrakurikuler.</td></tr>';
     ekskulList.forEach(function (r) {
       var tr = document.createElement('tr');
-      tr.innerHTML = '<td>' + escapeHtml(r.nama) + '</td>' +
-        '<td><button class="btn-small" data-edit-id="' + r.id + '">Edit</button> ' +
-        '<button class="btn-small btn-small--danger" data-id="' + r.id + '">Hapus</button></td>';
       ekBody.appendChild(tr);
+      tampilBarisEkskul(tr, r);
+    });
 
-      tr.querySelector('[data-edit-id]').addEventListener('click', async function () {
-        var namaBaru = prompt('Ubah nama ekstrakurikuler:', r.nama);
-        if (namaBaru === null) return;
-        namaBaru = namaBaru.trim();
-        if (!namaBaru || namaBaru === r.nama) return;
-        var upd = await supabaseClient.from('ekstrakurikuler').update({ nama: namaBaru }).eq('id', r.id);
-        if (upd.error) { alert('Gagal mengubah: ' + upd.error.message); return; }
+    wireBulkDelete({
+      checkboxClass: 'ekRowChk',
+      selectAllId: 'ekSelectAll',
+      btnId: 'btnHapusTerpilihEkskul',
+      countId: 'ekTerpilihCount',
+      confirmMsg: function (n) { return 'Hapus ' + n + ' ekstrakurikuler terpilih? Data peserta, penugasan pembina, dan nilai yang terhubung juga akan ikut terhapus.'; },
+      onDelete: async function (ids) {
+        await supabaseClient.from('ekstrakurikuler').delete().in('id', ids);
         renderEkstrakurikuler();
-      });
+      }
     });
-    ekBody.querySelectorAll('button[data-id]').forEach(function (btn) {
-      btn.addEventListener('click', async function () {
+
+    function tampilBarisEkskul(tr, r) {
+      tr.innerHTML = '<td><input type="checkbox" class="ekRowChk" value="' + r.id + '"></td>' +
+        '<td>' + escapeHtml(r.nama) + '</td>' +
+        '<td style="white-space:nowrap;"><button class="btn-small" data-edit>Edit</button> ' +
+        '<button class="btn-small btn-small--danger" data-hapus>Hapus</button></td>';
+
+      tr.querySelector('[data-hapus]').addEventListener('click', async function () {
         if (!confirm('Hapus ekstrakurikuler ini? Data peserta, penugasan pembina, dan nilai yang terhubung juga akan ikut terhapus.')) return;
-        await supabaseClient.from('ekstrakurikuler').delete().eq('id', btn.dataset.id);
+        await supabaseClient.from('ekstrakurikuler').delete().eq('id', r.id);
         renderEkstrakurikuler();
       });
-    });
+
+      tr.querySelector('[data-edit]').addEventListener('click', function () {
+        editBarisInline(tr, [
+          '',
+          '<input type="text" data-f="nama" value="' + escapeHtml(r.nama) + '" style="width:100%;">'
+        ], async function (row) {
+          var namaBaru = row.querySelector('[data-f="nama"]').value.trim();
+          if (!namaBaru) return 'Nama ekstrakurikuler tidak boleh kosong.';
+          var upd = await supabaseClient.from('ekstrakurikuler').update({ nama: namaBaru }).eq('id', r.id);
+          if (upd.error) return 'Gagal mengubah: ' + upd.error.message;
+          renderEkstrakurikuler();
+        }, function () { tampilBarisEkskul(tr, r); });
+      });
+    }
 
     // ---------- B. Peserta Ekstrakurikuler ----------
     // ---------- Peserta: export, template, import (Nama + Kelas) ----------
@@ -2834,7 +3187,7 @@
 
     var pembinaListRes = await supabaseClient
       .from('pembina_ekstrakurikuler')
-      .select('id, guru:guru_id(nama), ekstrakurikuler:ekstrakurikuler_id(nama)')
+      .select('id, guru_id, ekstrakurikuler_id, guru:guru_id(nama), ekstrakurikuler:ekstrakurikuler_id(nama)')
       .eq('tahun_ajaran_id', tahunAktif.id);
     var pbBody = document.getElementById('pbBody');
     var pbRows = pembinaListRes.data || [];
@@ -2845,19 +3198,38 @@
     pbBody.innerHTML = pbRows.length ? '' : '<tr><td colspan="3">Belum ada pembina ekstrakurikuler ditetapkan di tahun ajaran ini.</td></tr>';
     pbRows.forEach(function (r) {
       var tr = document.createElement('tr');
-      tr.innerHTML = '<td>' + escapeHtml(r.ekstrakurikuler.nama) + '</td><td>' + escapeHtml(r.guru.nama) + '</td>' +
-        '<td><button class="btn-small btn-small--danger" data-id="' + r.id + '">Hapus</button></td>';
       pbBody.appendChild(tr);
+      tampilBarisPembina(tr, r);
     });
-    pbBody.querySelectorAll('button[data-id]').forEach(function (btn) {
-      btn.addEventListener('click', async function () {
-        await supabaseClient.from('pembina_ekstrakurikuler').delete().eq('id', btn.dataset.id);
+
+    function tampilBarisPembina(tr, r) {
+      tr.innerHTML = '<td>' + escapeHtml(r.ekstrakurikuler.nama) + '</td><td>' + escapeHtml(r.guru.nama) + '</td>' +
+        '<td style="white-space:nowrap;"><button class="btn-small" data-edit>Edit</button> ' +
+        '<button class="btn-small btn-small--danger" data-hapus>Hapus</button></td>';
+
+      tr.querySelector('[data-hapus]').addEventListener('click', async function () {
+        if (!confirm('Hapus penugasan pembina ini?')) return;
+        await supabaseClient.from('pembina_ekstrakurikuler').delete().eq('id', r.id);
         renderEkstrakurikuler();
       });
-    });
+
+      tr.querySelector('[data-edit]').addEventListener('click', function () {
+        editBarisInline(tr, [
+          '<select data-f="ekskul">' + opsiTerpilih(ekskulList, r.ekstrakurikuler_id) + '</select>',
+          '<select data-f="guru">' + opsiTerpilih(guruList, r.guru_id) + '</select>'
+        ], async function (row) {
+          var upd = await supabaseClient.from('pembina_ekstrakurikuler').update({
+            ekstrakurikuler_id: row.querySelector('[data-f="ekskul"]').value,
+            guru_id: row.querySelector('[data-f="guru"]').value
+          }).eq('id', r.id);
+          if (upd.error) return 'Gagal menyimpan (guru ini mungkin sudah jadi pembina ekstrakurikuler tsb): ' + upd.error.message;
+          renderEkstrakurikuler();
+        }, function () { tampilBarisPembina(tr, r); });
+      });
+    }
   }
 
-  var views = { dashboard: renderDashboard, tahunAjaran: renderTahunAjaran, siswa: renderSiswa, leger: renderLeger, kelas: renderKelas, mapel: renderMapel, mapelTingkat: renderMapelTingkat, penugasan: renderPenugasan, guru: renderGuru, ekskul: renderEkstrakurikuler };
+  var views = { dashboard: renderDashboard, profilSekolah: renderProfilSekolah, tahunAjaran: renderTahunAjaran, siswa: renderSiswa, leger: renderLeger, kelas: renderKelas, mapel: renderMapel, mapelTingkat: renderMapelTingkat, penugasan: renderPenugasan, guru: renderGuru, ekskul: renderEkstrakurikuler };
 
   document.querySelectorAll('#menuAdmin .menu-item').forEach(function (item) {
     item.addEventListener('click', function (e) {

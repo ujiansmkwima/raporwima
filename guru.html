@@ -10,6 +10,7 @@
 <script src="https://unpkg.com/lucide@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="supabase-client.js"></script>
 </head>
 <body>
@@ -50,7 +51,7 @@
     <div class="sidebar__section-label" id="labelWaliKelas" style="display:none;">Wali Kelas</div>
     <nav class="menu-list" id="menuWaliKelas"></nav>
 
-    <div class="sidebar__section-label" id="labelCetakRapor" style="display:none;">Cetak Rapor</div>
+    <div class="sidebar__section-label" id="labelCetakRapor" style="display:none;">Unduh Rapor</div>
     <nav class="menu-list" id="menuCetakRapor"></nav>
 
     <div class="sidebar__footer">
@@ -123,6 +124,16 @@
     if (semesterTA === 'Ganjil') return basis + 1;
     if (semesterTA === 'Genap') return basis + 2;
     return null;
+  }
+
+  // ---------- Fase (Kurikulum Merdeka) dari Tingkat kelas ----------
+  // SMK: Tingkat 10 = Fase E, Tingkat 11-12 = Fase F. Dipakai di
+  // kepala Cetak Rapor ("Fase : E"), sesuai format rapor resmi.
+  function faseDariTingkat(tingkat) {
+    var t = Number(tingkat);
+    if (t === 10) return 'E';
+    if (t === 11 || t === 12) return 'F';
+    return '—';
   }
 
   (async function () {
@@ -232,7 +243,7 @@
     //    menempel di atas akun guru yang sama.
     var waliResult = await supabaseClient
       .from('wali_kelas')
-      .select('id, kelas:kelas_id(id, nama)')
+      .select('id, kelas:kelas_id(id, nama, tingkat)')
       .eq('guru_id', user.id)
       .eq('tahun_ajaran_id', tahunAktif.id)
       .maybeSingle();
@@ -265,6 +276,21 @@
       });
       menuWali.appendChild(itemPresensi);
 
+      // Catatan Wali Kelas — narasi bebas per siswa (tampil di kotak
+      // "Catatan Wali Kelas" pada Cetak Rapor). Menu terpisah supaya
+      // wali kelas bisa mengisi semua siswa sekaligus, tidak harus
+      // buka Cetak Rapor satu-satu dulu.
+      var itemCatatanWali = document.createElement('a');
+      itemCatatanWali.href = '#';
+      itemCatatanWali.className = 'menu-item';
+      itemCatatanWali.innerHTML = '<i data-lucide="sticky-note" class="menu-icon"></i><span class="menu-item__title">Catatan Wali Kelas</span><span class="menu-item__sub">' + waliKelas.kelas.nama + '</span>';
+      itemCatatanWali.addEventListener('click', function (e) {
+        e.preventDefault();
+        setActiveMenuItem(itemCatatanWali);
+        renderCatatanWaliKelas(waliKelas);
+      });
+      menuWali.appendChild(itemCatatanWali);
+
       // Cetak Rapor — hanya untuk wali kelas, mencetak rapor per siswa
       // di kelas yang diampunya (gabungan Nilai, Capaian Pembelajaran,
       // Ekstrakurikuler, Kokurikuler, dan rekap Presensi).
@@ -273,7 +299,7 @@
       var itemCetak = document.createElement('a');
       itemCetak.href = '#';
       itemCetak.className = 'menu-item';
-      itemCetak.innerHTML = '<i data-lucide="printer" class="menu-icon"></i><span class="menu-item__title">Cetak Rapor</span><span class="menu-item__sub">' + waliKelas.kelas.nama + '</span>';
+      itemCetak.innerHTML = '<i data-lucide="download" class="menu-icon"></i><span class="menu-item__title">Unduh Rapor</span><span class="menu-item__sub">' + waliKelas.kelas.nama + '</span>';
       itemCetak.addEventListener('click', function (e) {
         e.preventDefault();
         setActiveMenuItem(itemCetak);
@@ -1312,6 +1338,13 @@
       content.innerHTML =
         '<div class="panel-head"><div><div class="panel-head__title">Tujuan Pembelajaran — ' + escapeHtml(mapel.nama) + '</div>' +
         '<div class="panel-head__desc">Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + '. TP tidak terikat kelas tertentu — tandai Semester (1–6) dan status Aktif/Tidak Aktif tiap TP; urutan menentukan tampilan TP di daftar pilihan per siswa.</div></div></div>' +
+        '<div class="toolbar">' +
+        '<button class="btn-small" id="btnExportTujuan">⬇ Unduh Data (Excel)</button>' +
+        '<button class="btn-small" id="btnTemplateTujuan">⬇ Unduh Template Excel</button>' +
+        '<button class="btn-small" id="btnImportTujuan">⬆ Import dari Excel</button>' +
+        '<input type="file" id="fileImportTujuan" accept=".xlsx,.xls" style="display:none;">' +
+        '</div>' +
+        '<div id="importSummaryTujuan"></div>' +
         '<form class="add-form" id="formTujuan">' +
         '<div class="field"><label>Kode</label><input type="text" id="tpKode" placeholder="TP.1"></div>' +
         '<div class="field" style="flex:2;min-width:260px;"><label>Deskripsi</label><input type="text" id="tpDeskripsi" placeholder="Uraian tujuan pembelajaran" required></div>' +
@@ -1320,13 +1353,6 @@
         '<div class="field" style="max-width:140px;"><label>Status</label><select id="tpStatus">' + opsiStatusHtml(true) + '</select></div>' +
         '<button type="submit" class="btn-small btn-small--primary">Tambah</button>' +
         '</form>' +
-        '<div class="toolbar">' +
-        '<button class="btn-small" id="btnExportTujuan">⬇ Unduh Data (Excel)</button>' +
-        '<button class="btn-small" id="btnTemplateTujuan">⬇ Unduh Template Excel</button>' +
-        '<button class="btn-small" id="btnImportTujuan">⬆ Import dari Excel</button>' +
-        '<input type="file" id="fileImportTujuan" accept=".xlsx,.xls" style="display:none;">' +
-        '</div>' +
-        '<div id="importSummaryTujuan"></div>' +
         '<div class="table-wrap"><table class="data-table"><thead><tr><th>Semester</th><th>Urutan</th><th>Kode</th><th>Deskripsi</th><th>Status</th><th></th></tr></thead><tbody id="tpBody"></tbody></table></div>';
 
       document.getElementById('formTujuan').addEventListener('submit', async function (e) {
@@ -1859,9 +1885,118 @@
         '<div class="panel-head"><div><div class="panel-head__title">Presensi — ' + escapeHtml(wk.kelas.nama) + '</div>' +
         '<div class="panel-head__desc">Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + '. Isi jumlah Sakit, Izin, dan Tanpa Keterangan (Alpha) tiap siswa sepanjang tahun ajaran ini.</div></div>' +
         '<button class="btn-small btn-small--primary" id="btnSimpanPresensi">Simpan Presensi</button></div>' +
+        '<div class="toolbar">' +
+        '<button class="btn-small" id="btnExportPresensi">⬇ Unduh Data (Excel)</button>' +
+        '<button class="btn-small" id="btnTemplatePresensi">⬇ Unduh Template Excel</button>' +
+        '<button class="btn-small" id="btnImportPresensi">⬆ Import dari Excel</button>' +
+        '<input type="file" id="fileImportPresensi" accept=".xlsx,.xls" style="display:none;">' +
+        '</div>' +
+        '<div id="importSummaryPresensi"></div>' +
+        '<div class="panel-note">Kolom Excel: <strong>NIS</strong>, <strong>Nama</strong>, <strong>Sakit</strong>, <strong>Izin</strong>, <strong>Tanpa Keterangan</strong>. Siswa dicocokkan lewat NIS dulu, kalau kosong baru lewat Nama. Setelah import, angka langsung terisi di tabel — periksa dulu, lalu klik “Simpan Presensi”.</div>' +
         '<div id="presensiMsg"></div>' +
         '<div class="table-wrap"><table class="data-table"><thead><tr><th>No</th><th>NIS</th><th>Nama</th><th>Sakit</th><th>Izin</th><th>Tanpa Keterangan</th></tr></thead>' +
         '<tbody>' + rowsHtml + '</tbody></table></div>';
+
+      // ---------- Excel: Unduh / Template / Import ----------
+      var PRESENSI_HEADERS = ['NIS', 'Nama', 'Sakit', 'Izin', 'Tanpa Keterangan'];
+      var namaFileKelas = wk.kelas.nama.replace(/[^a-z0-9]/gi, '_');
+
+      function nilaiInput(cls, siswaId) {
+        var el = content.querySelector('.' + cls + '[data-siswa="' + siswaId + '"]');
+        if (!el) return 0;
+        var v = parseInt(el.value, 10);
+        return isNaN(v) || v < 0 ? 0 : v;
+      }
+
+      function setInput(cls, siswaId, val) {
+        var el = content.querySelector('.' + cls + '[data-siswa="' + siswaId + '"]');
+        if (el) el.value = val;
+      }
+
+      function unduhPresensi(pakaiDataTabel) {
+        var rows = siswaList.map(function (s) {
+          return {
+            'NIS': s.nis || '',
+            'Nama': s.nama,
+            'Sakit': pakaiDataTabel ? nilaiInput('presensi-sakit', s.id) : 0,
+            'Izin': pakaiDataTabel ? nilaiInput('presensi-izin', s.id) : 0,
+            'Tanpa Keterangan': pakaiDataTabel ? nilaiInput('presensi-alpha', s.id) : 0
+          };
+        });
+        var ws = XLSX.utils.json_to_sheet(rows, { header: PRESENSI_HEADERS });
+        var wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Presensi');
+        XLSX.writeFile(wb, (pakaiDataTabel ? 'presensi_' : 'template_presensi_') + namaFileKelas + '.xlsx');
+      }
+
+      document.getElementById('btnExportPresensi').addEventListener('click', function () { unduhPresensi(true); });
+      document.getElementById('btnTemplatePresensi').addEventListener('click', function () { unduhPresensi(false); });
+
+      document.getElementById('btnImportPresensi').addEventListener('click', function () {
+        document.getElementById('fileImportPresensi').click();
+      });
+
+      document.getElementById('fileImportPresensi').addEventListener('change', function (e) {
+        var file = e.target.files[0];
+        if (!file) return;
+        var ringkas = document.getElementById('importSummaryPresensi');
+        ringkas.innerHTML = '<div class="import-summary">Membaca file...</div>';
+
+        var reader = new FileReader();
+        reader.onload = function (ev) {
+          try {
+            var wb = XLSX.read(new Uint8Array(ev.target.result), { type: 'array' });
+            var sheet = wb.Sheets[wb.SheetNames[0]];
+            var rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+            // Peta pencarian siswa: lewat NIS dan lewat nama (huruf kecil).
+            var byNis = {}, byNama = {};
+            siswaList.forEach(function (s) {
+              if (s.nis) byNis[String(s.nis).trim()] = s;
+              byNama[String(s.nama).trim().toLowerCase()] = s;
+            });
+
+            function ambilKolom(row, kandidat) {
+              for (var i = 0; i < kandidat.length; i++) {
+                var keys = Object.keys(row);
+                for (var j = 0; j < keys.length; j++) {
+                  if (keys[j].trim().toLowerCase() === kandidat[i]) return row[keys[j]];
+                }
+              }
+              return '';
+            }
+
+            function keAngka(v) {
+              var n = parseInt(String(v).trim(), 10);
+              return isNaN(n) || n < 0 ? 0 : n;
+            }
+
+            var terisi = 0, gagal = [];
+            rows.forEach(function (row, idx) {
+              var nis = String(ambilKolom(row, ['nis'])).trim();
+              var nama = String(ambilKolom(row, ['nama', 'nama siswa'])).trim();
+              if (!nis && !nama) return;
+
+              var s = (nis && byNis[nis]) || byNama[nama.toLowerCase()];
+              if (!s) { gagal.push('baris ' + (idx + 2) + ' (' + (nama || nis) + ')'); return; }
+
+              setInput('presensi-sakit', s.id, keAngka(ambilKolom(row, ['sakit', 's'])));
+              setInput('presensi-izin', s.id, keAngka(ambilKolom(row, ['izin', 'i'])));
+              setInput('presensi-alpha', s.id, keAngka(ambilKolom(row, ['tanpa keterangan', 'alpha', 'alfa', 'tanpa ket', 'a'])));
+              terisi++;
+            });
+
+            ringkas.innerHTML = '<div class="import-summary"><strong>Hasil import:</strong> ' +
+              terisi + ' siswa terisi' +
+              (gagal.length ? ', ' + gagal.length + ' baris tidak cocok (' + escapeHtml(gagal.slice(0, 5).join('; ')) + (gagal.length > 5 ? '; ...' : '') + ')' : '') +
+              '. Periksa angkanya, lalu klik “Simpan Presensi” supaya tersimpan.</div>';
+          } catch (err) {
+            ringkas.innerHTML = '<div class="import-summary">Gagal membaca file: ' + escapeHtml(err.message) + '</div>';
+          }
+          document.getElementById('fileImportPresensi').value = '';
+        };
+        reader.readAsArrayBuffer(file);
+      });
 
       document.getElementById('btnSimpanPresensi').addEventListener('click', async function () {
         var btn = this;
@@ -2193,50 +2328,264 @@
     }
 
 
+    // ================= WALI KELAS: Catatan Wali Kelas =================
+    // Narasi bebas per siswa yang tampil di kotak "Catatan Wali Kelas"
+    // pada Cetak Rapor. Disimpan di rekap_presensi (1 baris per
+    // siswa+kelas+tahun ajaran, sama seperti data Presensi) supaya
+    // tidak perlu tabel baru. Upsert di sini HANYA mengirim kolom
+    // catatan_wali_kelas, jadi angka Sakit/Izin/Tanpa Keterangan yang
+    // sudah tersimpan di menu Presensi tidak ikut tertimpa/kosong.
+    async function renderCatatanWaliKelas(wk) {
+      content.innerHTML = renderPlaceholder('Memuat...', 'Menyiapkan Catatan Wali Kelas ' + wk.kelas.nama + '.');
+
+      var siswaList = await ambilSiswaKelas(wk.kelas.id);
+      if (!siswaList.length) {
+        content.innerHTML = renderPlaceholder('Catatan Wali Kelas — ' + wk.kelas.nama, 'Belum ada siswa di kelas ini pada tahun ajaran aktif.');
+        return;
+      }
+      var siswaIds = siswaList.map(function (s) { return s.id; });
+
+      var rekapRes = await supabaseClient
+        .from('rekap_presensi')
+        .select('siswa_id, catatan_wali_kelas')
+        .eq('kelas_id', wk.kelas.id)
+        .eq('tahun_ajaran_id', tahunAktif.id)
+        .in('siswa_id', siswaIds);
+      var catatanMap = {};
+      (rekapRes.data || []).forEach(function (r) { catatanMap[r.siswa_id] = r.catatan_wali_kelas || ''; });
+
+      var rowsHtml = siswaList.map(function (s, i) {
+        return '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(s.nis || '—') + '</td><td>' + escapeHtml(s.nama) + '</td>' +
+          '<td><textarea class="capaian-input catatan-wali-input" data-siswa="' + s.id + '" rows="2">' + escapeHtml(catatanMap[s.id] || '') + '</textarea></td></tr>';
+      }).join('');
+
+      content.innerHTML =
+        '<div class="panel-head"><div><div class="panel-head__title">Catatan Wali Kelas — ' + escapeHtml(wk.kelas.nama) + '</div>' +
+        '<div class="panel-head__desc">Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + '. Catatan ini tampil di kotak "Catatan Wali Kelas" saat rapor diunduh.</div></div>' +
+        '<button class="btn-small btn-small--primary" id="btnSimpanCatatanWali">Simpan Semua</button></div>' +
+        '<div id="catatanWaliMsg"></div>' +
+        '<div class="table-wrap"><table class="data-table"><thead><tr><th>No</th><th>NIS</th><th>Nama</th><th>Catatan Wali Kelas</th></tr></thead>' +
+        '<tbody>' + rowsHtml + '</tbody></table></div>';
+
+      document.getElementById('btnSimpanCatatanWali').addEventListener('click', async function () {
+        var btn = this;
+        var msg = document.getElementById('catatanWaliMsg');
+        btn.disabled = true;
+        btn.textContent = 'Menyimpan...';
+
+        var jobs = siswaList.map(function (s) {
+          var el = content.querySelector('.catatan-wali-input[data-siswa="' + s.id + '"]');
+          return supabaseClient.from('rekap_presensi').upsert({
+            siswa_id: s.id,
+            kelas_id: wk.kelas.id,
+            tahun_ajaran_id: tahunAktif.id,
+            catatan_wali_kelas: el ? el.value.trim() : ''
+          }, { onConflict: 'siswa_id,kelas_id,tahun_ajaran_id' });
+        });
+
+        var hasil = await Promise.all(jobs);
+        var gagal = hasil.filter(function (r) { return r.error; });
+
+        btn.disabled = false;
+        btn.textContent = 'Simpan Semua';
+        msg.innerHTML = gagal.length
+          ? '<div class="panel-note" style="color:var(--danger);">Gagal menyimpan ' + gagal.length + ' data: ' + escapeHtml(gagal[0].error.message) + '</div>'
+          : '<div class="panel-note">Semua catatan tersimpan.</div>';
+      });
+    }
+
     // ================= WALI KELAS: Cetak Rapor =================
     // Menggabungkan Nilai Rapor + Capaian Pembelajaran per mapel,
     // Nilai Ekstrakurikuler, Nilai Kokurikuler, dan rekap Presensi
     // (Sakit/Izin/Alpha) satu siswa, dalam tampilan siap cetak
-    // (tombol "Cetak" memanggil window.print()).
+    // (tombol "Unduh" membuat file PDF langsung lewat html2pdf.js, tanpa
+    // lewat jendela cetak browser — supaya tidak ada header/footer bawaan
+    // browser yang menampilkan alamat/URL halaman & nama aplikasi).
     async function renderCetakRapor(wk) {
       content.innerHTML = renderPlaceholder('Memuat...', 'Menyiapkan data cetak rapor kelas ' + wk.kelas.nama + '.');
 
       var siswaList = await ambilSiswaKelas(wk.kelas.id);
       if (!siswaList.length) {
-        content.innerHTML = renderPlaceholder('Cetak Rapor — ' + wk.kelas.nama, 'Belum ada siswa di kelas ini pada tahun ajaran aktif.');
+        content.innerHTML = renderPlaceholder('Unduh Rapor — ' + wk.kelas.nama, 'Belum ada siswa di kelas ini pada tahun ajaran aktif.');
         return;
       }
 
-      var optsSiswa = siswaList.map(function (s) {
-        return '<option value="' + s.id + '">' + escapeHtml(s.nama) + (s.nis ? ' (' + escapeHtml(s.nis) + ')' : '') + '</option>';
-      }).join('');
+      // Profil Sekolah (Nama Sekolah, Kepala Sekolah, Kota untuk baris
+      // tanda tangan) — diisi Admin lewat menu "Profil Sekolah", sama
+      // untuk semua kelas/siswa, jadi cukup diambil sekali di sini.
+      var profilRes = await supabaseClient.from('profil_sekolah').select('*').maybeSingle();
+      var profilSekolah = profilRes.data || {};
+      var NAMA_SEKOLAH = profilSekolah.nama_sekolah || 'SMK Widya Mandala Tambak';
+      var NAMA_KEPALA_SEKOLAH = profilSekolah.kepala_sekolah || '—';
+      var NAMA_KOTA_TTD = profilSekolah.kota_ttd || 'Tambak';
 
-      content.innerHTML =
-        '<div class="panel-head"><div><div class="panel-head__title">Cetak Rapor — ' + escapeHtml(wk.kelas.nama) + '</div>' +
-        '<div class="panel-head__desc">Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + '. Pilih siswa, lalu klik Cetak.</div></div>' +
-        '<div style="display:flex;gap:8px;align-items:center;" class="no-print">' +
-        '<select id="cetakSiswaSelect" style="min-width:220px;">' + optsSiswa + '</select>' +
-        '<button class="btn-small btn-small--primary" id="btnCetakRapor"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak</button>' +
-        '</div></div>' +
-        '<div id="cetakRaporArea"></div>';
-      lucide.createIcons();
+      // ---- Tampilan 1: Daftar seluruh siswa kelas ini ----
+      // Tiap baris punya tombol Preview (lihat di layar) dan Unduh
+      // (langsung buat & unduh file PDF siswa itu saja), plus checkbox
+      // untuk memilih beberapa siswa sekaligus ("Unduh Terpilih"), dan
+      // tombol "Unduh Semua" untuk mengunduh satu kelas penuh sekaligus
+      // (semua rapor digabung jadi satu file PDF, tiap siswa halaman baru).
+      function renderDaftarSiswa() {
+        var rowsHtml = siswaList.map(function (s, i) {
+          return '<tr>' +
+            '<td class="tc-center"><input type="checkbox" class="cetak-rapor-check" value="' + s.id + '"></td>' +
+            '<td class="tc-center">' + (i + 1) + '</td>' +
+            '<td>' + escapeHtml(s.nis || '—') + '</td>' +
+            '<td>' + escapeHtml(s.nama) + '</td>' +
+            '<td class="tc-center">' +
+            '<button class="btn-small btn-cetak-preview" data-id="' + s.id + '"><i data-lucide="eye" style="width:14px;height:14px;"></i> Preview</button> ' +
+            '<button class="btn-small btn-small--primary btn-cetak-satu" data-id="' + s.id + '"><i data-lucide="download" style="width:14px;height:14px;"></i> Unduh</button>' +
+            '</td></tr>';
+        }).join('');
 
-      async function muatRapor(siswaId) {
-        var siswa = siswaList.find(function (s) { return s.id === siswaId; });
+        content.innerHTML =
+          '<div class="panel-head"><div><div class="panel-head__title">Unduh Rapor — ' + escapeHtml(wk.kelas.nama) + '</div>' +
+          '<div class="panel-head__desc">Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + '. Klik Preview untuk melihat, Unduh untuk mengunduh PDF satu siswa, atau centang beberapa lalu Unduh Terpilih.</div></div>' +
+          '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+          '<button class="btn-small" id="btnCetakTerpilih"><i data-lucide="download" style="width:14px;height:14px;"></i> Unduh Terpilih</button>' +
+          '<button class="btn-small btn-small--primary" id="btnCetakSemua"><i data-lucide="download" style="width:14px;height:14px;"></i> Unduh Semua</button>' +
+          '</div></div>' +
+          '<div class="table-wrap no-print"><table class="data-table"><thead><tr>' +
+          '<th class="tc-center"><input type="checkbox" id="checkSemuaCetak"></th>' +
+          '<th class="rc-th-no">No</th><th>NIS</th><th>Nama Siswa</th><th class="tc-center">Aksi</th>' +
+          '</tr></thead><tbody>' + rowsHtml + '</tbody></table></div>' +
+          '<div id="cetakRaporArea"></div>';
+        lucide.createIcons();
+
+        document.getElementById('checkSemuaCetak').addEventListener('change', function () {
+          var checked = this.checked;
+          document.querySelectorAll('.cetak-rapor-check').forEach(function (c) { c.checked = checked; });
+        });
+        document.querySelectorAll('.btn-cetak-preview').forEach(function (btn) {
+          btn.addEventListener('click', function () { tampilkanPreview(this.getAttribute('data-id')); });
+        });
+        document.querySelectorAll('.btn-cetak-satu').forEach(function (btn) {
+          btn.addEventListener('click', function () { unduhSiswa([this.getAttribute('data-id')], this); });
+        });
+        document.getElementById('btnCetakTerpilih').addEventListener('click', function () {
+          var ids = Array.prototype.slice.call(document.querySelectorAll('.cetak-rapor-check:checked')).map(function (c) { return c.value; });
+          if (!ids.length) { alert('Centang minimal satu siswa terlebih dahulu.'); return; }
+          unduhSiswa(ids, this);
+        });
+        document.getElementById('btnCetakSemua').addEventListener('click', function () {
+          unduhSiswa(siswaList.map(function (s) { return s.id; }), this);
+        });
+      }
+
+      // Tampilkan hasil rapor 1 siswa di layar (tanpa langsung mengunduh),
+      // dengan tombol Kembali ke daftar dan Unduh dari sini.
+      async function tampilkanPreview(siswaId) {
+        var siswaRingkas = siswaList.find(function (s) { return s.id === siswaId; });
         var area = document.getElementById('cetakRaporArea');
-        area.innerHTML = '<div class="panel-note">Memuat data rapor ' + escapeHtml(siswa.nama) + '...</div>';
+        area.innerHTML = '<div class="panel-note no-print">Memuat data rapor ' + escapeHtml(siswaRingkas.nama) + '...</div>';
+        var html = await buatKartuRapor(siswaId);
+        area.innerHTML =
+          '<div class="no-print" style="display:flex;gap:8px;margin:14px 0;align-items:center;flex-wrap:wrap;">' +
+          '<button class="btn-small" id="btnKembaliDaftarCetak"><i data-lucide="arrow-left" style="width:14px;height:14px;"></i> Kembali ke Daftar</button>' +
+          '<button class="btn-small btn-small--primary" id="btnCetakDariPreview"><i data-lucide="download" style="width:14px;height:14px;"></i> Unduh</button>' +
+          '</div>' + html;
+        lucide.createIcons();
+        document.getElementById('btnKembaliDaftarCetak').addEventListener('click', renderDaftarSiswa);
+        document.getElementById('btnCetakDariPreview').addEventListener('click', function () { unduhSiswa([siswaId], this); });
+        area.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
 
-        // Mapel yang diajarkan di kelas ini + nilai rapor & capaian siswa ybs.
+      // Susun kartu rapor untuk 1 atau beberapa siswa sekaligus (dipakai
+      // oleh tombol Unduh per baris, Unduh Terpilih, dan Unduh Semua),
+      // lalu buat file PDF langsung lewat html2pdf.js dan unduh — tanpa
+      // jendela cetak browser, jadi tidak ada header/footer/watermark
+      // alamat halaman & nama aplikasi yang biasa ditambahkan browser.
+      // Kalau lebih dari satu siswa, semua rapor digabung jadi satu file
+      // PDF, tiap siswa otomatis mulai di halaman baru.
+      // Kartu disusun di kontainer sementara di luar layar (bukan di
+      // #cetakRaporArea) supaya tampilan yang sedang dilihat user
+      // (daftar siswa / preview) tidak berubah selama proses berjalan.
+      async function unduhSiswa(idList, triggerBtn) {
+        var teksAsliBtn = triggerBtn ? triggerBtn.innerHTML : null;
+        if (triggerBtn) { triggerBtn.disabled = true; triggerBtn.innerHTML = 'Membuat PDF...'; }
+
+        var kerja = document.createElement('div');
+        // Pakai "absolute" (relatif ke dokumen), BUKAN "fixed" (relatif ke
+        // viewport) — kalau halaman sedang di-scroll ke bawah saat tombol
+        // Unduh diklik, elemen "fixed" bisa berakhir di luar area yang
+        // ditangkap html2canvas sehingga hasil PDF-nya kosong/putih.
+        kerja.style.position = 'absolute';
+        kerja.style.left = '-10000px';
+        kerja.style.top = '0';
+        kerja.style.width = '794px'; // kira-kira lebar A4 @ 96dpi, supaya proporsi rapi
+        kerja.style.background = '#fff';
+        document.body.appendChild(kerja);
+
+        try {
+          var htmlParts = [];
+          for (var i = 0; i < idList.length; i++) {
+            htmlParts.push(await buatKartuRapor(idList[i]));
+          }
+          kerja.innerHTML = htmlParts.join('');
+
+          // Tandai supaya tiap kartu (kecuali yang pertama) mulai di
+          // halaman PDF baru — html2pdf.js mengenali class ini lewat
+          // opsi pagebreak.mode:'css'.
+          var kartuList = kerja.querySelectorAll('.rapor-cetak');
+          kartuList.forEach(function (el, idx) { if (idx > 0) el.classList.add('html2pdf__page-break'); });
+
+          function namaFileAman(s) { return String(s || '').replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, '_'); }
+          var namaFile;
+          if (idList.length === 1) {
+            var satuSiswa = siswaList.find(function (s) { return s.id === idList[0]; });
+            namaFile = 'Rapor_' + namaFileAman(satuSiswa ? satuSiswa.nama : 'Siswa') + '_' + namaFileAman(wk.kelas.nama) + '.pdf';
+          } else {
+            namaFile = 'Rapor_' + namaFileAman(wk.kelas.nama) + '_' + idList.length + '_siswa.pdf';
+          }
+
+          await html2pdf().set({
+            margin: 12.7,
+            filename: namaFile,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', scrollX: 0, scrollY: 0, windowWidth: kerja.scrollWidth, windowHeight: kerja.scrollHeight },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            pagebreak: { mode: ['css'] }
+          }).from(kerja).save();
+        } catch (err) {
+          alert('Gagal membuat PDF: ' + (err && err.message ? err.message : err));
+        } finally {
+          document.body.removeChild(kerja);
+          if (triggerBtn) { triggerBtn.disabled = false; triggerBtn.innerHTML = teksAsliBtn; lucide.createIcons(); }
+        }
+      }
+
+      async function buatKartuRapor(siswaId) {
+        var siswaRingkas = siswaList.find(function (s) { return s.id === siswaId; });
+
+        // Biodata lengkap siswa (NISN, alamat) — tidak ikut di ambilSiswaKelas
+        // supaya query itu tetap ringan untuk menu lain.
+        var siswaRes = await supabaseClient
+          .from('siswa')
+          .select('nama, nis, nisn, agama, alamat_siswa')
+          .eq('id', siswaId)
+          .single();
+        var siswa = siswaRes.data || siswaRingkas;
+
+        var fase = faseDariTingkat(wk.kelas.tingkat);
+
+        // Mapel yang diajarkan di kelas ini (+ jenis: umum/kejuruan, urutan
+        // tampil), lalu nilai rapor & capaian kompetensi siswa ybs.
         var penugasanRes = await supabaseClient
           .from('penugasan_guru')
-          .select('mapel:mapel_id(id, nama)')
+          .select('mapel:mapel_id(id, nama, jenis_mapel, urutan_rapor)')
           .eq('kelas_id', wk.kelas.id)
           .eq('tahun_ajaran_id', tahunAktif.id);
         var mapelMap = {};
-        (penugasanRes.data || []).forEach(function (r) { if (r.mapel) mapelMap[r.mapel.id] = r.mapel.nama; });
-        var mapelList = Object.keys(mapelMap)
-          .map(function (id) { return { id: id, nama: mapelMap[id] }; })
-          .sort(function (a, b) { return a.nama.localeCompare(b.nama); });
+        (penugasanRes.data || []).forEach(function (r) { if (r.mapel) mapelMap[r.mapel.id] = r.mapel; });
+        var mapelList = Object.keys(mapelMap).map(function (id) { return mapelMap[id]; });
+        function urutkanMapel(a, b) {
+          var ua = (a.urutan_rapor === null || a.urutan_rapor === undefined) ? 9999 : a.urutan_rapor;
+          var ub = (b.urutan_rapor === null || b.urutan_rapor === undefined) ? 9999 : b.urutan_rapor;
+          if (ua !== ub) return ua - ub;
+          return a.nama.localeCompare(b.nama);
+        }
+        var mapelUmum = mapelList.filter(function (m) { return m.jenis_mapel !== 'kejuruan'; }).sort(urutkanMapel);
+        var mapelKejuruan = mapelList.filter(function (m) { return m.jenis_mapel === 'kejuruan'; }).sort(urutkanMapel);
 
         var nilaiRes = await supabaseClient
           .from('nilai')
@@ -2247,13 +2596,20 @@
         var nilaiMap = {};
         (nilaiRes.data || []).forEach(function (r) { nilaiMap[r.mapel_id] = r; });
 
-        var nilaiRowsHtml = mapelList.map(function (m, i) {
-          var n = nilaiMap[m.id] || {};
-          var namaTampil = namaMapelUntukSiswa(m.nama, siswa.agama);
-          return '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(namaTampil) + '</td>' +
-            '<td style="text-align:center;">' + (n.nilai === undefined || n.nilai === null ? '—' : n.nilai) + '</td>' +
-            '<td>' + escapeHtml(n.capaian_pembelajaran || '—') + '</td></tr>';
-        }).join('');
+        function barisNilai(list) {
+          return list.map(function (m, i) {
+            var n = nilaiMap[m.id] || {};
+            var namaTampil = namaMapelUntukSiswa(m.nama, siswa.agama);
+            return '<tr><td class="tc-center">' + (i + 1) + '</td><td>' + escapeHtml(namaTampil) + '</td>' +
+              '<td class="tc-center">' + (n.nilai === undefined || n.nilai === null ? '0' : n.nilai) + '</td>' +
+              '<td>' + escapeHtml(n.capaian_pembelajaran || '0') + '</td></tr>';
+          }).join('');
+        }
+        var nilaiRowsHtml =
+          '<tr class="rapor-cetak__section-row"><td colspan="4">A. Mata Pelajaran Umum</td></tr>' +
+          (barisNilai(mapelUmum) || '<tr><td colspan="4" class="tc-center tc-soft">Belum ada mata pelajaran umum.</td></tr>') +
+          '<tr class="rapor-cetak__section-row"><td colspan="4">B. Mata Pelajaran Kejuruan</td></tr>' +
+          (barisNilai(mapelKejuruan) || '<tr><td colspan="4" class="tc-center tc-soft">Belum ada mata pelajaran kejuruan.</td></tr>');
 
         // Ekstrakurikuler siswa ybs.
         var ekskulRes = await supabaseClient
@@ -2273,10 +2629,12 @@
         }
         var ekskulRowsHtml = ekskulList.length ? ekskulList.map(function (ek, i) {
           var n = ekskulNilaiMap[ek.id] || {};
-          return '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(ek.nama) + '</td><td style="text-align:center;">' + escapeHtml(n.predikat || '—') + '</td><td>' + escapeHtml(n.deskripsi || '—') + '</td></tr>';
-        }).join('') : '<tr><td colspan="4" style="text-align:center;color:var(--ink-soft);">Tidak mengikuti ekstrakurikuler.</td></tr>';
+          var keterangan = [n.predikat, n.deskripsi].filter(Boolean).join(' — ');
+          return '<tr><td class="tc-center">' + (i + 1) + '</td><td>' + escapeHtml(ek.nama) + '</td><td>' + escapeHtml(keterangan || '—') + '</td></tr>';
+        }).join('') : '<tr><td colspan="3" class="tc-center tc-soft">Tidak mengikuti ekstrakurikuler.</td></tr>';
 
-        // Kokurikuler kelas ybs (bisa lebih dari satu kegiatan per siswa).
+        // Kokurikuler kelas ybs (bisa lebih dari satu kegiatan per siswa) —
+        // ditampilkan sebagai satu kotak narasi, bukan tabel.
         var kokuRes = await supabaseClient
           .from('nilai_kokurikuler')
           .select('nama_kegiatan, deskripsi')
@@ -2284,56 +2642,81 @@
           .eq('kelas_id', wk.kelas.id)
           .eq('tahun_ajaran_id', tahunAktif.id);
         var kokuList = kokuRes.data || [];
-        var kokuRowsHtml = kokuList.length ? kokuList.map(function (k, i) {
-          return '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(k.nama_kegiatan || '—') + '</td><td>' + escapeHtml(k.deskripsi || '—') + '</td></tr>';
-        }).join('') : '<tr><td colspan="3" style="text-align:center;color:var(--ink-soft);">Tidak mengikuti kokurikuler.</td></tr>';
+        var kokuHtml = kokuList.length ? kokuList.map(function (k) {
+          return '<div class="rapor-cetak__koku-item"><strong>' + escapeHtml(k.nama_kegiatan || 'Tanpa nama kegiatan') + '</strong>' +
+            (k.deskripsi ? ' — ' + escapeHtml(k.deskripsi) : '') + '</div>';
+        }).join('') : '—';
 
-        // Rekap presensi (jumlah langsung, diisi wali kelas di menu Presensi).
+        // Rekap presensi + Catatan Wali Kelas (jumlah & catatan diisi
+        // wali kelas, 1 baris per siswa+kelas+tahun ajaran).
         var presensiRes = await supabaseClient
           .from('rekap_presensi')
-          .select('jumlah_sakit, jumlah_izin, jumlah_alpha')
+          .select('jumlah_sakit, jumlah_izin, jumlah_alpha, catatan_wali_kelas')
           .eq('siswa_id', siswaId)
           .eq('kelas_id', wk.kelas.id)
           .eq('tahun_ajaran_id', tahunAktif.id)
           .maybeSingle();
         var rp = presensiRes.data || {};
         var tally = { sakit: rp.jumlah_sakit || 0, izin: rp.jumlah_izin || 0, alpha: rp.jumlah_alpha || 0 };
+        var catatanWaliKelas = rp.catatan_wali_kelas || '';
 
-        area.innerHTML =
+        var tahunAkhir = (String(tahunAktif.nama).split('/')[1] || tahunAktif.nama).trim();
+
+        return (
           '<div class="rapor-cetak">' +
-          '<div class="rapor-cetak__head">' +
-          '<div class="rapor-cetak__school">SMK Widya Mandala Tambak</div>' +
-          '<div>Rapor Peserta Didik — Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + ', Semester ' + escapeHtml(tahunAktif.semester) + '</div>' +
-          '</div>' +
-          '<table class="rapor-cetak__biodata"><tr><td>Nama</td><td>: ' + escapeHtml(siswa.nama) + '</td><td>Kelas</td><td>: ' + escapeHtml(wk.kelas.nama) + '</td></tr>' +
-          '<tr><td>NIS / NISN</td><td>: ' + escapeHtml(siswa.nis || '—') + '</td><td>Wali Kelas</td><td>: ' + escapeHtml(nama) + '</td></tr></table>' +
 
-          '<div class="rapor-cetak__section-title">A. Nilai Akademik</div>' +
-          '<table class="data-table"><thead><tr><th>No</th><th>Mata Pelajaran</th><th>Nilai</th><th>Capaian Pembelajaran</th></tr></thead>' +
-          '<tbody>' + (nilaiRowsHtml || '<tr><td colspan="4" style="text-align:center;color:var(--ink-soft);">Belum ada nilai.</td></tr>') + '</tbody></table>' +
+          '<table class="rapor-cetak__biodata"><tbody>' +
+          '<tr><td class="rc-label">Nama</td><td class="rc-colon">:</td><td class="rc-value">' + escapeHtml(siswa.nama) + '</td>' +
+          '<td class="rc-label rc-label--kanan">Kelas</td><td class="rc-colon">:</td><td class="rc-value">' + escapeHtml(wk.kelas.nama) + '</td></tr>' +
+          '<tr><td class="rc-label">NIS / NISN</td><td class="rc-colon">:</td><td class="rc-value">' + escapeHtml((siswa.nis || '—') + ' / ' + (siswa.nisn || '—')) + '</td>' +
+          '<td class="rc-label rc-label--kanan">Fase</td><td class="rc-colon">:</td><td class="rc-value">' + escapeHtml(fase) + '</td></tr>' +
+          '<tr><td class="rc-label">Sekolah</td><td class="rc-colon">:</td><td class="rc-value">' + escapeHtml(NAMA_SEKOLAH) + '</td>' +
+          '<td class="rc-label rc-label--kanan">Semester</td><td class="rc-colon">:</td><td class="rc-value">' + escapeHtml(tahunAktif.semester === 'Genap' ? '2 (Genap)' : '1 (Ganjil)') + '</td></tr>' +
+          '<tr><td class="rc-label">Alamat</td><td class="rc-colon">:</td><td class="rc-value">' + escapeHtml(siswa.alamat_siswa || '—') + '</td>' +
+          '<td class="rc-label rc-label--kanan">Tahun Ajaran</td><td class="rc-colon">:</td><td class="rc-value">' + escapeHtml(tahunAktif.nama) + '</td></tr>' +
+          '</tbody></table>' +
 
-          '<div class="rapor-cetak__section-title">B. Ekstrakurikuler</div>' +
-          '<table class="data-table"><thead><tr><th>No</th><th>Kegiatan</th><th>Predikat</th><th>Deskripsi</th></tr></thead>' +
+          '<table class="rapor-cetak__nilai data-table"><thead><tr><th class="rc-th-no">NO</th><th>Mata Pelajaran</th><th class="rc-th-nilai">Nilai Akhir</th><th>Capaian Kompetensi</th></tr></thead>' +
+          '<tbody>' + nilaiRowsHtml + '</tbody></table>' +
+
+          '<div class="rapor-cetak__bar">Kokurikuler</div>' +
+          '<div class="rapor-cetak__box">' + kokuHtml + '</div>' +
+
+          '<table class="rapor-cetak__ekskul data-table"><thead><tr><th class="rc-th-no">No.</th><th>Ekstrakurikuler</th><th>Keterangan</th></tr></thead>' +
           '<tbody>' + ekskulRowsHtml + '</tbody></table>' +
 
-          '<div class="rapor-cetak__section-title">C. Kokurikuler</div>' +
-          '<table class="data-table"><thead><tr><th>No</th><th>Nama Kegiatan</th><th>Deskripsi</th></tr></thead>' +
-          '<tbody>' + kokuRowsHtml + '</tbody></table>' +
+          '<div class="rapor-cetak__row2">' +
+          '<div class="rapor-cetak__col rapor-cetak__col--kehadiran">' +
+          '<div class="rapor-cetak__bar">Ketidakhadiran</div>' +
+          '<table class="rapor-cetak__kehadiran"><tbody>' +
+          '<tr><td class="rc-label">Sakit</td><td class="rc-colon">:</td><td class="tc-center">' + tally.sakit + '</td><td>Hari</td></tr>' +
+          '<tr><td class="rc-label">Izin</td><td class="rc-colon">:</td><td class="tc-center">' + tally.izin + '</td><td>Hari</td></tr>' +
+          '<tr><td class="rc-label">Tanpa Keterangan</td><td class="rc-colon">:</td><td class="tc-center">' + tally.alpha + '</td><td>Hari</td></tr>' +
+          '</tbody></table>' +
+          '</div>' +
+          '<div class="rapor-cetak__col rapor-cetak__col--catatan">' +
+          '<div class="rapor-cetak__bar">Catatan Wali Kelas</div>' +
+          '<div class="rapor-cetak__box">' + (catatanWaliKelas ? escapeHtml(catatanWaliKelas) : '—') + '</div>' +
+          '</div>' +
+          '</div>' +
+          '<div class="no-print rapor-cetak__catatan-hint">Untuk mengisi/mengubah Catatan Wali Kelas, buka menu <strong>Catatan Wali Kelas</strong> di sidebar.</div>' +
 
-          '<div class="rapor-cetak__section-title">D. Presensi</div>' +
-          '<table class="data-table"><thead><tr><th>Sakit</th><th>Izin</th><th>Alpha</th></tr></thead>' +
-          '<tbody><tr><td style="text-align:center;">' + tally.sakit + '</td><td style="text-align:center;">' + tally.izin + '</td><td style="text-align:center;">' + tally.alpha + '</td></tr></tbody></table>' +
-          '</div>';
+          '<div class="rapor-cetak__bar">Tanggapan Orangtua/ Wali</div>' +
+          '<div class="rapor-cetak__box rapor-cetak__box--tall"></div>' +
+
+          '<div class="rapor-cetak__footer">' +
+          '<div class="rapor-cetak__footer-cols">' +
+          '<div class="rapor-cetak__footer-col"><div class="rapor-cetak__footer-col-spacer">&nbsp;</div><div>Orangtua/ Wali</div><div class="rapor-cetak__ttd-space"></div><div>…...........................................</div></div>' +
+          '<div class="rapor-cetak__footer-col"><div class="rapor-cetak__footer-col-spacer">&nbsp;</div><div>Kepala Sekolah</div><div class="rapor-cetak__ttd-space"></div><div><strong>' + escapeHtml(NAMA_KEPALA_SEKOLAH) + '</strong></div></div>' +
+          '<div class="rapor-cetak__footer-col"><div class="rapor-cetak__footer-date">' + escapeHtml(NAMA_KOTA_TTD) + ', …........' + escapeHtml(tahunAkhir) + '</div><div>Wali Kelas</div><div class="rapor-cetak__ttd-space"></div><div><strong>' + escapeHtml(nama) + '</strong></div></div>' +
+          '</div>' +
+          '</div>' +
+
+          '</div>'
+        );
       }
 
-      document.getElementById('cetakSiswaSelect').addEventListener('change', function () {
-        muatRapor(this.value);
-      });
-      document.getElementById('btnCetakRapor').addEventListener('click', function () {
-        window.print();
-      });
-
-      await muatRapor(siswaList[0].id);
+      renderDaftarSiswa();
     }
 
     function setActiveMenuItem(el) {

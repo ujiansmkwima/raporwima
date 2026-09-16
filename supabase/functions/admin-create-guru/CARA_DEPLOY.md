@@ -45,3 +45,14 @@ tombol **Edit** di menu Guru → bisa ubah nama, email, role, dan
 reset password). Kalau function ini sudah pernah di-deploy
 sebelumnya, **deploy ulang** dengan copy-paste isi `index.ts` yang
 terbaru (ulangi langkah 3–7 di atas) supaya tombol Edit berfungsi.
+
+## Update: sekarang function ini juga menangani Hapus Guru
+
+`index.ts` sudah ditambah aksi `delete` (dipanggil otomatis lewat
+tombol **Hapus** per baris maupun **🗑 Hapus Terpilih** di menu
+Guru → menghapus baris `profiles` sekaligus akun login di Supabase
+Auth). Kalau function ini sudah pernah di-deploy sebelumnya,
+**deploy ulang** dengan copy-paste isi `index.ts` yang terbaru
+(ulangi langkah 3–7 di atas) supaya tombol Hapus/Hapus Terpilih di
+menu Guru berfungsi. Admin tidak bisa menghapus akunnya sendiri
+lewat tombol ini (supaya tidak terkunci keluar dari sistem).

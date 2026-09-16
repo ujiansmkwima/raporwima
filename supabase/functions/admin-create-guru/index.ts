@@ -134,6 +134,44 @@ Deno.serve(async (req: Request) => {
       return json({ success: true, user_id: userId }, 200);
     }
 
+    // ---- Aksi DELETE: dipakai tombol "Hapus" / "Hapus Terpilih" di menu Guru ----
+    if (action === "delete") {
+      const idsRaw = body.user_ids !== undefined ? body.user_ids : body.user_id;
+      const userIds: string[] = Array.isArray(idsRaw)
+        ? idsRaw.map((x) => String(x).trim()).filter(Boolean)
+        : (idsRaw ? [String(idsRaw).trim()] : []);
+
+      if (!userIds.length) {
+        return json({ error: "Tidak ada akun yang dipilih untuk dihapus." }, 400);
+      }
+
+      // Admin tidak boleh menghapus akunnya sendiri (supaya tidak terkunci keluar).
+      if (userIds.includes(callerData.user.id)) {
+        return json({ error: "Tidak bisa menghapus akun yang sedang dipakai login saat ini." }, 400);
+      }
+
+      const gagal: { user_id: string; error: string }[] = [];
+      let berhasil = 0;
+
+      for (const uid of userIds) {
+        // Hapus baris profil dulu (kalau gagal, akun Auth tidak ikut dihapus
+        // supaya tidak ada akun Auth "nyangkut" tanpa profil).
+        const { error: profDelErr } = await adminClient.from("profiles").delete().eq("id", uid);
+        if (profDelErr) {
+          gagal.push({ user_id: uid, error: profDelErr.message });
+          continue;
+        }
+        const { error: authDelErr } = await adminClient.auth.admin.deleteUser(uid);
+        if (authDelErr) {
+          gagal.push({ user_id: uid, error: authDelErr.message });
+          continue;
+        }
+        berhasil++;
+      }
+
+      return json({ success: gagal.length === 0, deleted_count: berhasil, failed: gagal }, 200);
+    }
+
     // ---- Aksi CREATE (default): membuat akun guru baru ----
     const nama = String(body.nama || "").trim();
     const email = String(body.email || "").trim().toLowerCase();
