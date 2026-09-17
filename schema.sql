@@ -70,7 +70,14 @@ create table if not exists public.mata_pelajaran (
   kkm integer not null default 75,      -- kriteria ketuntasan minimal
   urutan_rapor integer,                 -- urutan tampil mapel ini di rapor
   berlaku_untuk text not null default 'semua' check (berlaku_untuk in ('semua', 'tertentu')),
-  jenis_mapel text not null default 'umum' check (jenis_mapel in ('umum', 'kejuruan'))  -- A. Mata Pelajaran Umum / B. Mata Pelajaran Kejuruan
+  jenis_mapel text not null default 'umum' check (jenis_mapel in ('umum', 'kejuruan')),  -- A. Mata Pelajaran Umum / B. Mata Pelajaran Kejuruan
+  -- Diisi HANYA untuk mapel Pendidikan Agama (mis. "Pendidikan Agama
+  -- Islam dan Budi Pekerti"): menandai mapel ini khusus untuk siswa
+  -- agama apa. NULL berarti bukan mapel agama / berlaku untuk semua
+  -- siswa apapun agamanya. Dipakai untuk menyaring siswa yang muncul
+  -- ke guru mapel ini, dan menyaring baris mapel yang tampil di rapor
+  -- tiap siswa (siswa cuma lihat mapel agama yang cocok agamanya).
+  agama_spesifik text check (agama_spesifik is null or agama_spesifik in ('Islam', 'Kristen', 'Katolik', 'Hindu', 'Buddha', 'Konghucu'))
 );
 
 -- Kelas mana saja yang memakai mapel ini, KALAU berlaku_untuk = 'tertentu'

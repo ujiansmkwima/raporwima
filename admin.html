@@ -731,6 +731,17 @@
     });
   }
 
+  // Daftar agama yang sama dengan opsi field "Agama" di form Biodata
+  // Siswa (menu Peserta Didik) -- supaya nilainya selalu bisa dicocokkan
+  // persis dengan kolom siswa.agama.
+  var DAFTAR_AGAMA_MAPEL = ['Islam', 'Kristen', 'Katolik', 'Hindu', 'Buddha', 'Konghucu'];
+  function opsiAgamaMapelHtml(terpilih) {
+    return '<option value="">Bukan mapel agama</option>' +
+      DAFTAR_AGAMA_MAPEL.map(function (a) {
+        return '<option value="' + a + '"' + (terpilih === a ? ' selected' : '') + '>' + a + '</option>';
+      }).join('');
+  }
+
   // ================= PANEL: MATA PELAJARAN =================
   async function renderMapel() {
     var kelasRes = await supabaseClient.from('kelas').select('id, nama').order('nama');
@@ -754,8 +765,10 @@
       '<div class="field"><label>KKM</label><input type="number" id="mKkm" value="75"></div>' +
       '<div class="field"><label>Urutan pada Rapor</label><input type="number" id="mUrutan" placeholder="1"></div>' +
       '<div class="field"><label>Kelas</label><select id="mBerlaku"><option value="semua">Semua Kelas</option><option value="tertentu">Kelas Tertentu</option></select></div>' +
+      '<div class="field"><label>Mapel Agama Untuk</label><select id="mAgama">' + opsiAgamaMapelHtml('') + '</select></div>' +
       '<button type="submit" class="btn-small btn-small--primary">Tambah</button>' +
       '</form>' +
+      '<div class="panel-note" style="margin:0 0 16px;">Isi "Mapel Agama Untuk" HANYA kalau mapel ini adalah Pendidikan Agama satu agama tertentu (mis. "Pendidikan Agama Islam dan Budi Pekerti" → pilih Islam). Rapor tiap siswa otomatis cuma menampilkan mapel agama yang cocok dengan agama siswa itu sendiri, dan guru mapel ini otomatis cuma melihat siswa yang beragama sama.</div>' +
       '<div id="mKelasTertentuWrap" style="display:none;margin:0 0 20px;">' +
       '<label style="font-weight:600;font-size:13px;display:block;margin-bottom:8px;">Pilih kelas yang memakai mapel ini</label>' +
       '<div style="display:flex;flex-wrap:wrap;gap:8px 18px;">' + kelasChecklistHtml + '</div>' +
@@ -796,7 +809,8 @@
         jenis_mapel: document.getElementById('mJenis').value,
         kkm: parseInt(document.getElementById('mKkm').value, 10) || 75,
         urutan_rapor: urutanVal === '' ? null : parseInt(urutanVal, 10),
-        berlaku_untuk: berlaku
+        berlaku_untuk: berlaku,
+        agama_spesifik: document.getElementById('mAgama').value || null
       }).select('id').single();
 
       if (res.error) { alert('Gagal menambah: ' + res.error.message); return; }
@@ -812,7 +826,7 @@
 
     var listRes = await supabaseClient
       .from('mata_pelajaran')
-      .select('id, kode, nama, jenis_mapel, kkm, urutan_rapor, berlaku_untuk')
+      .select('id, kode, nama, jenis_mapel, kkm, urutan_rapor, berlaku_untuk, agama_spesifik')
       .order('urutan_rapor', { ascending: true, nullsFirst: false })
       .order('nama');
     var rows = listRes.data || [];
@@ -841,11 +855,13 @@
         ? (mapelKelasMap[r.id] || []).map(escapeHtml).join(', ') || '<span style="color:var(--ink-soft);">— belum dipilih —</span>'
         : 'Semua Kelas';
 
+      var namaHtml = escapeHtml(r.nama) + (r.agama_spesifik ? ' <span class="chip chip--muted">Agama: ' + escapeHtml(r.agama_spesifik) + '</span>' : '');
+
       var tr = document.createElement('tr');
       tr.innerHTML =
         '<td><input type="checkbox" class="mRowChk" value="' + r.id + '"></td>' +
         '<td>' + escapeHtml(r.urutan_rapor === null || r.urutan_rapor === undefined ? '—' : r.urutan_rapor) + '</td>' +
-        '<td>' + escapeHtml(r.kode || '—') + '</td><td>' + escapeHtml(r.nama) + '</td>' +
+        '<td>' + escapeHtml(r.kode || '—') + '</td><td>' + namaHtml + '</td>' +
         '<td>' + escapeHtml(jenisLabel[r.jenis_mapel] || jenisLabel.umum) + '</td>' +
         '<td>' + escapeHtml(r.kkm) + '</td>' +
         '<td>' + kelasHtml + '</td>' +
@@ -907,6 +923,7 @@
         '<option value="semua"' + (existing.berlaku_untuk === 'semua' ? ' selected' : '') + '>Semua Kelas</option>' +
         '<option value="tertentu"' + (existing.berlaku_untuk === 'tertentu' ? ' selected' : '') + '>Kelas Tertentu</option>' +
         '</select></div>' +
+        '<div class="field"><label>Mapel Agama Untuk</label><select id="f_mAgama">' + opsiAgamaMapelHtml(existing.agama_spesifik || '') + '</select></div>' +
         '</div>' +
         '<div id="f_mKelasTertentuWrap" style="display:' + (existing.berlaku_untuk === 'tertentu' ? 'block' : 'none') + ';margin:0 0 20px;">' +
         '<label style="font-weight:600;font-size:13px;display:block;margin-bottom:8px;">Pilih kelas yang memakai mapel ini</label>' +
@@ -951,7 +968,8 @@
           jenis_mapel: document.getElementById('f_mJenis').value,
           kkm: parseInt(document.getElementById('f_mKkm').value, 10) || 75,
           urutan_rapor: urutanVal === '' ? null : parseInt(urutanVal, 10),
-          berlaku_untuk: berlaku
+          berlaku_untuk: berlaku,
+          agama_spesifik: document.getElementById('f_mAgama').value || null
         };
 
         var res = await supabaseClient.from('mata_pelajaran').update(payload).eq('id', existing.id);
@@ -3044,6 +3062,7 @@
     }
     var clsData = isSectionCollapsed('bodyEkskulData') ? ' is-collapsed' : '';
     var clsPeserta = isSectionCollapsed('bodyEkskulPeserta') ? ' is-collapsed' : '';
+    var clsRekap = isSectionCollapsed('bodyEkskulRekap') ? ' is-collapsed' : '';
     var clsPembina = isSectionCollapsed('bodyEkskulPembina') ? ' is-collapsed' : '';
 
     content.innerHTML =
@@ -3083,6 +3102,18 @@
       '<button type="button" class="btn-small" id="btnTampilkanPeserta">Tampilkan Siswa</button>' +
       '</div>' +
       '<div id="pesertaArea"></div>' +
+      '</div>' +
+      '<hr class="panel-divider">' +
+      '<div class="panel-head panel-head--toggle" data-target="bodyEkskulRekap"><div><div class="panel-head__title">Rekap Data Peserta</div>' +
+      '<div class="panel-head__desc">Pilih ekstrakurikuler untuk melihat rekap siswa yang mengikutinya beserta kelasnya. Pilih "Semua Ekstrakurikuler" untuk melihat rekap seluruh kegiatan sekaligus.</div></div>' +
+      '<span class="panel-head__toggle-icon">☰</span></div>' +
+      '<div class="collapsible-body' + clsRekap + '" id="bodyEkskulRekap">' +
+      '<div class="add-form">' +
+      '<div class="field"><label>Ekstrakurikuler</label><select id="rekapEkskul"><option value="">— Semua Ekstrakurikuler —</option>' + opsi(ekskulList) + '</select></div>' +
+      '<button type="button" class="btn-small btn-small--primary" id="btnTampilkanRekap">Tampilkan Rekap</button>' +
+      '<button type="button" class="btn-small" id="btnExportRekap">⬇ Unduh Rekap (Excel)</button>' +
+      '</div>' +
+      '<div id="rekapPesertaArea"></div>' +
       '</div>' +
       '<hr class="panel-divider">' +
       '<div class="panel-head panel-head--toggle" data-target="bodyEkskulPembina"><div><div class="panel-head__title">Penugasan Pembina Ekstrakurikuler</div>' +
@@ -3347,6 +3378,79 @@
           ? '<div class="import-summary">Gagal menyimpan: ' + escapeHtml(insRes.error.message) + '</div>'
           : '<div class="import-summary">' + terpilih.length + ' siswa ditetapkan sebagai peserta.</div>';
       });
+    });
+
+    // ---------- B2. Rekap Data Peserta ----------
+    async function ambilRekapPesertaRows() {
+      var ekskulId = document.getElementById('rekapEkskul').value;
+      var q = supabaseClient
+        .from('ekstrakurikuler_siswa')
+        .select('siswa_id, ekstrakurikuler_id, siswa:siswa_id(nama), ekstrakurikuler:ekstrakurikuler_id(nama)')
+        .eq('tahun_ajaran_id', tahunAktif.id);
+      if (ekskulId) q = q.eq('ekstrakurikuler_id', ekskulId);
+      var res = await q;
+      var rows = (res.data || []).filter(function (x) { return x.siswa && x.ekstrakurikuler; }).map(function (x) {
+        return {
+          nama: x.siswa.nama,
+          kelas: kelasNamaBySiswaId[x.siswa_id] || '—',
+          ekstrakurikuler: x.ekstrakurikuler.nama
+        };
+      });
+      rows.sort(function (a, b) {
+        return a.ekstrakurikuler.localeCompare(b.ekstrakurikuler) || a.kelas.localeCompare(b.kelas) || a.nama.localeCompare(b.nama);
+      });
+      return rows;
+    }
+
+    function namaEkskulTerpilihRekap() {
+      var id = document.getElementById('rekapEkskul').value;
+      var e = ekskulList.filter(function (x) { return x.id === id; })[0];
+      return e ? e.nama : '';
+    }
+
+    document.getElementById('btnTampilkanRekap').addEventListener('click', async function () {
+      var area = document.getElementById('rekapPesertaArea');
+      area.innerHTML = '<div class="panel-note">Memuat rekap peserta...</div>';
+
+      var ekskulId = document.getElementById('rekapEkskul').value;
+      var tampilkanKolomEkskul = !ekskulId;
+      var rows = await ambilRekapPesertaRows();
+
+      if (!rows.length) {
+        area.innerHTML = '<div class="panel-note">Belum ada peserta tercatat untuk pilihan ini.</div>';
+        return;
+      }
+
+      var headHtml = tampilkanKolomEkskul
+        ? '<tr><th>No</th><th>Ekstrakurikuler</th><th>Nama Siswa</th><th>Kelas</th></tr>'
+        : '<tr><th>No</th><th>Nama Siswa</th><th>Kelas</th></tr>';
+
+      var rowsHtml = rows.map(function (r, i) {
+        return tampilkanKolomEkskul
+          ? '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(r.ekstrakurikuler) + '</td><td>' + escapeHtml(r.nama) + '</td><td>' + escapeHtml(r.kelas) + '</td></tr>'
+          : '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(r.nama) + '</td><td>' + escapeHtml(r.kelas) + '</td></tr>';
+      }).join('');
+
+      area.innerHTML =
+        '<div class="panel-note">Total <strong>' + rows.length + '</strong> peserta' +
+        (ekskulId ? ' di ' + escapeHtml(namaEkskulTerpilihRekap()) : ' pada seluruh ekstrakurikuler') + '.</div>' +
+        '<div class="table-wrap"><table class="data-table"><thead>' + headHtml + '</thead><tbody>' + rowsHtml + '</tbody></table></div>';
+    });
+
+    document.getElementById('btnExportRekap').addEventListener('click', async function () {
+      var ekskulId = document.getElementById('rekapEkskul').value;
+      var tampilkanKolomEkskul = !ekskulId;
+      var rows = await ambilRekapPesertaRows();
+      if (!rows.length) { alert('Belum ada data peserta untuk diunduh.'); return; }
+
+      var excelRows = rows.map(function (r) {
+        return tampilkanKolomEkskul
+          ? { 'Ekstrakurikuler': r.ekstrakurikuler, 'Nama': r.nama, 'Kelas': r.kelas }
+          : { 'Nama': r.nama, 'Kelas': r.kelas };
+      });
+      var headers = tampilkanKolomEkskul ? ['Ekstrakurikuler', 'Nama', 'Kelas'] : ['Nama', 'Kelas'];
+      var namaFile = 'rekap_peserta_' + (ekskulId ? namaEkskulTerpilihRekap().replace(/\s+/g, '_') : 'semua_ekstrakurikuler') + '.xlsx';
+      tulisExcelEkskul(excelRows, headers, 'Rekap Peserta', namaFile);
     });
 
     // ---------- C. Penugasan Pembina Ekstrakurikuler ----------

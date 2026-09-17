@@ -103,39 +103,78 @@
   // ================= Peringatan Perubahan Belum Disimpan =================
   // Berlaku untuk SEMUA form input guru/wali kelas: Input Nilai, Pengaturan
   // Bobot/KKM, Presensi, Ekskul, Kokurikuler, Catatan Wali Kelas, dsb.
-  // Begitu ada perubahan di area konten lalu guru pindah menu di sidebar
-  // (atau klik Keluar) SEBELUM klik tombol "Simpan...", munculkan konfirmasi.
-  var adaPerubahanBelumSimpan = false;
-  function tandaiBerubah() { adaPerubahanBelumSimpan = true; }
-  function tandaiTersimpan() { adaPerubahanBelumSimpan = false; }
-
+  // Begitu ada perubahan NILAI (bukan cuma diketik/diklik) di area konten
+  // lalu guru pindah menu di sidebar (atau klik Keluar) SEBELUM klik tombol
+  // "Simpan...", munculkan konfirmasi.
   (function () {
     var content = document.getElementById('content');
 
-    // Setiap ketikan/pilihan di form (nilai, presensi, catatan, dsb) —
-    // dianggap "ada perubahan" sampai tombol Simpan terkait diklik.
-    content.addEventListener('input', function (e) {
-      if (e.target.matches('input, textarea, select')) tandaiBerubah();
-    });
-    content.addEventListener('change', function (e) {
-      if (e.target.matches('input, textarea, select')) tandaiBerubah();
-    });
+    // Nilai "asli" tiap field diambil dari properti bawaan browser
+    // defaultValue/defaultChecked/defaultSelected — ini otomatis terisi
+    // sesuai atribut value/checked/selected di markup HTML saat field itu
+    // pertama kali dirender, dan TIDAK ikut berubah walau guru mengetik
+    // atau memilih opsi lain. Dengan membandingkan nilai SEKARANG terhadap
+    // nilai asli ini (bukan sekadar "pernah ada event input/change"),
+    // mengetik lalu menghapus lagi sampai kembali ke isi semula TIDAK
+    // dianggap sebagai perubahan yang perlu diperingatkan.
+    function nilaiAsalSelect(el) {
+      for (var i = 0; i < el.options.length; i++) {
+        if (el.options[i].defaultSelected) return el.options[i].value;
+      }
+      // Kalau tidak ada satu pun <option> yang ditandai "selected" di
+      // markup, browser otomatis memilih opsi pertama sebagai bawaan.
+      return el.options.length ? el.options[0].value : '';
+    }
+
+    function fieldBerubah(el) {
+      if (el.tagName === 'SELECT') return el.value !== nilaiAsalSelect(el);
+      if (el.type === 'checkbox' || el.type === 'radio') return el.checked !== el.defaultChecked;
+      return el.value !== el.defaultValue;
+    }
+
+    // Cek langsung ke semua field yang sedang tampil di halaman: ada yang
+    // nilainya berbeda dari nilai asalnya atau tidak. Dihitung ulang setiap
+    // kali dibutuhkan (bukan disimpan sebagai status terpisah), supaya
+    // selalu mencerminkan kondisi form yang sebenarnya saat itu.
+    function adaPerubahanBelumSimpan() {
+      var fields = content.querySelectorAll('input, textarea, select');
+      for (var i = 0; i < fields.length; i++) {
+        if (fieldBerubah(fields[i])) return true;
+      }
+      return false;
+    }
+
+    // Begitu nilai berhasil disimpan, nilai yang baru saja disimpan itu
+    // dijadikan "nilai asal" yang baru — supaya field yang tidak diubah
+    // lagi setelahnya tidak dianggap sebagai perubahan baru.
+    function tetapkanNilaiSaatIniSebagaiAsal() {
+      var fields = content.querySelectorAll('input, textarea, select');
+      fields.forEach(function (el) {
+        if (el.tagName === 'SELECT') {
+          Array.prototype.forEach.call(el.options, function (o) { o.defaultSelected = (o.value === el.value); });
+        } else if (el.type === 'checkbox' || el.type === 'radio') {
+          el.defaultChecked = el.checked;
+        } else {
+          el.defaultValue = el.value;
+        }
+      });
+    }
 
     // Semua tombol simpan di aplikasi ini id-nya diawali "btnSimpan"
     // (btnSimpanNilai, btnSimpanPengaturan, btnSimpanPresensi,
     // btnSimpanEkskul, btnSimpanKoku, btnSimpanCatatanWali). Begitu
-    // diklik, beri jeda sebentar untuk proses simpan ke server lalu
-    // anggap sudah tersimpan.
+    // diklik, beri jeda sebentar untuk proses simpan ke server, lalu
+    // tetapkan nilai saat ini sebagai nilai asal yang baru.
     content.addEventListener('click', function (e) {
       var tombolSimpan = e.target.closest('[id^="btnSimpan"]');
-      if (tombolSimpan) setTimeout(tandaiTersimpan, 500);
+      if (tombolSimpan) setTimeout(tetapkanNilaiSaatIniSebagaiAsal, 500);
     });
 
     // Cegat klik pindah menu di sidebar (dan tombol Keluar) di fase
     // "capture", supaya jalan LEBIH DULU sebelum handler klik menu yang
     // asli — kalau guru batal, handler asli tidak akan pernah terpanggil.
     document.querySelector('.sidebar').addEventListener('click', function (e) {
-      if (!adaPerubahanBelumSimpan) return;
+      if (!adaPerubahanBelumSimpan()) return;
       var el = e.target.closest('.menu-item, #logoutBtn');
       if (!el) return;
       var tetapPindah = confirm(
@@ -146,14 +185,12 @@
       if (!tetapPindah) {
         e.preventDefault();
         e.stopImmediatePropagation();
-      } else {
-        tandaiTersimpan();
       }
     }, true);
 
     // Jaga-jaga juga saat tab ditutup/direfresh/pindah halaman lain.
     window.addEventListener('beforeunload', function (e) {
-      if (!adaPerubahanBelumSimpan) return;
+      if (!adaPerubahanBelumSimpan()) return;
       e.preventDefault();
       e.returnValue = '';
     });
@@ -250,7 +287,7 @@
     // 4. Ambil penugasan mengajar guru ini, HANYA untuk tahun ajaran aktif.
     var penugasanResult = await supabaseClient
       .from('penugasan_guru')
-      .select('id, kelas:kelas_id(id, nama, tingkat), mapel:mapel_id(id, nama)')
+      .select('id, kelas:kelas_id(id, nama, tingkat), mapel:mapel_id(id, nama, agama_spesifik)')
       .eq('guru_id', user.id)
       .eq('tahun_ajaran_id', tahunAktif.id);
 
@@ -582,12 +619,14 @@
       var kelasIds = Object.keys(kelasIdSet);
 
       var kelasSiswaMap = {};
+      var siswaAgamaMap = {};
       if (kelasIds.length) {
         var siswaKelasRes = await supabaseClient
-          .from('siswa_kelas').select('siswa_id, kelas_id')
+          .from('siswa_kelas').select('siswa_id, kelas_id, siswa:siswa_id(agama)')
           .eq('tahun_ajaran_id', tahunAktif.id).in('kelas_id', kelasIds);
         (siswaKelasRes.data || []).forEach(function (r) {
           (kelasSiswaMap[r.kelas_id] = kelasSiswaMap[r.kelas_id] || []).push(r.siswa_id);
+          siswaAgamaMap[r.siswa_id] = r.siswa ? r.siswa.agama : null;
         });
       }
 
@@ -630,7 +669,15 @@
         });
 
         rowsNilai = penugasan.map(function (p) {
-          var siswaIds = kelasSiswaMap[p.kelas.id] || [];
+          var siswaIdsKelas = kelasSiswaMap[p.kelas.id] || [];
+          // Mapel agama yang sudah ditandai agama_spesifik cuma dinilai
+          // untuk siswa yang agamanya cocok — jadi "total slot" dan
+          // "jumlah siswa" di kartu progres ini juga disaring, supaya
+          // progresnya tidak keliru dianggap kurang (siswa agama lain
+          // memang bukan tanggung jawab mapel ini).
+          var siswaIds = p.mapel.agama_spesifik
+            ? siswaIdsKelas.filter(function (sid) { return (siswaAgamaMap[sid] || null) === p.mapel.agama_spesifik; })
+            : siswaIdsKelas;
           var total = siswaIds.length;
           var filled = 0;
           siswaIds.forEach(function (sid) { if (nilaiMap[p.mapel.id + '|' + sid]) filled++; });
@@ -1094,9 +1141,20 @@
     async function renderInputNilai(p) {
       content.innerHTML = renderPlaceholder('Memuat...', 'Mengambil data siswa kelas ' + p.kelas.nama + '.');
 
-      var siswaList = await ambilSiswaKelas(p.kelas.id);
+      var siswaListSemua = await ambilSiswaKelas(p.kelas.id);
+      // Mapel Pendidikan Agama yang sudah ditandai agama_spesifik (mis.
+      // "Pendidikan Agama Islam dan Budi Pekerti") HANYA menampilkan siswa
+      // yang agamanya cocok — siswa agama lain tidak ikut dinilai/muncul
+      // di mapel ini sama sekali, karena rapor mereka memakai mapel agama
+      // yang lain.
+      var siswaList = p.mapel.agama_spesifik
+        ? siswaListSemua.filter(function (s) { return s.agama === p.mapel.agama_spesifik; })
+        : siswaListSemua;
       if (!siswaList.length) {
-        content.innerHTML = renderPlaceholder('Input Nilai — ' + p.mapel.nama, 'Belum ada siswa yang ditempatkan di kelas ' + p.kelas.nama + ' pada tahun ajaran ini.');
+        var pesanKosong = p.mapel.agama_spesifik
+          ? 'Tidak ada siswa beragama ' + p.mapel.agama_spesifik + ' di kelas ' + p.kelas.nama + ' pada tahun ajaran ini.'
+          : 'Belum ada siswa yang ditempatkan di kelas ' + p.kelas.nama + ' pada tahun ajaran ini.';
+        content.innerHTML = renderPlaceholder('Input Nilai — ' + p.mapel.nama, pesanKosong);
         return;
       }
       var siswaIds = siswaList.map(function (s) { return s.id; });
@@ -1270,7 +1328,12 @@
       // =======================================================
       //  Tampilan
       // =======================================================
-      var isPAI = isPendidikanAgama(p.mapel.nama);
+      // Kolom "Mapel (sesuai agama)" cuma relevan untuk gaya lama: satu
+      // mapel PAI generik dipakai bareng semua siswa lintas agama dalam
+      // satu kelas. Kalau mapel ini sudah ditandai agama_spesifik (gaya
+      // baru), siswaList di atas sudah disaring 1 agama saja, jadi kolom
+      // ini tidak perlu lagi.
+      var isPAI = isPendidikanAgama(p.mapel.nama) && !p.mapel.agama_spesifik;
       var kolomMapel = isPAI ? '<th>Mapel (sesuai agama)</th>' : '';
 
       function labelTp(i) { return 'TP' + (i + 1); }
@@ -1347,7 +1410,9 @@
         '<div class="panel-head"><div><div class="panel-head__title">Input Nilai — ' + escapeHtml(p.mapel.nama) + '</div>' +
         '<div class="panel-head__desc">Kelas ' + escapeHtml(p.kelas.nama) + (semesterKe ? ' · Semester ' + semesterKe : '') + ', Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + '. ' +
         'Isi nilai tiap TP (0–100), Nilai Tengah Semester, dan Nilai Akhir Semester. Nilai Rapor & Capaian Pembelajaran dihitung otomatis.' +
-        (isPAI ? ' Nama mapel di rapor otomatis menyesuaikan agama tiap siswa.' : '') + '</div></div>' +
+        (isPAI ? ' Nama mapel di rapor otomatis menyesuaikan agama tiap siswa.' : '') +
+        (p.mapel.agama_spesifik ? ' Daftar di bawah hanya menampilkan siswa beragama <strong>' + escapeHtml(p.mapel.agama_spesifik) + '</strong> (' + siswaList.length + ' dari ' + siswaListSemua.length + ' siswa kelas ' + escapeHtml(p.kelas.nama) + ') — siswa agama lain punya mapel agama sendiri.' : '') +
+        '</div></div>' +
         '<button class="btn-small btn-small--primary" id="btnSimpanNilai">Simpan Semua Nilai</button></div>' +
 
         bannerMigrasi +
@@ -1803,7 +1868,7 @@
         '<div id="importSummaryTujuan"></div>' +
         '<form class="add-form" id="formTujuan">' +
         '<div class="field"><label>Kode</label><input type="text" id="tpKode" placeholder="TP.1"></div>' +
-        '<div class="field" style="flex:2;min-width:260px;"><label>Deskripsi</label><input type="text" id="tpDeskripsi" placeholder="Uraian tujuan pembelajaran" maxlength="300" required></div>' +
+        '<div class="field" style="flex:2;min-width:260px;"><label>Deskripsi</label><input type="text" id="tpDeskripsi" placeholder="Uraian tujuan pembelajaran" maxlength="105" style="text-transform:lowercase;" required></div>' +
         '<div class="field" style="max-width:100px;"><label>Urutan</label><input type="number" id="tpUrutan" min="0" step="1" placeholder="0"></div>' +
         '<div class="field" style="max-width:150px;"><label>Semester</label><select id="tpSemester">' + opsiSemesterHtml(1) + '</select></div>' +
         '<div class="field" style="max-width:140px;"><label>Status</label><select id="tpStatus">' + opsiStatusHtml(true) + '</select></div>' +
@@ -1811,9 +1876,13 @@
         '</form>' +
         '<div class="table-wrap"><table class="data-table"><thead><tr><th>Semester</th><th>Urutan</th><th>Kode</th><th>Deskripsi</th><th>Status</th><th></th></tr></thead><tbody id="tpBody"></tbody></table></div>';
 
+      document.getElementById('tpDeskripsi').addEventListener('input', function (e) {
+        e.target.value = e.target.value.toLowerCase();
+      });
+
       document.getElementById('formTujuan').addEventListener('submit', async function (e) {
         e.preventDefault();
-        var deskripsi = document.getElementById('tpDeskripsi').value.trim();
+        var deskripsi = document.getElementById('tpDeskripsi').value.trim().toLowerCase().slice(0, 105);
         if (!deskripsi) return;
         var res = await supabaseClient.from('tujuan_pembelajaran').insert({
           guru_id: user.id,
@@ -1892,7 +1961,7 @@
           '<div class="field"><label>Urutan</label><input type="number" id="f_tpUrutan" min="0" step="1" value="' + existing.urutan + '"></div>' +
           '<div class="field"><label>Semester</label><select id="f_tpSemester">' + opsiSemesterHtml(existing.semester) + '</select></div>' +
           '<div class="field"><label>Status</label><select id="f_tpStatus">' + opsiStatusHtml(existing.is_aktif) + '</select></div>' +
-          '<div class="field" style="grid-column:1 / -1;"><label>Deskripsi</label><input type="text" id="f_tpDeskripsi" value="' + escapeHtml(existing.deskripsi) + '" maxlength="300" required></div>' +
+          '<div class="field" style="grid-column:1 / -1;"><label>Deskripsi</label><input type="text" id="f_tpDeskripsi" value="' + escapeHtml(existing.deskripsi) + '" maxlength="105" style="text-transform:lowercase;" required></div>' +
           '</div>' +
           '<div class="modal-box__actions">' +
           '<button type="button" class="btn-small" id="modalCancelBtn">Batal</button>' +
@@ -1907,9 +1976,13 @@
         document.getElementById('modalCancelBtn').addEventListener('click', tutup);
         overlay.addEventListener('click', function (e) { if (e.target === overlay) tutup(); });
 
+        document.getElementById('f_tpDeskripsi').addEventListener('input', function (e) {
+          e.target.value = e.target.value.toLowerCase();
+        });
+
         document.getElementById('formModalTujuan').addEventListener('submit', async function (e) {
           e.preventDefault();
-          var deskripsi = document.getElementById('f_tpDeskripsi').value.trim();
+          var deskripsi = document.getElementById('f_tpDeskripsi').value.trim().toLowerCase().slice(0, 105);
           if (!deskripsi) return;
           var payload = {
             kode: document.getElementById('f_tpKode').value.trim() || null,
@@ -1979,7 +2052,7 @@
           for (var i = 0; i < rows.length; i++) {
             var row = rows[i];
             var kode = String(row['Kode'] || '').trim();
-            var deskripsi = String(row['Deskripsi'] || '').trim();
+            var deskripsi = String(row['Deskripsi'] || '').trim().toLowerCase().slice(0, 105);
             var urutanRaw = row['Urutan'];
             var urutan = parseInt(urutanRaw, 10);
             if (isNaN(urutan)) urutan = 0;
@@ -2043,13 +2116,13 @@
 
       var penugasanRes = await supabaseClient
         .from('penugasan_guru')
-        .select('mapel:mapel_id(id, nama)')
+        .select('mapel:mapel_id(id, nama, agama_spesifik)')
         .eq('kelas_id', wk.kelas.id)
         .eq('tahun_ajaran_id', tahunAktif.id);
       var mapelMap = {};
-      (penugasanRes.data || []).forEach(function (r) { if (r.mapel) mapelMap[r.mapel.id] = r.mapel.nama; });
+      (penugasanRes.data || []).forEach(function (r) { if (r.mapel) mapelMap[r.mapel.id] = r.mapel; });
       var mapelList = Object.keys(mapelMap)
-        .map(function (id) { return { id: id, nama: mapelMap[id] }; })
+        .map(function (id) { return mapelMap[id]; })
         .sort(function (a, b) { return a.nama.localeCompare(b.nama); });
 
       if (!mapelList.length) {
@@ -2069,15 +2142,23 @@
         nilaiMap[r.siswa_id][r.mapel_id] = r;
       });
 
-      var adaMapelAgama = mapelList.some(function (m) { return isPendidikanAgama(m.nama); });
+      // Gaya lama: satu mapel PAI generik dipakai bareng semua siswa
+      // lintas agama, namanya "diganti" saat dicetak (lihat namaMapelUntukSiswa).
+      // Gaya baru: mapel sudah eksplisit per agama lewat agama_spesifik —
+      // kolomnya cuma relevan untuk siswa yang agamanya cocok, siswa lain
+      // ditampilkan strip (–) tanpa label agama.
+      var adaMapelAgamaGenerik = mapelList.some(function (m) { return isPendidikanAgama(m.nama) && !m.agama_spesifik; });
       var headerMapel = mapelList.map(function (m) {
-        return '<th>' + escapeHtml(m.nama) + (isPendidikanAgama(m.nama) ? ' *' : '') + '</th>';
+        return '<th>' + escapeHtml(m.nama) + (isPendidikanAgama(m.nama) && !m.agama_spesifik ? ' *' : '') + '</th>';
       }).join('');
       var rowsHtml = siswaList.map(function (s, i) {
         var cells = mapelList.map(function (m) {
+          if (m.agama_spesifik && s.agama !== m.agama_spesifik) {
+            return '<td style="text-align:center;color:var(--ink-soft);">–</td>';
+          }
           var n = (nilaiMap[s.id] && nilaiMap[s.id][m.id]) || {};
           var nilaiTampil = (n.nilai === undefined || n.nilai === null) ? '—' : n.nilai;
-          var labelAgama = isPendidikanAgama(m.nama)
+          var labelAgama = (isPendidikanAgama(m.nama) && !m.agama_spesifik)
             ? '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:2px;">' + escapeHtml(s.agama || 'agama belum diisi') + '</div>'
             : '';
           return '<td style="text-align:center;">' + labelAgama + nilaiTampil + '</td>';
@@ -2090,7 +2171,7 @@
         '<div class="panel-head__desc">Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + ' — per mata pelajaran.</div></div></div>' +
         '<div class="table-wrap"><table class="data-table"><thead><tr><th>No</th><th>Nama</th>' + headerMapel + '</tr></thead>' +
         '<tbody>' + rowsHtml + '</tbody></table></div>' +
-        (adaMapelAgama ? '<div class="panel-note">* Nama mapel otomatis menyesuaikan agama tiap siswa saat dicetak di rapor (contoh: siswa Buddha → "Pendidikan Agama Buddha dan Budi Pekerti").</div>' : '');
+        (adaMapelAgamaGenerik ? '<div class="panel-note">* Nama mapel otomatis menyesuaikan agama tiap siswa saat dicetak di rapor (contoh: siswa Buddha → "Pendidikan Agama Buddha dan Budi Pekerti").</div>' : '');
     }
 
     // ================= WALI KELAS: Presensi =================
@@ -2604,6 +2685,13 @@
       return daftar.slice(0, -1).join(', ') + ', dan ' + daftar[daftar.length - 1];
     }
 
+    // Ambil satu kalimat secara acak dari daftar variasi, supaya catatan
+    // antar siswa (dan tiap kali "Susun Otomatis" diklik ulang) tidak
+    // terasa seperti disalin-tempel dari templat yang sama.
+    function pilihAcak(daftarKalimat) {
+      return daftarKalimat[Math.floor(Math.random() * daftarKalimat.length)];
+    }
+
     async function renderCatatanWaliKelas(wk) {
       content.innerHTML = renderPlaceholder('Memuat...', 'Menyiapkan Catatan Wali Kelas ' + wk.kelas.nama + '.');
 
@@ -2716,27 +2804,68 @@
 
         if (r.adaNilai && o.nilai) {
           if (r.rata >= 90) {
-            kalimat.push('Selamat! Ananda ' + panggil + ' meraih hasil belajar yang sangat memuaskan dengan rata-rata nilai ' + r.rata + ' dari ' + r.jumlahMapel + ' mata pelajaran.');
+            kalimat.push(pilihAcak([
+              'Selamat! Ananda ' + panggil + ' meraih hasil belajar yang sangat memuaskan dengan rata-rata nilai ' + r.rata + ' dari ' + r.jumlahMapel + ' mata pelajaran.',
+              'Prestasi luar biasa! Ananda ' + panggil + ' berhasil mencatatkan rata-rata nilai ' + r.rata + ' dari ' + r.jumlahMapel + ' mata pelajaran, sebuah hasil yang sangat membanggakan.',
+              'Ananda ' + panggil + ' tampil istimewa semester ini dengan rata-rata nilai ' + r.rata + ' dari ' + r.jumlahMapel + ' mata pelajaran — pencapaian yang patut diapresiasi.',
+              'Sungguh membanggakan, Ananda ' + panggil + ' menutup semester ini dengan rata-rata nilai ' + r.rata + ' dari ' + r.jumlahMapel + ' mata pelajaran, jauh di atas harapan.',
+              'Semester ini menjadi bukti kerja keras Ananda ' + panggil + ', dengan rata-rata nilai ' + r.rata + ' dari ' + r.jumlahMapel + ' mata pelajaran yang sangat memuaskan.'
+            ]));
           } else if (r.rata >= 80) {
-            kalimat.push('Selamat, Ananda ' + panggil + ' menunjukkan hasil belajar yang baik dengan rata-rata nilai ' + r.rata + ' dari ' + r.jumlahMapel + ' mata pelajaran.');
+            kalimat.push(pilihAcak([
+              'Selamat, Ananda ' + panggil + ' menunjukkan hasil belajar yang baik dengan rata-rata nilai ' + r.rata + ' dari ' + r.jumlahMapel + ' mata pelajaran.',
+              'Ananda ' + panggil + ' meraih hasil belajar yang baik semester ini, dengan rata-rata nilai ' + r.rata + ' dari ' + r.jumlahMapel + ' mata pelajaran.',
+              'Kerja keras Ananda ' + panggil + ' membuahkan hasil yang baik, tercermin dari rata-rata nilai ' + r.rata + ' dari ' + r.jumlahMapel + ' mata pelajaran.',
+              'Ananda ' + panggil + ' menutup semester ini dengan hasil yang menggembirakan, rata-rata nilai ' + r.rata + ' dari ' + r.jumlahMapel + ' mata pelajaran.',
+              'Hasil belajar Ananda ' + panggil + ' tergolong baik semester ini, dengan rata-rata nilai ' + r.rata + ' dari ' + r.jumlahMapel + ' mata pelajaran.'
+            ]));
           } else if (r.rata >= r.rataKkm) {
-            kalimat.push('Ananda ' + panggil + ' telah mencapai ketuntasan belajar dengan rata-rata nilai ' + r.rata + ' dari ' + r.jumlahMapel + ' mata pelajaran.');
+            kalimat.push(pilihAcak([
+              'Ananda ' + panggil + ' telah mencapai ketuntasan belajar dengan rata-rata nilai ' + r.rata + ' dari ' + r.jumlahMapel + ' mata pelajaran.',
+              'Secara umum, Ananda ' + panggil + ' sudah tuntas belajar dengan rata-rata nilai ' + r.rata + ' dari ' + r.jumlahMapel + ' mata pelajaran.',
+              'Ananda ' + panggil + ' berhasil memenuhi standar ketuntasan, dengan rata-rata nilai ' + r.rata + ' dari ' + r.jumlahMapel + ' mata pelajaran.',
+              'Hasil belajar Ananda ' + panggil + ' semester ini sudah mencapai batas tuntas, rata-rata nilai ' + r.rata + ' dari ' + r.jumlahMapel + ' mata pelajaran.',
+              'Ananda ' + panggil + ' menyelesaikan semester ini dengan ketuntasan belajar tercapai, rata-rata nilai ' + r.rata + ' dari ' + r.jumlahMapel + ' mata pelajaran.'
+            ]));
           } else {
-            kalimat.push('Rata-rata nilai Ananda ' + panggil + ' pada semester ini adalah ' + r.rata + ' dari ' + r.jumlahMapel + ' mata pelajaran dan masih perlu ditingkatkan.');
+            kalimat.push(pilihAcak([
+              'Rata-rata nilai Ananda ' + panggil + ' pada semester ini adalah ' + r.rata + ' dari ' + r.jumlahMapel + ' mata pelajaran dan masih perlu ditingkatkan.',
+              'Ananda ' + panggil + ' mencatat rata-rata nilai ' + r.rata + ' dari ' + r.jumlahMapel + ' mata pelajaran semester ini, sehingga upaya belajar perlu lebih ditingkatkan.',
+              'Hasil belajar Ananda ' + panggil + ' semester ini, dengan rata-rata nilai ' + r.rata + ' dari ' + r.jumlahMapel + ' mata pelajaran, belum mencapai hasil optimal.',
+              'Rata-rata nilai ' + r.rata + ' dari ' + r.jumlahMapel + ' mata pelajaran yang diperoleh Ananda ' + panggil + ' menunjukkan perlunya peningkatan usaha belajar.',
+              'Ananda ' + panggil + ' masih perlu meningkatkan usaha belajar, terlihat dari rata-rata nilai ' + r.rata + ' dari ' + r.jumlahMapel + ' mata pelajaran semester ini.'
+            ]));
           }
 
           if (r.terbaik.length) {
-            kalimat.push('Prestasi terbaik diraih pada mata pelajaran ' +
-              daftarNaratif(r.terbaik.map(function (x) { return x.mapel; })) +
-              ' dengan nilai ' + r.terbaik[0].nilai + '.');
+            var namaTerbaik = daftarNaratif(r.terbaik.map(function (x) { return x.mapel; }));
+            var nilaiTerbaik = r.terbaik[0].nilai;
+            kalimat.push(pilihAcak([
+              'Prestasi terbaik diraih pada mata pelajaran ' + namaTerbaik + ' dengan nilai ' + nilaiTerbaik + '.',
+              'Ananda ' + panggil + ' tampil menonjol di mata pelajaran ' + namaTerbaik + ' dengan nilai ' + nilaiTerbaik + '.',
+              'Capaian tertinggi semester ini diraih pada mata pelajaran ' + namaTerbaik + ', dengan nilai ' + nilaiTerbaik + '.',
+              'Kemampuan terbaik Ananda ' + panggil + ' terlihat pada mata pelajaran ' + namaTerbaik + ', dengan nilai ' + nilaiTerbaik + '.',
+              'Mata pelajaran ' + namaTerbaik + ' menjadi bukti prestasi terbaik Ananda ' + panggil + ' semester ini, dengan nilai ' + nilaiTerbaik + '.'
+            ]));
           }
 
           if (r.belumTuntas.length) {
-            kalimat.push('Masih ada ' + r.belumTuntas.length + ' mata pelajaran yang berada di bawah KKM, yaitu ' +
-              daftarNaratif(r.belumTuntas.slice(0, 4).map(function (x) { return x.mapel; })) +
-              ', sehingga perlu perhatian dan pendampingan lebih.');
+            var namaBelumTuntas = daftarNaratif(r.belumTuntas.slice(0, 4).map(function (x) { return x.mapel; }));
+            kalimat.push(pilihAcak([
+              'Masih ada ' + r.belumTuntas.length + ' mata pelajaran yang berada di bawah KKM, yaitu ' + namaBelumTuntas + ', sehingga perlu perhatian dan pendampingan lebih.',
+              'Terdapat ' + r.belumTuntas.length + ' mata pelajaran yang belum mencapai KKM, yaitu ' + namaBelumTuntas + ', dan memerlukan bimbingan lebih lanjut.',
+              'Ada ' + r.belumTuntas.length + ' mata pelajaran yang hasilnya masih di bawah KKM, yaitu ' + namaBelumTuntas + ', perlu pendampingan ekstra dari orang tua/wali.',
+              'Sebanyak ' + r.belumTuntas.length + ' mata pelajaran, yaitu ' + namaBelumTuntas + ', masih berada di bawah KKM dan membutuhkan perhatian khusus.',
+              'Perlu perhatian pada ' + r.belumTuntas.length + ' mata pelajaran yang belum tuntas, yaitu ' + namaBelumTuntas + ', agar hasilnya bisa ditingkatkan.'
+            ]));
           } else {
-            kalimat.push('Seluruh mata pelajaran sudah tuntas di atas KKM.');
+            kalimat.push(pilihAcak([
+              'Seluruh mata pelajaran sudah tuntas di atas KKM.',
+              'Semua mata pelajaran telah mencapai ketuntasan di atas KKM.',
+              'Tidak ada mata pelajaran yang berada di bawah KKM — seluruhnya sudah tuntas.',
+              'Ketuntasan belajar tercapai pada seluruh mata pelajaran.',
+              'Seluruh mata pelajaran berhasil diselesaikan dengan hasil di atas KKM.'
+            ]));
           }
         }
 
@@ -2759,16 +2888,41 @@
           var pr = r.presensi;
           var totalTidakHadir = pr.sakit + pr.izin + pr.alpha;
           if (totalTidakHadir === 0) {
-            kalimat.push('Kehadiran Ananda ' + panggil + ' sangat baik — hadir penuh tanpa sakit, izin, maupun tanpa keterangan.');
+            kalimat.push(pilihAcak([
+              'Kehadiran Ananda ' + panggil + ' sangat baik — hadir penuh tanpa sakit, izin, maupun tanpa keterangan.',
+              'Ananda ' + panggil + ' menunjukkan kedisiplinan tinggi dengan kehadiran penuh sepanjang semester, tanpa sakit, izin, atau tanpa keterangan.',
+              'Tingkat kehadiran Ananda ' + panggil + ' sangat baik, hadir penuh tanpa satu pun absen.',
+              'Kedisiplinan kehadiran Ananda ' + panggil + ' patut diapresiasi — tidak ada catatan sakit, izin, maupun tanpa keterangan semester ini.',
+              'Ananda ' + panggil + ' konsisten hadir setiap hari sekolah tanpa sakit, izin, maupun tanpa keterangan.'
+            ]));
           } else if (pr.alpha === 0) {
             var rincian = [];
             if (pr.sakit) rincian.push('sakit ' + pr.sakit + ' hari');
             if (pr.izin) rincian.push('izin ' + pr.izin + ' hari');
-            kalimat.push('Kehadiran tetap terjaga baik, tercatat ' + daftarNaratif(rincian) + ' dan tidak ada ketidakhadiran tanpa keterangan.');
+            var rincianTeks = daftarNaratif(rincian);
+            kalimat.push(pilihAcak([
+              'Kehadiran tetap terjaga baik, tercatat ' + rincianTeks + ' dan tidak ada ketidakhadiran tanpa keterangan.',
+              'Ananda ' + panggil + ' menjaga kedisiplinan kehadiran dengan baik, tercatat ' + rincianTeks + ', tanpa tanpa keterangan.',
+              'Meski tercatat ' + rincianTeks + ', kedisiplinan kehadiran Ananda ' + panggil + ' tetap terjaga tanpa ketidakhadiran tanpa keterangan.',
+              'Kehadiran Ananda ' + panggil + ' masih baik, dengan catatan ' + rincianTeks + ' dan nihil tanpa keterangan.',
+              'Tercatat ' + rincianTeks + ' pada Ananda ' + panggil + ', namun tidak ada ketidakhadiran tanpa keterangan.'
+            ]));
           } else if (pr.alpha <= 3) {
-            kalimat.push('Tercatat ' + pr.alpha + ' hari tanpa keterangan, sehingga kedisiplinan kehadiran masih perlu ditingkatkan.');
+            kalimat.push(pilihAcak([
+              'Tercatat ' + pr.alpha + ' hari tanpa keterangan, sehingga kedisiplinan kehadiran masih perlu ditingkatkan.',
+              'Ananda ' + panggil + ' tercatat ' + pr.alpha + ' hari tidak hadir tanpa keterangan, perlu ditingkatkan kedisiplinannya.',
+              'Ada ' + pr.alpha + ' hari tanpa keterangan yang tercatat, sehingga kehadiran Ananda ' + panggil + ' perlu lebih diperhatikan.',
+              'Kedisiplinan kehadiran Ananda ' + panggil + ' perlu ditingkatkan, dengan ' + pr.alpha + ' hari tercatat tanpa keterangan.',
+              'Tercatat ' + pr.alpha + ' hari absen tanpa keterangan, mohon menjadi perhatian bersama untuk semester berikutnya.'
+            ]));
           } else {
-            kalimat.push('Tercatat ' + pr.alpha + ' hari tanpa keterangan. Kedisiplinan kehadiran perlu menjadi perhatian serius bersama orang tua/wali.');
+            kalimat.push(pilihAcak([
+              'Tercatat ' + pr.alpha + ' hari tanpa keterangan. Kedisiplinan kehadiran perlu menjadi perhatian serius bersama orang tua/wali.',
+              'Ananda ' + panggil + ' tercatat ' + pr.alpha + ' hari tidak hadir tanpa keterangan, sehingga memerlukan perhatian serius dari orang tua/wali.',
+              'Ketidakhadiran tanpa keterangan sebanyak ' + pr.alpha + ' hari cukup tinggi dan perlu ditangani serius bersama orang tua/wali.',
+              'Dengan ' + pr.alpha + ' hari tanpa keterangan, kedisiplinan kehadiran Ananda ' + panggil + ' membutuhkan perhatian dan kerja sama orang tua/wali.',
+              'Tingkat ketidakhadiran tanpa keterangan Ananda ' + panggil + ' (' + pr.alpha + ' hari) cukup mengkhawatirkan dan perlu segera ditindaklanjuti bersama orang tua/wali.'
+            ]));
           }
         }
 
@@ -2776,13 +2930,37 @@
           var hasilBaik = r.adaNilai && r.rata >= 80 && r.belumTuntas.length === 0;
           var hasilCukup = r.adaNilai && r.rata >= r.rataKkm;
           if (hasilBaik && r.presensi.alpha === 0) {
-            kalimat.push('Pertahankan prestasi dan kedisiplinan yang membanggakan ini, dan teruslah menjadi teladan bagi teman-teman. Semangat terus!');
+            kalimat.push(pilihAcak([
+              'Pertahankan prestasi dan kedisiplinan yang membanggakan ini, dan teruslah menjadi teladan bagi teman-teman. Semangat terus!',
+              'Prestasi dan kedisiplinan Ananda ' + panggil + ' sungguh membanggakan — pertahankan dan jadilah inspirasi bagi teman-teman. Semangat!',
+              'Teruslah pertahankan semangat belajar dan kedisiplinan ini, Ananda ' + panggil + ' sudah menjadi contoh yang baik. Sukses selalu!',
+              'Kombinasi prestasi dan kedisiplinan Ananda ' + panggil + ' luar biasa — pertahankan terus dan tetap jadi panutan. Semangat!',
+              'Semoga prestasi dan kedisiplinan yang sudah dibangun ini terus dipertahankan pada semester berikutnya. Tetap semangat, Ananda ' + panggil + '!'
+            ]));
           } else if (hasilBaik) {
-            kalimat.push('Pertahankan prestasi yang membanggakan ini dan lengkapi dengan kehadiran yang lebih disiplin. Semangat terus!');
+            kalimat.push(pilihAcak([
+              'Pertahankan prestasi yang membanggakan ini dan lengkapi dengan kehadiran yang lebih disiplin. Semangat terus!',
+              'Prestasi belajar Ananda ' + panggil + ' sudah sangat baik, tinggal kedisiplinan kehadiran yang perlu ditingkatkan. Semangat!',
+              'Teruslah pertahankan hasil belajar yang baik ini, sambil membiasakan kehadiran yang lebih tertib. Semangat, Ananda ' + panggil + '!',
+              'Hasil belajar Ananda ' + panggil + ' sudah membanggakan, semoga diikuti dengan kedisiplinan kehadiran yang lebih baik. Tetap semangat!',
+              'Prestasi ini patut dipertahankan, dengan catatan kehadiran yang perlu lebih ditertibkan lagi. Semangat terus, Ananda ' + panggil + '!'
+            ]));
           } else if (hasilCukup) {
-            kalimat.push('Teruslah belajar dengan tekun — sedikit lagi untuk meraih hasil yang lebih gemilang pada semester berikutnya. Semangat!');
+            kalimat.push(pilihAcak([
+              'Teruslah belajar dengan tekun — sedikit lagi untuk meraih hasil yang lebih gemilang pada semester berikutnya. Semangat!',
+              'Ananda ' + panggil + ' sudah di jalur yang tepat, tinggal sedikit usaha lagi untuk hasil yang lebih baik. Semangat!',
+              'Hasil yang tuntas ini adalah awal yang baik — teruslah tingkatkan usaha belajar agar semakin gemilang. Semangat!',
+              'Pertahankan usaha belajar Ananda ' + panggil + ' dan tingkatkan sedikit lagi untuk hasil yang lebih optimal. Tetap semangat!',
+              'Ananda ' + panggil + ' sudah menunjukkan usaha yang baik, semoga semester depan hasilnya semakin gemilang. Semangat!'
+            ]));
           } else {
-            kalimat.push('Jangan berkecil hati. Dengan belajar lebih tekun, rajin bertanya, dan tidak menyerah, Ananda ' + panggil + ' pasti bisa meraih hasil yang lebih baik. Tetap semangat!');
+            kalimat.push(pilihAcak([
+              'Jangan berkecil hati. Dengan belajar lebih tekun, rajin bertanya, dan tidak menyerah, Ananda ' + panggil + ' pasti bisa meraih hasil yang lebih baik. Tetap semangat!',
+              'Ananda ' + panggil + ' jangan menyerah — dengan usaha yang lebih keras dan dukungan dari sekitar, hasil yang lebih baik pasti bisa diraih. Semangat!',
+              'Setiap usaha pasti membawa hasil. Teruslah belajar, rajin bertanya kepada guru, dan pantang menyerah, Ananda ' + panggil + '. Tetap semangat!',
+              'Hasil semester ini bukan akhir dari segalanya. Dengan tekad dan usaha lebih, Ananda ' + panggil + ' pasti bisa berkembang lebih baik. Semangat!',
+              'Percayalah, dengan kerja keras dan semangat pantang menyerah, Ananda ' + panggil + ' bisa meraih hasil yang lebih memuaskan ke depannya. Tetap semangat!'
+            ]));
           }
         }
 
@@ -2957,7 +3135,7 @@
       // (urutan default yang diatur admin lewat menu Mata Pelajaran).
       var mapelSemuaRes = await supabaseClient
         .from('mata_pelajaran')
-        .select('id, nama, jenis_mapel, urutan_rapor, berlaku_untuk');
+        .select('id, nama, jenis_mapel, urutan_rapor, berlaku_untuk, agama_spesifik');
       var mapelKelasRes = await supabaseClient
         .from('mapel_kelas')
         .select('mapel_id')
@@ -3209,7 +3387,15 @@
         (nilaiRes.data || []).forEach(function (r) { nilaiMap[r.mapel_id] = r; });
 
         function barisNilai(list) {
-          return list.map(function (m, i) {
+          // Mapel agama yang sudah ditandai agama_spesifik HANYA tampil di
+          // rapor siswa yang agamanya cocok — mapel agama lain (agama_
+          // spesifik siswa lain) disembunyikan total dari rapor siswa ini,
+          // bukan cuma diganti namanya. Nomor urut (i+1) dihitung ulang
+          // sesudah baris yang tidak relevan dibuang, supaya tetap rapi 1..n.
+          var listRelevan = list.filter(function (m) {
+            return !m.agama_spesifik || m.agama_spesifik === siswa.agama;
+          });
+          return listRelevan.map(function (m, i) {
             var n = nilaiMap[m.id] || {};
             var namaTampil = namaMapelUntukSiswa(m.nama, siswa.agama);
             var nilaiBulat = (n.nilai === undefined || n.nilai === null) ? '0' : Math.round(Number(n.nilai));

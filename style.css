@@ -1615,6 +1615,22 @@ a { color: inherit; text-decoration: none; }
     transform: translate(-50%, -50%);
   }
 
+  /* Cetak Terpilih/Cetak Semua menaruh beberapa kartu (.rapor-cetak)
+     berurutan di #cetakRaporArea, dan tiap kartu punya watermark
+     sendiri lewat ::before di atas. Karena watermark itu "fixed" saat
+     cetak (supaya berulang di tiap halaman kertas), KALAU dibiarkan
+     apa adanya, watermark SETIAP kartu ikut berulang di SEMUA halaman
+     dokumen (bukan cuma halaman kartu itu sendiri) — jadi kalau ada N
+     siswa, tiap halaman malah menumpuk N watermark yang saling
+     bertindihan. Tumpukan logo 12% opacity yang berulang-ulang itu
+     mengunci jadi terlihat pekat/nyaris solid alih-alih transparan.
+     Perbaikannya: matikan watermark pada semua kartu KECUALI kartu
+     pertama, supaya cuma ada SATU watermark yang berulang di seluruh
+     halaman dokumen, seperti seharusnya. */
+  .rapor-cetak ~ .rapor-cetak::before {
+    display: none !important;
+  }
+
   .rapor-cetak__nilai,
   .rapor-cetak__ekskul {
     page-break-inside: auto;
