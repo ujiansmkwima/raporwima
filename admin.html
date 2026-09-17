@@ -378,6 +378,7 @@
       '<div class="field"><label>Nama Kepala Sekolah</label><input type="text" id="psKepalaSekolah" value="' + escapeHtml(p.kepala_sekolah || '') + '" placeholder="Agung Pambudi, S.E., S. Kom., M.M."></div>' +
       '<div class="field"><label>NIP Kepala Sekolah (opsional)</label><input type="text" id="psNipKepalaSekolah" value="' + escapeHtml(p.nip_kepala_sekolah || '') + '"></div>' +
       '<div class="field"><label>Kota (untuk baris tanda tangan, mis. "Tambak, ....... 2026")</label><input type="text" id="psKotaTtd" value="' + escapeHtml(p.kota_ttd || 'Tambak') + '" placeholder="Tambak"></div>' +
+      '<div class="field"><label>Tanggal Rapor (untuk baris tanda tangan, mis. "Tambak, 12 Desember 2026")</label><input type="date" id="psTanggalRapor" value="' + escapeHtml(p.tanggal_rapor || '') + '"></div>' +
       '<button type="submit" class="btn-small btn-small--primary" style="align-self:flex-start;">Simpan</button>' +
       '</form>' +
       '<div id="profilSekolahMsg" style="margin-top:10px;"></div>';
@@ -394,6 +395,7 @@
         kepala_sekolah: document.getElementById('psKepalaSekolah').value.trim() || null,
         nip_kepala_sekolah: document.getElementById('psNipKepalaSekolah').value.trim() || null,
         kota_ttd: document.getElementById('psKotaTtd').value.trim() || 'Tambak',
+        tanggal_rapor: document.getElementById('psTanggalRapor').value || null,
         updated_at: new Date().toISOString()
       }, { onConflict: 'singleton' });
 

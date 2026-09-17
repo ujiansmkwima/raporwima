@@ -1129,8 +1129,21 @@ a { color: inherit; text-decoration: none; }
 .rapor-cetak__nilai,
 .rapor-cetak__ekskul {
   width: 100%;
-  border-collapse: collapse;
+  /* border-collapse: separate (bukan collapse) supaya garis bawah tiap
+     baris tidak hilang saat dicetak/di-screenshot html2canvas — dengan
+     collapse, border yang "dibagi" antar sel kadang tidak ikut ter-render
+     oleh browser print engine maupun html2canvas (dipakai jalur Unduh
+     PDF), terutama pada baris terakhir sebelum jeda halaman. */
+  border-collapse: separate;
+  border-spacing: 0;
   margin-bottom: 14px;
+  /* Garis terluar tabel (kanan & bawah) ditaruh di sini; garis atas &
+     kiri ditaruh per sel (lihat th/td di bawah). Dengan begitu setiap
+     garis pada tabel — luar maupun antar sel — hanya tergambar SATU
+     kali dengan ketebalan 1px yang sama, tidak ada garis yang menumpuk
+     jadi terlihat lebih tebal (lihat catatan th/td di bawah). */
+  border-right: 1px solid #000;
+  border-bottom: 1px solid #000;
 }
 
 .rapor-cetak__nilai th,
@@ -1142,13 +1155,20 @@ a { color: inherit; text-decoration: none; }
   text-transform: none;
   letter-spacing: normal;
   font-size: 13px;
-  border: 1px solid #000;
+  /* Hanya garis atas & kiri per sel (bukan border:1px di keempat sisi)
+     supaya garis yang dibagi antar sel bertetangga tidak digambar dua
+     kali (yang membuatnya tampak dua kali lebih tebal daripada garis
+     terluar tabel). Garis kanan/bawah tabel disediakan oleh wrapper
+     tabel di atas, dan garis kiri paling atas oleh sel pertama. */
+  border-top: 1px solid #000;
+  border-left: 1px solid #000;
   padding: 6px 8px;
 }
 
 .rapor-cetak__nilai td,
 .rapor-cetak__ekskul td {
-  border: 1px solid #000;
+  border-top: 1px solid #000;
+  border-left: 1px solid #000;
   padding: 7px 8px;
   vertical-align: top;
 }
@@ -1159,6 +1179,18 @@ a { color: inherit; text-decoration: none; }
 
 .rc-th-nilai {
   width: 90px;
+}
+
+/* ---- Lebar kolom tabel Ekstrakurikuler: kolom Keterangan dibuat lebih
+   lebar daripada kolom nama Ekstrakurikuler, karena isinya (predikat +
+   deskripsi pembina) biasanya jauh lebih panjang daripada nama
+   kegiatannya. Kolom No. sudah tetap lebar lewat .rc-th-no. ---- */
+.rc-th-ekskul-nama {
+  width: 28%;
+}
+
+.rc-th-ekskul-ket {
+  width: auto;
 }
 
 .rapor-cetak__section-row td {
@@ -1230,14 +1262,17 @@ a { color: inherit; text-decoration: none; }
 
 .rapor-cetak__kehadiran {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   border: 1px solid #000;
 }
 
 .rapor-cetak__kehadiran td {
   padding: 4px 8px;
   font-size: 13px;
-  border: 1px solid #000;
+  /* Tanpa garis tengah — hanya garis luar kotak Ketidakhadiran (di atas)
+     yang tampil, tidak ada garis antar baris/kolom di dalamnya. */
+  border: none;
 }
 
 .rapor-cetak__kehadiran .rc-label {
@@ -1322,7 +1357,8 @@ a { color: inherit; text-decoration: none; }
   }
 
   .rapor-cetak,
-  .rapor-cetak * {
+  .rapor-cetak *,
+  .rapor-cetak::before {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
     color-adjust: exact !important;
@@ -1331,6 +1367,19 @@ a { color: inherit; text-decoration: none; }
   .rapor-cetak {
     border: none;
     padding: 0;
+  }
+
+  /* Watermark logo: di layar ia mengambang di tengah kartu (yang tingginya
+     mengikuti isi rapor), tapi saat dicetak satu kartu bisa melebihi satu
+     halaman kertas. Supaya logo tetap di tengah tiap LEMBAR kertas dan
+     ikut muncul lagi di halaman lanjutannya (bukan cuma sekali di tengah
+     seluruh kartu), posisinya diubah jadi "fixed" khusus saat cetak —
+     elemen fixed otomatis diulang oleh browser di setiap halaman cetak. */
+  .rapor-cetak::before {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
   }
 
   .rapor-cetak__nilai,

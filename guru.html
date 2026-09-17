@@ -126,6 +126,24 @@
     return null;
   }
 
+  // ---------- Format tanggal "12 Desember 2026" untuk Tanggal Rapor ----------
+  // Dipakai di baris tanda tangan Cetak Rapor, mengambil dari kolom
+  // tanggal_rapor di profil_sekolah (diisi Admin). Kalau belum diisi,
+  // kembalikan string kosong supaya baris tanda tangan tetap kosong
+  // (bukan menampilkan teks aneh).
+  var NAMA_BULAN_ID = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+  function formatTanggalIndonesia(tanggalIso) {
+    if (!tanggalIso) return '';
+    var bagian = String(tanggalIso).split('-');
+    if (bagian.length !== 3) return '';
+    var tahun = parseInt(bagian[0], 10);
+    var bulan = parseInt(bagian[1], 10);
+    var tanggal = parseInt(bagian[2], 10);
+    if (!tahun || !bulan || !tanggal || bulan < 1 || bulan > 12) return '';
+    return tanggal + ' ' + NAMA_BULAN_ID[bulan - 1] + ' ' + tahun;
+  }
+
   // ---------- Fase (Kurikulum Merdeka) dari Tingkat kelas ----------
   // SMK: Tingkat 10 = Fase E, Tingkat 11-12 = Fase F. Dipakai di
   // kepala Cetak Rapor ("Fase : E"), sesuai format rapor resmi.
@@ -2415,8 +2433,53 @@
       var profilRes = await supabaseClient.from('profil_sekolah').select('*').maybeSingle();
       var profilSekolah = profilRes.data || {};
       var NAMA_SEKOLAH = profilSekolah.nama_sekolah || 'SMK Widya Mandala Tambak';
+      var ALAMAT_SEKOLAH = profilSekolah.alamat_sekolah || '';
       var NAMA_KEPALA_SEKOLAH = profilSekolah.kepala_sekolah || '—';
       var NAMA_KOTA_TTD = profilSekolah.kota_ttd || 'Tambak';
+      // Tanggal Rapor (mis. "12 Desember 2026") — diisi Admin lewat
+      // Profil Sekolah, dipakai di baris tanda tangan pengganti bagian
+      // titik-titik yang tadinya harus ditulis tangan.
+      var TANGGAL_RAPOR_CETAK = formatTanggalIndonesia(profilSekolah.tanggal_rapor);
+
+      // Semua Mata Pelajaran yang berlaku untuk kelas ini — sama seperti
+      // logika di Admin → "Mata Pelajaran Per Tingkat": mapel yang
+      // berlaku_untuk = 'semua' selalu ikut, mapel 'tertentu' cuma ikut
+      // kalau terhubung ke kelas ini lewat mapel_kelas. TIDAK lagi
+      // disaring dari penugasan_guru, supaya mapel tetap muncul di rapor
+      // walau belum ada guru yang ditugaskan mengajarnya di kelas ini.
+      // Urutan tampil memakai mapel_urutan_kelas (khusus kelas ini) kalau
+      // ada, kalau tidak jatuh balik ke mata_pelajaran.urutan_rapor
+      // (urutan default yang diatur admin lewat menu Mata Pelajaran).
+      var mapelSemuaRes = await supabaseClient
+        .from('mata_pelajaran')
+        .select('id, nama, jenis_mapel, urutan_rapor, berlaku_untuk');
+      var mapelKelasRes = await supabaseClient
+        .from('mapel_kelas')
+        .select('mapel_id')
+        .eq('kelas_id', wk.kelas.id);
+      var mapelUrutanKelasRes = await supabaseClient
+        .from('mapel_urutan_kelas')
+        .select('mapel_id, urutan_rapor')
+        .eq('kelas_id', wk.kelas.id);
+      var mapelKelasSet = {};
+      (mapelKelasRes.data || []).forEach(function (r) { mapelKelasSet[r.mapel_id] = true; });
+      var urutanKelasMap = {};
+      (mapelUrutanKelasRes.data || []).forEach(function (r) { urutanKelasMap[r.mapel_id] = r.urutan_rapor; });
+      function efektifUrutanRapor(m) {
+        if (urutanKelasMap[m.id] !== undefined && urutanKelasMap[m.id] !== null) return urutanKelasMap[m.id];
+        return (m.urutan_rapor === null || m.urutan_rapor === undefined) ? 9999 : m.urutan_rapor;
+      }
+      function urutkanMapel(a, b) {
+        var ua = efektifUrutanRapor(a);
+        var ub = efektifUrutanRapor(b);
+        if (ua !== ub) return ua - ub;
+        return a.nama.localeCompare(b.nama);
+      }
+      var mapelListKelasIni = (mapelSemuaRes.data || []).filter(function (m) {
+        return m.berlaku_untuk !== 'tertentu' || mapelKelasSet[m.id];
+      });
+      var mapelUmum = mapelListKelasIni.filter(function (m) { return m.jenis_mapel !== 'kejuruan'; }).sort(urutkanMapel);
+      var mapelKejuruan = mapelListKelasIni.filter(function (m) { return m.jenis_mapel === 'kejuruan'; }).sort(urutkanMapel);
 
       // ---- Tampilan 1: Daftar seluruh siswa kelas ini ----
       // Tiap baris punya tombol Preview (lihat di layar) dan Unduh
@@ -2607,25 +2670,17 @@
         var siswa = siswaRes.data || siswaRingkas;
 
         var fase = faseDariTingkat(wk.kelas.tingkat);
+        // Angka semester sebenarnya (1–6) berdasarkan Tingkat kelas +
+        // Semester tahun ajaran aktif — sama seperti penomoran yang
+        // dipakai di Tujuan Pembelajaran/Leger Nilai. Contoh: kelas XI
+        // (Tingkat 11) di semester Ganjil = Semester 3.
+        var semesterKeCetak = hitungSemesterKe(wk.kelas.tingkat, tahunAktif.semester);
 
-        // Mapel yang diajarkan di kelas ini (+ jenis: umum/kejuruan, urutan
-        // tampil), lalu nilai rapor & capaian kompetensi siswa ybs.
-        var penugasanRes = await supabaseClient
-          .from('penugasan_guru')
-          .select('mapel:mapel_id(id, nama, jenis_mapel, urutan_rapor)')
-          .eq('kelas_id', wk.kelas.id)
-          .eq('tahun_ajaran_id', tahunAktif.id);
-        var mapelMap = {};
-        (penugasanRes.data || []).forEach(function (r) { if (r.mapel) mapelMap[r.mapel.id] = r.mapel; });
-        var mapelList = Object.keys(mapelMap).map(function (id) { return mapelMap[id]; });
-        function urutkanMapel(a, b) {
-          var ua = (a.urutan_rapor === null || a.urutan_rapor === undefined) ? 9999 : a.urutan_rapor;
-          var ub = (b.urutan_rapor === null || b.urutan_rapor === undefined) ? 9999 : b.urutan_rapor;
-          if (ua !== ub) return ua - ub;
-          return a.nama.localeCompare(b.nama);
-        }
-        var mapelUmum = mapelList.filter(function (m) { return m.jenis_mapel !== 'kejuruan'; }).sort(urutkanMapel);
-        var mapelKejuruan = mapelList.filter(function (m) { return m.jenis_mapel === 'kejuruan'; }).sort(urutkanMapel);
+        // Mapel Umum/Kejuruan untuk kelas ini (mapelUmum, mapelKejuruan)
+        // sudah dihitung sekali di atas (di luar loop per-siswa) dari
+        // seluruh Mata Pelajaran yang berlaku untuk kelas ini — bukan
+        // dari penugasan guru — supaya semua mapel kelas ini tetap
+        // tampil di rapor sesuai urutan yang diatur admin.
 
         var nilaiRes = await supabaseClient
           .from('nilai')
@@ -2711,18 +2766,18 @@
           '<tr><td class="rc-label">NIS / NISN</td><td class="rc-colon">:</td><td class="rc-value">' + escapeHtml((siswa.nis || '—') + ' / ' + (siswa.nisn || '—')) + '</td>' +
           '<td class="rc-label rc-label--kanan">Fase</td><td class="rc-colon">:</td><td class="rc-value">' + escapeHtml(fase) + '</td></tr>' +
           '<tr><td class="rc-label">Sekolah</td><td class="rc-colon">:</td><td class="rc-value">' + escapeHtml(NAMA_SEKOLAH) + '</td>' +
-          '<td class="rc-label rc-label--kanan">Semester</td><td class="rc-colon">:</td><td class="rc-value">' + escapeHtml(tahunAktif.semester === 'Genap' ? '2 (Genap)' : '1 (Ganjil)') + '</td></tr>' +
-          '<tr><td class="rc-label">Alamat</td><td class="rc-colon">:</td><td class="rc-value">' + escapeHtml(siswa.alamat_siswa || '—') + '</td>' +
+          '<td class="rc-label rc-label--kanan">Semester</td><td class="rc-colon">:</td><td class="rc-value">' + escapeHtml((semesterKeCetak || '—') + ' (' + tahunAktif.semester + ')') + '</td></tr>' +
+          '<tr><td class="rc-label">Alamat</td><td class="rc-colon">:</td><td class="rc-value">' + escapeHtml(ALAMAT_SEKOLAH || '—') + '</td>' +
           '<td class="rc-label rc-label--kanan">Tahun Ajaran</td><td class="rc-colon">:</td><td class="rc-value">' + escapeHtml(tahunAktif.nama) + '</td></tr>' +
           '</tbody></table>' +
 
-          '<table class="rapor-cetak__nilai data-table"><thead><tr><th class="rc-th-no">NO</th><th>Mata Pelajaran</th><th class="rc-th-nilai">Nilai Akhir</th><th>Capaian Kompetensi</th></tr></thead>' +
+          '<table class="rapor-cetak__nilai"><thead><tr><th class="rc-th-no">NO</th><th>Mata Pelajaran</th><th class="rc-th-nilai">Nilai Akhir</th><th>Capaian Kompetensi</th></tr></thead>' +
           '<tbody>' + nilaiRowsHtml + '</tbody></table>' +
 
           '<div class="rapor-cetak__bar">Kokurikuler</div>' +
           '<div class="rapor-cetak__box">' + kokuHtml + '</div>' +
 
-          '<table class="rapor-cetak__ekskul data-table"><thead><tr><th class="rc-th-no">No.</th><th>Ekstrakurikuler</th><th>Keterangan</th></tr></thead>' +
+          '<table class="rapor-cetak__ekskul"><thead><tr><th class="rc-th-no">No.</th><th class="rc-th-ekskul-nama">Ekstrakurikuler</th><th class="rc-th-ekskul-ket">Keterangan</th></tr></thead>' +
           '<tbody>' + ekskulRowsHtml + '</tbody></table>' +
 
           '<div class="rapor-cetak__row2">' +
@@ -2748,7 +2803,7 @@
           '<div class="rapor-cetak__footer-cols">' +
           '<div class="rapor-cetak__footer-col"><div class="rapor-cetak__footer-col-spacer">&nbsp;</div><div>Orangtua/ Wali</div><div class="rapor-cetak__ttd-space"></div><div>…...........................................</div></div>' +
           '<div class="rapor-cetak__footer-col"><div class="rapor-cetak__footer-col-spacer">&nbsp;</div><div>Kepala Sekolah</div><div class="rapor-cetak__ttd-space"></div><div><strong>' + escapeHtml(NAMA_KEPALA_SEKOLAH) + '</strong></div></div>' +
-          '<div class="rapor-cetak__footer-col"><div class="rapor-cetak__footer-date">' + escapeHtml(NAMA_KOTA_TTD) + ', …........' + escapeHtml(tahunAkhir) + '</div><div>Wali Kelas</div><div class="rapor-cetak__ttd-space"></div><div><strong>' + escapeHtml(nama) + '</strong></div></div>' +
+          '<div class="rapor-cetak__footer-col"><div class="rapor-cetak__footer-date">' + escapeHtml(NAMA_KOTA_TTD) + ', ' + (TANGGAL_RAPOR_CETAK ? escapeHtml(TANGGAL_RAPOR_CETAK) : '…........' + escapeHtml(tahunAkhir)) + '</div><div>Wali Kelas</div><div class="rapor-cetak__ttd-space"></div><div><strong>' + escapeHtml(nama) + '</strong></div></div>' +
           '</div>' +
           '</div>' +
 
