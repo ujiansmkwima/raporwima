@@ -886,6 +886,28 @@ a { color: inherit; text-decoration: none; }
   box-shadow: 0 0 0 3px var(--primary-tint-strong);
 }
 
+/* Kolom nilai TP / PTS / PAS dibuat sempit supaya tabel Input Nilai
+   tetap muat walau jumlah TP-nya banyak. Header-nya diberi cursor
+   help karena deskripsi lengkap TP ada di atribut title. */
+.data-table th.col-tp,
+.data-table td.col-tp {
+  width: 78px;
+  text-align: center;
+  padding-left: 6px;
+  padding-right: 6px;
+}
+.data-table th.col-tp { cursor: help; white-space: nowrap; }
+.data-table td.col-tp input[type="number"] { width: 62px; text-align: center; }
+
+/* Kolom hasil hitungan otomatis (Rata TP & Nilai Rapor). */
+.data-table th.col-hitung,
+.data-table td.col-hitung {
+  width: 88px;
+  text-align: center;
+  background: var(--primary-tint);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---------- Dashboard: stat card & progress bar ---------- */
 
 .stat-grid {
@@ -1008,6 +1030,11 @@ a { color: inherit; text-decoration: none; }
   cursor: pointer;
 }
 
+/* Saat dipakai sebagai daftar opsi di dalam .add-form (mis. panel
+   "Isi Catatan Otomatis"), tiap opsi diberi lebar minimum supaya
+   turun rapi ke baris berikutnya di layar sempit. */
+.add-form .tp-checklist__item { flex: 1 1 250px; align-items: center; }
+
 .tp-checklist__item input[type="checkbox"] {
   margin-top: 2px;
   flex-shrink: 0;
@@ -1085,6 +1112,50 @@ a { color: inherit; text-decoration: none; }
   z-index: 1;
 }
 
+/* Pembagi 2 bagian: page1 = Biodata + Nilai, page2 = Kokurikuler s.d.
+   tanda tangan. Di layar (Preview) keduanya cuma mengalir biasa, hanya
+   diberi garis putus-putus sebagai penanda; saat dicetak, page1 diberi
+   tinggi minimum 1 halaman kertas supaya page2 otomatis jatuh ke
+   halaman berikutnya kalau tabel Nilai pendek, TAPI tetap menyambung
+   di halaman yang sama kalau tabel Nilai sudah meluber lebih dari 1
+   halaman — lihat @media print di bagian bawah file ini. Nomor halaman
+   sesungguhnya (yang otomatis mengikuti jumlah halaman fisik yang
+   benar-benar tercetak) ditampilkan lewat footer cetak native browser
+   (@page di bawah), bukan elemen HTML. */
+.rapor-cetak__page1 + .rapor-cetak__page2 {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--border-strong, #d8dee6);
+}
+
+/* ---- Identitas siswa yang berulang di tiap halaman cetak ----
+   .rapor-cetak__print-frame adalah tabel pembungkus seluruh kartu
+   rapor: Identitas Siswa (biodataHtml()) ditaruh di <thead>-nya, dan
+   seluruh isi rapor (page1 + page2) ditaruh di satu sel <tbody>. Kalau
+   isi <tbody> itu terpotong ke halaman kertas berikutnya saat dicetak,
+   browser otomatis mengulang <thead> ini tepat di atas lanjutan isi di
+   halaman baru — mekanisme "repeat header" bawaan HTML/CSS untuk
+   tabel, sama seperti "Repeat rows at top" di Excel/Word. Ini jauh
+   lebih andal daripada trik position: fixed + margin @page yang
+   dihitung manual (versi sebelumnya), karena posisinya selalu
+   ditentukan oleh alur dokumen yang sesungguhnya, bukan perkiraan
+   tinggi lewat JS — sehingga tidak bisa lagi menimpa isi rapor. */
+.rapor-cetak__print-frame {
+  width: 100%;
+  margin: 0;
+  border-collapse: collapse;
+}
+
+.rapor-cetak__print-frame > thead {
+  display: table-header-group;
+}
+
+.rapor-cetak__print-frame > thead > tr > td,
+.rapor-cetak__print-frame > tbody > tr > td {
+  padding: 0;
+  border: none;
+}
+
 /* ---- Biodata (Nama/NISN/Sekolah/Alamat | Kelas/Fase/Semester/Tahun) ---- */
 .rapor-cetak__biodata {
   width: 100%;
@@ -1137,13 +1208,48 @@ a { color: inherit; text-decoration: none; }
   border-collapse: separate;
   border-spacing: 0;
   margin-bottom: 14px;
-  /* Garis terluar tabel (kanan & bawah) ditaruh di sini; garis atas &
-     kiri ditaruh per sel (lihat th/td di bawah). Dengan begitu setiap
-     garis pada tabel — luar maupun antar sel — hanya tergambar SATU
-     kali dengan ketebalan 1px yang sama, tidak ada garis yang menumpuk
-     jadi terlihat lebih tebal (lihat catatan th/td di bawah). */
-  border-right: 1px solid #000;
-  border-bottom: 1px solid #000;
+  /* Garis kanan SENGAJA tidak dipasang di sini (di elemen <table>),
+     melainkan per sel (lihat th/td di bawah). Kalau dipasang di sini,
+     saat tabel terpotong ke beberapa halaman cetak, browser/​html2canvas
+     kadang tetap menggambar garis kanan itu memanjang mengikuti tinggi
+     tabel LOGIS (bukan tinggi baris yang benar-benar tercetak di
+     halaman tsb), sehingga muncul garis "menggantung" di area kosong
+     setelah baris terakhir yang sebenarnya. Garis kiri, kanan & bawah
+     per sel tidak punya masalah ini karena tiap baris menutup dirinya
+     sendiri persis di tempat ia berhenti tercetak. */
+}
+
+/* ---- Tabel Nilai: lebar kolom TETAP, apa pun panjang isi Capaian
+   Kompetensi ----
+   table-layout: fixed membuat lebar tiap kolom murni ditentukan oleh
+   width yang diset di CSS (bukan oleh isi sel). Tanpa ini, browser
+   (table-layout: auto, default) bisa "menegosiasikan ulang" lebar kolom
+   ketika ada teks Capaian Kompetensi yang panjang, sehingga kolom No/
+   Mata Pelajaran/Nilai Akhir jadi ikut menyempit/melebar tidak
+   konsisten antar siswa. Dengan fixed, kalau isi Capaian Kompetensi
+   banyak, teks itu hanya membuat BARIS-nya lebih tinggi (kata-katanya
+   membungkus ke bawah), lebar kolom & tabel tidak pernah berubah. */
+.rapor-cetak__nilai {
+  table-layout: fixed;
+}
+
+/* Kolom "Mata Pelajaran" (kolom ke-2) diberi lebar tetap dalam persen
+   supaya konsisten di semua rapor. Kolom "Capaian Kompetensi" (ke-4)
+   sengaja TIDAK diberi width eksplisit — dengan table-layout: fixed ia
+   otomatis mengambil sisa lebar tabel setelah No + Mata Pelajaran +
+   Nilai Akhir, dan itu sudah tetap (tidak berubah-ubah) karena ketiga
+   kolom lain sudah fixed lebarnya (rc-th-no, nth-child(2), rc-th-nilai). */
+.rapor-cetak__nilai thead th:nth-child(2) {
+  width: 30%;
+}
+
+/* Isi sel yang panjang (nama mapel atau Capaian Kompetensi) wajib
+   membungkus ke baris baru di dalam lebar kolom yang sudah tetap,
+   termasuk kalau ada 1 kata/istilah yang sangat panjang tanpa spasi —
+   supaya tabel bertambah TINGGI, bukan LEBAR. */
+.rapor-cetak__nilai td {
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .rapor-cetak__nilai th,
@@ -1155,26 +1261,50 @@ a { color: inherit; text-decoration: none; }
   text-transform: none;
   letter-spacing: normal;
   font-size: 13px;
-  /* Hanya garis atas & kiri per sel (bukan border:1px di keempat sisi)
-     supaya garis yang dibagi antar sel bertetangga tidak digambar dua
-     kali (yang membuatnya tampak dua kali lebih tebal daripada garis
-     terluar tabel). Garis kanan/bawah tabel disediakan oleh wrapper
-     tabel di atas, dan garis kiri paling atas oleh sel pertama. */
+  /* Garis atas (batas atas tabel) + kiri + bawah (pemisah dari baris
+     data pertama) per sel, + kanan HANYA di sel kolom terakhir supaya
+     jadi batas kanan tabel (lihat catatan di border-right yang
+     dihapus dari elemen <table> di atas). */
   border-top: 1px solid #000;
   border-left: 1px solid #000;
+  border-bottom: 1px solid #000;
   padding: 6px 8px;
+}
+
+.rapor-cetak__nilai th:last-child,
+.rapor-cetak__ekskul th:last-child,
+.rapor-cetak__nilai td:last-child,
+.rapor-cetak__ekskul td:last-child {
+  border-right: 1px solid #000;
 }
 
 .rapor-cetak__nilai td,
 .rapor-cetak__ekskul td {
-  border-top: 1px solid #000;
+  /* Garis BAWAH (bukan atas) per sel — ini kuncinya: tiap baris jadi
+     "menutup dirinya sendiri" dengan garis bawah miliknya sendiri,
+     bukan mengandalkan garis atas baris berikutnya. Kalau tabelnya
+     melebihi 1 halaman dan baris terakhir di halaman itu ternyata
+     BUKAN baris terakhir tabel (sisanya lanjut ke halaman berikutnya),
+     baris itu tetap tercetak dengan garis bawahnya sendiri — karena
+     garisnya adalah properti baris itu sendiri, bukan "dipinjam" dari
+     baris sesudahnya yang mungkin sudah pindah halaman.
+     Garis kiri tetap dipasang di sini seperti sebelumnya. */
   border-left: 1px solid #000;
+  border-bottom: 1px solid #000;
   padding: 7px 8px;
   vertical-align: top;
 }
 
 .rc-th-no {
   width: 42px;
+}
+
+/* Teks Capaian Kompetensi (Capaian Pembelajaran) dibuat rata kanan-kiri
+   (justify) supaya tepi kanan paragraf rapi sejajar, seperti format
+   rapor cetak resmi — bukan rata kiri biasa yang tepi kanannya bergerigi. */
+.rc-td-capaian {
+  text-align: justify;
+  text-align-last: left;
 }
 
 .rc-th-nilai {
@@ -1195,7 +1325,7 @@ a { color: inherit; text-decoration: none; }
 
 .rapor-cetak__section-row td {
   font-weight: 700;
-  background: #fff;
+  background: transparent;
 }
 
 .tc-center {
@@ -1323,6 +1453,87 @@ a { color: inherit; text-decoration: none; }
   height: 64px;
 }
 
+/* ---------- Cetak Identitas ----------
+   Kartu cover/identitas peserta didik (biodata siswa, orang tua, wali,
+   keterangan penerimaan) — dipakai ulang class .rapor-cetak supaya ikut
+   aturan halaman/watermark/margin cetak yang sama dengan Cetak Rapor,
+   cuma isinya beda (tabel label:nilai satu kolom, bukan tabel nilai). */
+
+/* Modifier .rapor-cetak--identitas: bar judul section tetap ada garis
+   kotak & teks tebal, tapi TANPA warna kuning seperti di Cetak Rapor
+   (khusus diminta polos/tidak berwarna untuk lembar identitas ini). */
+.rapor-cetak--identitas .rapor-cetak__bar {
+  background: #fff;
+  border-bottom: 1px solid #000;
+}
+
+.ident-photo-box {
+  width: 90px;
+  height: 120px;
+  border: 1px solid #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 11px;
+  color: var(--ink-soft, #6b7280);
+  line-height: 1.3;
+  flex: 0 0 auto;
+}
+
+.ident-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 16px;
+}
+
+.ident-table td {
+  padding: 3px 4px;
+  vertical-align: top;
+  font-size: 13px;
+}
+
+.ident-label {
+  width: 210px;
+  white-space: nowrap;
+}
+
+.ident-colon {
+  width: 12px;
+}
+
+.ident-value {
+  font-weight: 700;
+}
+
+/* Baris "diisi tangan" (mis. Diterima di sekolah ini) — sengaja
+   dikosongkan, cukup garis bawah tempat menulis, bukan tanda "-". */
+.ident-value--blank {
+  border-bottom: 1px solid #000;
+  min-width: 160px;
+  display: inline-block;
+  height: 14px;
+}
+
+/* Baris tanda tangan Kepala Sekolah + kotak foto 3x4 di sampingnya
+   (kiri foto, kanan blok tanda tangan), rata kanan halaman seperti
+   footer Cetak Rapor. */
+.ident-footer-row {
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-end;
+  gap: 16px;
+}
+
+.ident-footer-ttd {
+  text-align: left;
+}
+
+.ident-footer-ttd div:last-child {
+  white-space: nowrap;
+  font-size: 11.5px;
+}
+
 /* Saat mencetak (window.print()): sembunyikan sidebar, topbar, dan semua
    kontrol interaktif (tombol, dropdown pemilih siswa), tampilkan hanya
    kartu rapor siap cetak (#cetakRaporArea .rapor-cetak), dibuat semirip
@@ -1331,7 +1542,28 @@ a { color: inherit; text-decoration: none; }
    saat print kecuali dipaksa lewat print-color-adjust: exact). */
 @page {
   size: A4;
-  margin: 12.7mm; /* setara "Narrow" margin di Word: 0.5 inci semua sisi */
+  /* Margin biasa di ke-4 sisi. Identitas Siswa yang berulang di tiap
+     halaman TIDAK lagi ditaruh di ruang margin ini — ia sekarang bagian
+     dari alur isi halaman sendiri lewat <thead> (lihat
+     .rapor-cetak__print-frame), jadi margin di sini tidak perlu lagi
+     dibuat besar/dihitung ulang oleh JS. Margin bawah tetap sedikit
+     lebih besar dari kiri/kanan supaya ada ruang untuk footer nomor
+     halaman (@bottom-center) tanpa menabrak isi. */
+  margin: 16mm 12.7mm 16mm 12.7mm;
+
+  /* Nomor halaman "Halaman X dari Y" ditaruh di footer kertas lewat
+     margin box bawaan browser (bukan elemen HTML biasa), supaya X dan
+     Y SELALU mengikuti jumlah halaman fisik yang benar-benar tercetak
+     — berapa pun panjang isi rapor (tidak lagi diasumsikan selalu 2
+     halaman). Didukung Chrome/Edge 131+ dan Firefox terbaru; browser
+     lama akan mengabaikan aturan ini dengan aman (footer nomor halaman
+     saja yang tidak tampil, isi rapor tidak terpengaruh). */
+  @bottom-center {
+    content: "Halaman " counter(page) " dari " counter(pages);
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 9pt;
+    color: #333;
+  }
 }
 
 @media print {
@@ -1367,6 +1599,7 @@ a { color: inherit; text-decoration: none; }
   .rapor-cetak {
     border: none;
     padding: 0;
+    margin-top: 0;
   }
 
   /* Watermark logo: di layar ia mengambang di tengah kartu (yang tingginya
@@ -1397,5 +1630,58 @@ a { color: inherit; text-decoration: none; }
      mulai di halaman baru. */
   .rapor-cetak + .rapor-cetak {
     page-break-before: always;
+    margin-top: 0;
+  }
+
+  /* Rapor dibagi 2 bagian: Biodata + tabel Nilai (.rapor-cetak__page1),
+     lalu Kokurikuler sampai tanda tangan (.rapor-cetak__page2).
+
+     TIDAK memakai page-break-before: always di sini lagi — itu memaksa
+     page2 SELALU mulai di halaman kertas baru berikutnya dari titik
+     manapun page1 berakhir. Akibatnya, kalau tabel Nilai sudah panjang
+     dan meluber sampai ke halaman kertas ke-2, page2 (Kokurikuler s.d.
+     tanda tangan) malah terlempar ke halaman ke-3 — bukan menyambung
+     di halaman ke-2 tempat luberan nilai itu berada.
+
+     Sebagai gantinya, .rapor-cetak__page1 diberi min-height setinggi 1
+     halaman cetak (lihat aturan di bawah). Ini membuat pembagian
+     halamannya otomatis mengikuti aliran normal dokumen:
+     - Kalau tabel Nilai PENDEK (muat kurang dari 1 halaman): page1
+       "diganjal" oleh min-height sampai penuh 1 halaman, sehingga
+       page2 otomatis jatuh mulai di halaman kertas ke-2 (persis
+       seperti page-break manual, tapi tanpa memaksa).
+     - Kalau tabel Nilai PANJANG (sudah meluber ke halaman ke-2): tinggi
+       asli page1 sudah melebihi min-height, jadi tidak ada ganjalan
+       tambahan — page2 langsung mengalir menyambung tepat sesudah baris
+       nilai terakhir, yaitu masih di halaman kertas ke-2 yang sama
+       (bukan lompat ke halaman ke-3). */
+  .rapor-cetak__page1 {
+    /* Tinggi area konten 1 halaman A4 = tinggi kertas (297mm) dikurangi
+       margin atas+bawah di @page (16mm + 16mm = 32mm) dikurangi lagi
+       perkiraan tinggi kotak Identitas Siswa di <thead> (yang sekarang
+       ikut memakan ruang isi halaman, bukan lagi ruang margin) — nilai
+       di sini cuma FALLBACK kasar (perkiraan identitas ~45mm). Nilai
+       sesungguhnya (mengikuti tinggi identitas yang sebenar-benarnya,
+       termasuk kalau alamat siswa membungkus ke baris ke-2) dihitung &
+       disuntikkan otomatis oleh JS tepat sebelum window.print() (lihat
+       terapkanTinggiIdentitasCetak() di guru.html). Meleset di fallback
+       ini paling buruk cuma bikin halaman 2 mulai sedikit lebih awal/
+       telat dari idealnya — identitas tetap tidak mungkin menimpa isi
+       rapor karena sekarang digambar lewat <thead>, bukan lagi lewat
+       posisi yang dihitung manual. */
+    min-height: 220mm;
+  }
+
+  /* ".rapor-cetak__page1 + .rapor-cetak__page2" di atas menambah garis
+     putus-putus + jarak sebagai penanda visual DI LAYAR (Preview) saja,
+     supaya guru bisa melihat di mana bagian 1 berakhir dan bagian 2
+     mulai. Saat benar-benar dicetak, keduanya sudah otomatis terpisah
+     oleh kertas fisik (lewat page-break-before di atas), jadi garis
+     ini dimatikan di sini — tanpa baris ini, garis putus-putus itu
+     akan tetap tercetak mengambang di bagian atas halaman baru. */
+  .rapor-cetak__page1 + .rapor-cetak__page2 {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
   }
 }

@@ -1314,26 +1314,82 @@
       '<button class="btn-small btn-small--primary" id="btnTambahSiswa">+ Tambah Siswa</button>' +
       '<button class="btn-small btn-small--danger" id="btnHapusTerpilihSiswa" disabled>🗑 Hapus Terpilih (<span id="sTerpilihCount">0</span>)</button>' +
       '</div>' +
+      '<div class="toolbar" style="align-items:center;flex-wrap:wrap;gap:14px;">' +
+      '<label style="font-size:13px;color:#555;display:flex;align-items:center;gap:6px;">Urutkan berdasarkan' +
+      '<select id="sSortBy"><option value="nama">Nama (A-Z)</option><option value="kelas">Kelas</option></select></label>' +
+      '<label style="font-size:13px;color:#555;display:flex;align-items:center;gap:6px;">Filter Kelas' +
+      '<select id="sFilterKelas"><option value="">Semua Kelas</option></select></label>' +
+      '<div id="sTotalInfo" style="margin-left:auto;font-size:13px;color:#555;font-weight:600;"></div>' +
+      '</div>' +
       '<div class="table-wrap"><table class="data-table"><thead><tr><th style="width:32px;"><input type="checkbox" id="sSelectAll"></th><th>NIS</th><th>NISN</th><th>Nama</th><th>Kelas (' + escapeHtml(tahunAktif.nama) + ')</th><th></th></tr></thead><tbody id="sBody"></tbody></table></div>';
 
     if (kelasList.length === 0) {
       content.querySelector('.panel-head').insertAdjacentHTML('afterend', '<div class="panel-note">Belum ada kelas. Tambahkan kelas dulu di menu "Kelas" supaya siswa bisa ditempatkan.</div>');
     }
 
+    // Isi opsi dropdown "Filter Kelas" dari daftar kelas + opsi "Belum Ada Kelas".
+    var selFilterKelas = document.getElementById('sFilterKelas');
+    kelasList.forEach(function (k) {
+      var opt = document.createElement('option');
+      opt.value = k.id;
+      opt.textContent = k.nama;
+      selFilterKelas.appendChild(opt);
+    });
+    var optTanpaKelas = document.createElement('option');
+    optTanpaKelas.value = '__tanpa_kelas__';
+    optTanpaKelas.textContent = 'Belum Ada Kelas';
+    selFilterKelas.appendChild(optTanpaKelas);
+
     async function muatUlangDaftar() {
       var siswaRes = await supabaseClient.from('siswa').select('*').order('nama');
-      var siswaList = siswaRes.data || [];
+      var siswaListAsli = siswaRes.data || [];
       var skRes = await supabaseClient.from('siswa_kelas').select('siswa_id, kelas_id').eq('tahun_ajaran_id', tahunAktif.id);
       var skMap = {};
       (skRes.data || []).forEach(function (r) { skMap[r.siswa_id] = r.kelas_id; });
 
+      // Tempelkan nama kelas ke tiap siswa, dipakai untuk sort & filter.
+      var siswaList = siswaListAsli.map(function (s) {
+        var kelasObj = kelasList.find(function (k) { return k.id === skMap[s.id]; });
+        return { data: s, kelasId: skMap[s.id] || '', kelasNama: kelasObj ? kelasObj.nama : '' };
+      });
+
+      var totalSemua = siswaList.length;
+
+      // ---- Filter per kelas ----
+      var filterVal = (document.getElementById('sFilterKelas') || {}).value || '';
+      if (filterVal === '__tanpa_kelas__') {
+        siswaList = siswaList.filter(function (r) { return !r.kelasId; });
+      } else if (filterVal) {
+        siswaList = siswaList.filter(function (r) { return r.kelasId === filterVal; });
+      }
+
+      // ---- Sort: per Nama (default, A-Z) atau per Kelas (lalu Nama) ----
+      var sortVal = (document.getElementById('sSortBy') || {}).value || 'nama';
+      if (sortVal === 'kelas') {
+        siswaList.sort(function (a, b) {
+          var ka = a.kelasNama || 'zzz_tanpa_kelas';
+          var kb = b.kelasNama || 'zzz_tanpa_kelas';
+          var c = ka.localeCompare(kb, 'id', { numeric: true });
+          return c !== 0 ? c : a.data.nama.localeCompare(b.data.nama);
+        });
+      } else {
+        siswaList.sort(function (a, b) { return a.data.nama.localeCompare(b.data.nama); });
+      }
+
+      // ---- Keterangan total siswa ----
+      var totalInfo = document.getElementById('sTotalInfo');
+      if (totalInfo) {
+        totalInfo.textContent = filterVal
+          ? 'Menampilkan ' + siswaList.length + ' dari ' + totalSemua + ' siswa'
+          : 'Total ' + totalSemua + ' siswa';
+      }
+
       var body = document.getElementById('sBody');
       body.innerHTML = siswaList.length ? '' : '<tr><td colspan="6">Belum ada siswa.</td></tr>';
 
-      siswaList.forEach(function (s) {
-        var kelasNama = '—';
-        var kelasObj = kelasList.find(function (k) { return k.id === skMap[s.id]; });
-        if (kelasObj) kelasNama = kelasObj.nama;
+      siswaList.forEach(function (row) {
+        var s = row.data;
+        var kelasNama = row.kelasNama || '—';
 
         var tr = document.createElement('tr');
         tr.innerHTML =
@@ -1347,7 +1403,7 @@
         body.appendChild(tr);
 
         tr.querySelector('[data-edit]').addEventListener('click', function () {
-          bukaModalSiswa(s, kelasList, skMap[s.id] || '');
+          bukaModalSiswa(s, kelasList, row.kelasId || '');
         });
         tr.querySelector('[data-del]').addEventListener('click', async function () {
           if (!confirm('Hapus siswa ini beserta seluruh riwayat nilai/presensinya?')) return;
@@ -1368,10 +1424,13 @@
         }
       });
 
-      return siswaList;
+      return siswaListAsli;
     }
 
     var daftarSiswaTerkini = await muatUlangDaftar();
+
+    document.getElementById('sSortBy').addEventListener('change', muatUlangDaftar);
+    document.getElementById('sFilterKelas').addEventListener('change', muatUlangDaftar);
 
     document.getElementById('btnTambahSiswa').addEventListener('click', function () {
       bukaModalSiswa(null, kelasList, '');
@@ -1564,10 +1623,123 @@
         var ditambah = 0, diperbarui = 0, dilewati = 0;
         var pesan = [];
 
+        // ---------- Deteksi Tanggal Lahir / Tanggal Masuk dari Excel ----------
+        // Dibuat lebih "pintar" karena tanggal dari Excel bisa muncul
+        // dalam banyak rupa tergantung format kolomnya di file sumber:
+        //   1) Objek Date asli — kalau kolom Excel-nya memang berformat
+        //      Tanggal, SheetJS (cellDates:true di atas) sudah otomatis
+        //      mengubahnya jadi objek Date.
+        //   2) Nomor serial Excel — kalau kolom terlanjur berformat
+        //      Umum/Angka (bukan Tanggal), yang lolos ke sini cuma angka
+        //      mentah seperti 38976, bukan objek Date.
+        //   3) Teks bebas — kalau kolom berformat Teks, isinya bisa
+        //      "17/09/2006", "17-09-2006", "2006-09-17", "17 September
+        //      2006", "17 Sept 2006", dst — gaya penulisan orang
+        //      Indonesia yang berbeda-beda.
+        // Semua kemungkinan itu dicoba satu per satu di bawah, dan kalau
+        // berhasil dikenali selalu dikembalikan dalam format baku
+        // YYYY-MM-DD. Kalau tidak ada satu pun yang cocok, baris tetap
+        // lanjut ter-import (tidak gagal), tanggalnya cukup dikosongkan
+        // dan bisa dilengkapi manual lewat Edit.
+        var BULAN_ID = {
+          jan: 1, januari: 1, january: 1,
+          feb: 2, februari: 2, february: 2,
+          mar: 3, maret: 3, march: 3,
+          apr: 4, april: 4,
+          mei: 5, may: 5,
+          jun: 6, juni: 6, june: 6,
+          jul: 7, juli: 7, july: 7,
+          agu: 8, agt: 8, agustus: 8, aug: 8, august: 8,
+          sep: 9, sept: 9, september: 9,
+          okt: 10, oktober: 10, oct: 10, october: 10,
+          nov: 11, november: 11,
+          des: 12, desember: 12, dec: 12, december: 12
+        };
+
+        function pad2(n) { return n < 10 ? '0' + n : '' + n; }
+
+        // SheetJS selalu membuat objek Date lewat Date.UTC (bukan zona
+        // waktu lokal browser), jadi komponennya HARUS dibaca pakai
+        // getUTC*, bukan get* biasa — kalau tidak, tanggalnya bisa
+        // "geser" mundur/maju satu hari tergantung zona waktu perangkat
+        // yang dipakai untuk import.
+        function formatTanggalUTC(d) {
+          if (!(d instanceof Date) || isNaN(d.getTime())) return null;
+          return d.getUTCFullYear() + '-' + pad2(d.getUTCMonth() + 1) + '-' + pad2(d.getUTCDate());
+        }
+
+        // Konversi nomor serial Excel (jumlah hari sejak 30 Des 1899,
+        // termasuk bug tahun kabisat 1900 bawaan Excel) ke tanggal asli.
+        function serialExcelKeTanggal(serial) {
+          var utcHari = Math.floor(serial - 25569);
+          return new Date(utcHari * 86400 * 1000);
+        }
+
         function toTanggal(v) {
-          if (!v) return null;
-          if (v instanceof Date) return v.toISOString().slice(0, 10);
-          return String(v).trim() || null;
+          if (v === null || v === undefined || v === '') return null;
+
+          if (v instanceof Date) return formatTanggalUTC(v);
+          if (typeof v === 'number' && isFinite(v)) return formatTanggalUTC(serialExcelKeTanggal(v));
+
+          var t = String(v).trim();
+          if (!t) return null;
+
+          // Sudah format ISO (boleh ada jam di belakang, mis. dari export lain)
+          var mIso = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+          if (mIso) {
+            var yIso = +mIso[1], moIso = +mIso[2], dIso = +mIso[3];
+            if (moIso >= 1 && moIso <= 12 && dIso >= 1 && dIso <= 31) {
+              return yIso + '-' + pad2(moIso) + '-' + pad2(dIso);
+            }
+          }
+
+          // Format DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY — termasuk tahun
+          // 2 digit (17/09/06 diasumsikan 2006, 17/09/85 diasumsikan 1985)
+          var mNum = t.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
+          if (mNum) {
+            var dNum = +mNum[1], moNum = +mNum[2], yNum = +mNum[3];
+            if (yNum < 100) yNum += (yNum < 50 ? 2000 : 1900);
+            if (moNum >= 1 && moNum <= 12 && dNum >= 1 && dNum <= 31) {
+              return yNum + '-' + pad2(moNum) + '-' + pad2(dNum);
+            }
+          }
+
+          // Format nama bulan Indonesia/​Inggris: "17 September 2006",
+          // "17 Sept 2006", "17 Mei 2006"
+          var mNama = t.toLowerCase().match(/^(\d{1,2})\s+([a-z]+)\.?\s+(\d{4})$/);
+          if (mNama) {
+            var dNama = +mNama[1], bulanNama = BULAN_ID[mNama[2]], yNama = +mNama[3];
+            if (bulanNama && dNama >= 1 && dNama <= 31) {
+              return yNama + '-' + pad2(bulanNama) + '-' + pad2(dNama);
+            }
+          }
+
+          // Upaya terakhir: serahkan ke parser tanggal bawaan browser
+          // (menangkap gaya lain yang belum tercakup di atas, mis.
+          // "September 17, 2006"), lalu validasi hasilnya masuk akal.
+          var coba = new Date(t);
+          if (!isNaN(coba.getTime()) && coba.getFullYear() > 1900 && coba.getFullYear() < 2100) {
+            return coba.getFullYear() + '-' + pad2(coba.getMonth() + 1) + '-' + pad2(coba.getDate());
+          }
+
+          return null;
+        }
+
+        // Kolom "Jenis Kelamin" di Excel sering diisi macam-macam cara
+        // (Laki-laki, laki2, LK, Pria, L, dst — begitu juga sisi
+        // perempuan), padahal di database cuma boleh 'L' atau 'P'.
+        // Fungsi ini menerima variasi penulisan yang umum dan selalu
+        // mengembalikan 'L'/'P' (atau null kalau memang tidak dikenali,
+        // supaya baris tidak gagal import gara-gara ini — cukup kosong
+        // dan bisa dilengkapi manual lewat Edit).
+        function normalisasiJenisKelamin(v) {
+          var t = String(v || '').trim().toLowerCase();
+          if (!t) return null;
+          if (t === 'l' || t.indexOf('laki') === 0 || t.indexOf('laki-laki') !== -1 ||
+            t === 'lk' || t === 'pria' || t === 'cowok' || t === 'm' || t === 'male') return 'L';
+          if (t === 'p' || t.indexOf('perempuan') !== -1 || t === 'pr' ||
+            t === 'wanita' || t === 'cewek' || t === 'f' || t === 'female') return 'P';
+          return null;
         }
 
         for (var i = 0; i < rows.length; i++) {
@@ -1599,8 +1771,14 @@
               payload[f.key] = (f.key === 'status') ? 'aktif' : null; // kolom status NOT NULL di database
               return;
             }
-            if (f.type === 'date') payload[f.key] = toTanggal(raw);
+            if (f.type === 'date') {
+              payload[f.key] = toTanggal(raw);
+              if (payload[f.key] === null) {
+                pesan.push('Baris ' + (i + 2) + ' (' + nama + '): format "' + f.label + '" ("' + raw + '") tidak dikenali, dikosongkan — lengkapi manual lewat Edit.');
+              }
+            }
             else if (f.type === 'number') payload[f.key] = parseInt(raw, 10) || null;
+            else if (f.key === 'jenis_kelamin') payload[f.key] = normalisasiJenisKelamin(raw);
             else payload[f.key] = String(raw).trim();
           });
 
@@ -1827,7 +2005,7 @@
     var rowsHtml = mapelList.map(function (m) {
       var cells = [1, 2, 3, 4, 5, 6].map(function (ke) {
         var n = (nilaiMap[ke] && nilaiMap[ke][m.id]) || {};
-        var nilaiTampil = (n.nilai === undefined || n.nilai === null) ? '—' : n.nilai;
+        var nilaiTampil = (n.nilai === undefined || n.nilai === null) ? '—' : Math.round(Number(n.nilai));
         return '<td style="text-align:center;">' + nilaiTampil + '</td>';
       }).join('');
       return '<tr><td>' + escapeHtml(m.nama) + '</td>' + cells + '</tr>';
@@ -1848,7 +2026,7 @@
         var row = [m.nama];
         for (var ke = 1; ke <= 6; ke++) {
           var n = (nilaiMap[ke] && nilaiMap[ke][m.id]) || {};
-          row.push(n.nilai === undefined || n.nilai === null ? '' : n.nilai);
+          row.push(n.nilai === undefined || n.nilai === null ? '' : Math.round(Number(n.nilai)));
         }
         aoa.push(row);
       });
