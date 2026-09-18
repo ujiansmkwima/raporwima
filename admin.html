@@ -3337,10 +3337,33 @@
       }).join('');
 
       area.innerHTML =
-        '<div class="table-wrap"><table class="data-table"><thead><tr><th>No</th><th>NIS</th><th>Nama</th><th>Ikut?</th></tr></thead>' +
+        '<div class="table-wrap"><table class="data-table"><thead><tr><th>No</th><th>NIS</th><th>Nama</th><th style="text-align:center;">Ikut?<br><label style="font-weight:normal;font-size:11px;"><input type="checkbox" id="pesSelectAllChk"> Pilih Semua</label></th></tr></thead>' +
         '<tbody>' + rowsHtml + '</tbody></table></div>' +
         '<button class="btn-small btn-small--primary" id="btnSimpanPeserta" style="margin-top:10px;">Simpan Peserta</button>' +
         '<div id="pesertaSimpanMsg"></div>';
+
+      // ---------- Pilih Semua / Batal Semua peserta ----------
+      // Checkbox di header men-toggle SEMUA checkbox siswa di tabel ini
+      // sekaligus, supaya admin tidak perlu ceklis satu-satu kalau
+      // seluruh kelas ikut ekskul yang sama. Indeterminate dipakai kalau
+      // baru sebagian yang diceklis (misalnya dari data lama), dan status
+      // checkbox header ikut menyesuaikan otomatis kalau ada yang
+      // dicentang/dibatalkan manual per baris.
+      var pesSelectAll = document.getElementById('pesSelectAllChk');
+      function pesChkList() { return document.querySelectorAll('.pes-check'); }
+      function refreshPesSelectAll() {
+        var semua = pesChkList();
+        var terpilih = Array.prototype.filter.call(semua, function (c) { return c.checked; });
+        pesSelectAll.checked = semua.length > 0 && terpilih.length === semua.length;
+        pesSelectAll.indeterminate = terpilih.length > 0 && terpilih.length < semua.length;
+      }
+      pesSelectAll.addEventListener('change', function () {
+        Array.prototype.forEach.call(pesChkList(), function (c) { c.checked = pesSelectAll.checked; });
+      });
+      Array.prototype.forEach.call(pesChkList(), function (c) {
+        c.addEventListener('change', refreshPesSelectAll);
+      });
+      refreshPesSelectAll();
 
       document.getElementById('btnSimpanPeserta').addEventListener('click', async function () {
         var btn = this;
