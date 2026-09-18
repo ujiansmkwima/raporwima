@@ -1633,6 +1633,10 @@
       var NILAI_EXCEL_COLUMNS = ['NIS', 'Nama']
         .concat(HEADER_TP)
         .concat(['Nilai Tengah Semester', 'Nilai Akhir Semester', 'Nilai Rapor (Otomatis)', 'Capaian Pembelajaran']);
+      // Khusus tombol "Unduh Data (Excel)": tanpa kolom Capaian Pembelajaran
+      // (permintaan guru, supaya file unduhan lebih ringkas — kolom ini
+      // tetap ada di Template Excel karena masih dipakai untuk import).
+      var NILAI_EXCEL_COLUMNS_UNDUH = NILAI_EXCEL_COLUMNS.filter(function (h) { return h !== 'Capaian Pembelajaran'; });
 
       function barisExcelSiswa(s, kosongkan) {
         var h = hitungSiswa(s.id);
@@ -1661,7 +1665,7 @@
 
       document.getElementById('btnExportNilai').addEventListener('click', function () {
         var rows = siswaList.map(function (s) { return barisExcelSiswa(s, false); });
-        var ws = XLSX.utils.json_to_sheet(rows, { header: NILAI_EXCEL_COLUMNS });
+        var ws = XLSX.utils.json_to_sheet(rows, { header: NILAI_EXCEL_COLUMNS_UNDUH });
         var wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Nilai');
         XLSX.utils.book_append_sheet(wb, sheetKeteranganTp(), 'Keterangan TP');
