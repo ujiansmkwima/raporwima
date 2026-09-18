@@ -3541,52 +3541,43 @@
           '}';
       }
 
-      // Cetak 1 atau beberapa siswa sekaligus (dipakai oleh tombol Cetak
-      // per baris, Cetak Terpilih, dan Cetak Semua). Untuk Cetak
-      // Terpilih/Cetak Semua, tiap siswa DICETAK TERPISAH satu per satu
-      // (window.print() dipanggil ulang untuk tiap siswa, bukan sekali
-      // untuk semua digabung) — supaya tiap siswa tetap jadi dokumen/
-      // PDF-nya sendiri-sendiri, tidak tergabung jadi satu file berisi
-      // banyak siswa. window.print() bersifat blocking (skrip berhenti
-      // sampai jendela cetak ditutup/selesai), jadi loop ini otomatis
-      // menunggu tiap siswa selesai dicetak sebelum lanjut ke siswa
-      // berikutnya.
+      // Susun kartu rapor untuk 1 atau beberapa siswa sekaligus (dipakai
+      // oleh tombol Cetak per baris, Cetak Terpilih, dan Cetak Semua),
+      // ditaruh di #cetakRaporArea (area yang sama dengan Preview), lalu
+      // panggil window.print() SEKALI SAJA untuk semua siswa — supaya
+      // tetap satu kali proses cetak/simpan PDF, bukan satu per satu.
+      // Tiap siswa tetap mulai di HALAMAN barunya sendiri (lihat aturan
+      // ".rapor-cetak + .rapor-cetak { page-break-before: always; }" di
+      // @media print), jadi halaman tiap siswa tidak pernah bercampur
+      // dengan siswa lain walau digabung dalam satu dokumen/file.
       async function cetakSiswa(idList, triggerBtn) {
         var teksAsliBtn = triggerBtn ? triggerBtn.innerHTML : null;
-        if (triggerBtn) { triggerBtn.disabled = true; }
+        if (triggerBtn) { triggerBtn.disabled = true; triggerBtn.innerHTML = 'Menyiapkan...'; }
 
         var judulAsli = document.title;
-        var area = document.getElementById('cetakRaporArea');
         try {
+          var htmlParts = [];
           for (var i = 0; i < idList.length; i++) {
-            if (triggerBtn) {
-              triggerBtn.innerHTML = idList.length > 1
-                ? 'Menyiapkan (' + (i + 1) + '/' + idList.length + ')...'
-                : 'Menyiapkan...';
-            }
-
-            area.innerHTML = await buatKartuRapor(idList[i]);
-            document.title = judulCetakRapor([idList[i]]);
-
-            // Beri jeda sesaat supaya browser sempat me-render (termasuk
-            // logo watermark & kotak Identitas Siswa) sebelum jendela cetak
-            // muncul, baru ukur tinggi Identitas Siswa yang sesungguhnya
-            // dan suntikkan ke @page margin-top (lihat
-            // terapkanTinggiIdentitasCetak) — supaya identitas berulang di
-            // tiap halaman selalu pas ruangnya, tidak ketiban isi rapor.
-            await new Promise(function (resolve) { setTimeout(resolve, 150); });
-            terapkanTinggiIdentitasCetak(area);
-            window.print();
-
-            // Jeda singkat sebelum menyiapkan siswa berikutnya, supaya
-            // jendela cetak sebelumnya benar-benar tertutup dengan bersih.
-            await new Promise(function (resolve) { setTimeout(resolve, 300); });
+            htmlParts.push(await buatKartuRapor(idList[i]));
           }
+          var area = document.getElementById('cetakRaporArea');
+          area.innerHTML = htmlParts.join('');
+
+          document.title = judulCetakRapor(idList);
+
+          // Beri jeda sesaat supaya browser sempat me-render (termasuk
+          // logo watermark & kotak Identitas Siswa) sebelum jendela cetak
+          // muncul, baru ukur tinggi Identitas Siswa yang sesungguhnya
+          // dan suntikkan ke @page margin-top (lihat
+          // terapkanTinggiIdentitasCetak) — supaya identitas berulang di
+          // tiap halaman selalu pas ruangnya, tidak ketiban isi rapor.
+          await new Promise(function (resolve) { setTimeout(resolve, 150); });
+          terapkanTinggiIdentitasCetak(area);
+          window.print();
         } catch (err) {
           alert('Gagal menyiapkan cetak: ' + (err && err.message ? err.message : err));
         } finally {
           document.title = judulAsli;
-          area.innerHTML = '';
           if (triggerBtn) { triggerBtn.disabled = false; triggerBtn.innerHTML = teksAsliBtn; lucide.createIcons(); }
         }
       }
@@ -3914,41 +3905,36 @@
         return 'Identitas - ' + wk.kelas.nama;
       }
 
-      // Cetak identitas 1 atau beberapa siswa sekaligus — sama seperti
-      // cetakSiswa() di Cetak Rapor, tiap siswa dicetak TERPISAH satu
-      // per satu (bukan digabung jadi satu dokumen) supaya tiap siswa
-      // tetap jadi PDF/dokumennya sendiri-sendiri.
+      // Susun kartu identitas untuk 1 atau beberapa siswa sekaligus,
+      // ditaruh di #cetakIdentitasArea, lalu panggil window.print()
+      // SEKALI SAJA untuk semua siswa (sama seperti cetakSiswa() di
+      // Cetak Rapor) — tiap siswa tetap mulai di halaman barunya sendiri
+      // lewat aturan ".rapor-cetak + .rapor-cetak { page-break-before:
+      // always; }" di @media print, jadi halaman antar siswa tidak
+      // pernah bercampur walau digabung jadi satu dokumen/file cetak.
       async function cetakIdentitasSiswa(idList, triggerBtn) {
         var teksAsliBtn = triggerBtn ? triggerBtn.innerHTML : null;
-        if (triggerBtn) { triggerBtn.disabled = true; }
+        if (triggerBtn) { triggerBtn.disabled = true; triggerBtn.innerHTML = 'Menyiapkan...'; }
 
         var judulAsli = document.title;
-        var area = document.getElementById('cetakIdentitasArea');
         try {
+          var htmlParts = [];
           for (var i = 0; i < idList.length; i++) {
-            if (triggerBtn) {
-              triggerBtn.innerHTML = idList.length > 1
-                ? 'Menyiapkan (' + (i + 1) + '/' + idList.length + ')...'
-                : 'Menyiapkan...';
-            }
-
-            area.innerHTML = await buatKartuIdentitas(idList[i]);
-            document.title = judulCetakIdentitas([idList[i]]);
-
-            // Beri jeda sesaat supaya browser sempat me-render sebelum
-            // jendela cetak muncul.
-            await new Promise(function (resolve) { setTimeout(resolve, 150); });
-            window.print();
-
-            // Jeda singkat sebelum menyiapkan siswa berikutnya, supaya
-            // jendela cetak sebelumnya benar-benar tertutup dengan bersih.
-            await new Promise(function (resolve) { setTimeout(resolve, 300); });
+            htmlParts.push(await buatKartuIdentitas(idList[i]));
           }
+          var area = document.getElementById('cetakIdentitasArea');
+          area.innerHTML = htmlParts.join('');
+
+          document.title = judulCetakIdentitas(idList);
+
+          // Beri jeda sesaat supaya browser sempat me-render sebelum
+          // jendela cetak muncul.
+          await new Promise(function (resolve) { setTimeout(resolve, 150); });
+          window.print();
         } catch (err) {
           alert('Gagal menyiapkan cetak: ' + (err && err.message ? err.message : err));
         } finally {
           document.title = judulAsli;
-          area.innerHTML = '';
           if (triggerBtn) { triggerBtn.disabled = false; triggerBtn.innerHTML = teksAsliBtn; lucide.createIcons(); }
         }
       }
