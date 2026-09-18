@@ -2392,24 +2392,37 @@
       }
 
       // Leger HARUS menampilkan SEMUA mata pelajaran dari 6 semester itu,
-      // bukan cuma yang kebetulan sudah ada nilainya — kalau tidak, mapel
-      // yang nilainya belum diisi (mis. semester berjalan) jadi "hilang"
-      // dari tabel. Diambil gabungan (union) mapel yang berlaku dari SETIAP
-      // kelas yang pernah ditempati siswa ini sepanjang Semester 1 s.d. 6
-      // (kelas X, XI, XII bisa beda mapel kejuruannya sesuai program
-      // keahlian) — sama seperti logika di Cetak Rapor & Rekap Nilai: mapel
-      // berlaku_untuk 'semua' selalu ikut, mapel 'tertentu' (mis. "Dasar-
-      // dasar Program" yang isinya beda per jurusan: dasar-dasar otomotif /
-      // dasar-dasar animasi) ikut kalau terhubung ke SALAH SATU kelas yang
-      // pernah ditempati siswa ini lewat mapel_kelas — jurusan yang benar
-      // otomatis ikut karena mapel_kelas cuma menghubungkan tiap mapel ke
-      // kelas jurusannya sendiri (mis. "Dasar-dasar Teknik Otomotif" cuma
-      // terhubung ke kelas X jurusan Otomotif, bukan ke kelas X Animasi).
+      // walaupun belum ada nilainya sama sekali dan walaupun riwayat
+      // siswa_kelas siswa ini di semester-semester lama belum lengkap.
+      // Mapel produktif/kejuruan (berlaku_untuk = 'tertentu', mis.
+      // "Dasar-dasar Otomotif") ditentukan lewat jurusan (program_keahlian)
+      // siswa ini, BUKAN lewat id kelas persis — karena id kelas X TO 1
+      // pasti beda dengan id kelas XII TO 1, padahal sama-sama jurusan
+      // Otomotif. Semua kelas dengan program_keahlian yang sama (di
+      // tingkat X/XI/XII manapun) dianggap satu jurusan.
+      var programKeahlianSet = {};
+      if (wk.kelas.program_keahlian) programKeahlianSet[wk.kelas.program_keahlian] = true;
+      Object.keys(semesterMap).forEach(function (ke) {
+        var pk = semesterMap[ke].programKeahlian;
+        if (pk) programKeahlianSet[pk] = true;
+      });
+
       var kelasIdList = [];
       Object.keys(semesterMap).forEach(function (ke) {
         var kid = semesterMap[ke].kelasId;
         if (kid && kelasIdList.indexOf(kid) === -1) kelasIdList.push(kid);
       });
+      if (kelasIdList.indexOf(wk.kelas.id) === -1) kelasIdList.push(wk.kelas.id);
+
+      if (Object.keys(programKeahlianSet).length) {
+        var kelasSejurusanRes = await supabaseClient
+          .from('kelas')
+          .select('id, program_keahlian')
+          .in('program_keahlian', Object.keys(programKeahlianSet));
+        (kelasSejurusanRes.data || []).forEach(function (k) {
+          if (kelasIdList.indexOf(k.id) === -1) kelasIdList.push(k.id);
+        });
+      }
 
       var mapelSemuaRes = await supabaseClient
         .from('mata_pelajaran')
@@ -2420,21 +2433,16 @@
       var mapelKelasSet = {};
       (mapelKelasRes.data || []).forEach(function (r) { mapelKelasSet[r.mapel_id] = true; });
       var mapelSemesterSet = await ambilMapelSemesterSet();
-      var semesterKeDijalani = Object.keys(semesterMap).map(Number);
+      // Cakupan Semester mapel dipakai untuk menentukan DI KOLOM SEMESTER
+      // MANA mapel ini tampil (lihat rendering di bawah) — bukan untuk
+      // menyembunyikan barisnya dari leger.
+      function semesterBerlakuUntukMapel(m, ke) {
+        if (m.berlaku_semester !== 'tertentu') return true;
+        return (mapelSemesterSet[m.id] || []).indexOf(ke) !== -1;
+      }
 
       var mapelList = (mapelSemuaRes.data || []).filter(function (m) {
         if (m.berlaku_untuk === 'tertentu' && !mapelKelasSet[m.id]) return false;
-        // Mapel dengan cakupan Semester 'tertentu' (menu Mata Pelajaran →
-        // Semester) cuma ikut kalau salah satu semester yang dicentang
-        // pernah dijalani siswa ini — supaya mapel semester 1-2 (mis.
-        // "Dasar-dasar Otomotif" di kelas X) tetap muncul di leger walau
-        // siswa sekarang sudah XII, tapi mapel yang memang tidak pernah
-        // berlaku di semester manapun yang dijalani siswa tidak ikut.
-        if (m.berlaku_semester === 'tertentu') {
-          var daftarSemesterMapel = mapelSemesterSet[m.id] || [];
-          var pernahDijalani = daftarSemesterMapel.some(function (ke) { return semesterKeDijalani.indexOf(ke) !== -1; });
-          if (!pernahDijalani) return false;
-        }
         // Mapel Pendidikan Agama versi lama (generik, tanpa agama_spesifik)
         // tetap ikut untuk semua siswa (namanya menyesuaikan saat dicetak).
         // Versi baru (agama_spesifik terisi) cuma ikut untuk siswa yang
@@ -2485,6 +2493,9 @@
       var rowsHtml = mapelList.map(function (m) {
         var cells = [1, 2, 3, 4, 5, 6].map(function (ke) {
           var n = (nilaiMap[ke] && nilaiMap[ke][m.id]) || {};
+          if (!semesterBerlakuUntukMapel(m, ke)) {
+            return '<td style="text-align:center;color:var(--ink-soft);">' + ((n.nilai === undefined || n.nilai === null) ? '' : Math.round(Number(n.nilai))) + '</td>';
+          }
           var nilaiTampil = (n.nilai === undefined || n.nilai === null) ? '—' : Math.round(Number(n.nilai));
           return '<td style="text-align:center;">' + nilaiTampil + '</td>';
         }).join('');
