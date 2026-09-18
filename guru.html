@@ -1889,7 +1889,8 @@
         '<div id="importSummaryTujuan"></div>' +
         '<form class="add-form" id="formTujuan">' +
         '<div class="field"><label>Kode</label><input type="text" id="tpKode" placeholder="TP.1"></div>' +
-        '<div class="field" style="flex:2;min-width:260px;"><label>Deskripsi</label><input type="text" id="tpDeskripsi" placeholder="Uraian tujuan pembelajaran" maxlength="105" style="text-transform:lowercase;" required></div>' +
+        '<div class="field" style="flex:2;min-width:260px;"><label>Deskripsi</label><input type="text" id="tpDeskripsi" placeholder="Uraian tujuan pembelajaran" maxlength="' + BATAS_PANJANG_DESKRIPSI_TP + '" style="text-transform:lowercase;" required>' +
+        '<div id="tpDeskripsiCounter" style="font-size:11px;color:var(--ink-soft);margin-top:2px;">0/' + BATAS_PANJANG_DESKRIPSI_TP + ' karakter</div></div>' +
         '<div class="field" style="max-width:100px;"><label>Urutan</label><input type="number" id="tpUrutan" min="0" step="1" placeholder="0"></div>' +
         '<div class="field" style="max-width:150px;"><label>Semester</label><select id="tpSemester">' + opsiSemesterHtml(1) + '</select></div>' +
         '<div class="field" style="max-width:140px;"><label>Status</label><select id="tpStatus">' + opsiStatusHtml(true) + '</select></div>' +
@@ -1897,13 +1898,20 @@
         '</form>' +
         '<div class="table-wrap"><table class="data-table"><thead><tr><th>Semester</th><th>Urutan</th><th>Kode</th><th>Deskripsi</th><th>Status</th><th></th></tr></thead><tbody id="tpBody"></tbody></table></div>';
 
+      var tpDeskripsiCounter = document.getElementById('tpDeskripsiCounter');
+      function perbaruiCounterTpDeskripsi(el) {
+        var panjang = el.value.length;
+        tpDeskripsiCounter.textContent = panjang + '/' + BATAS_PANJANG_DESKRIPSI_TP + ' karakter';
+        tpDeskripsiCounter.style.color = panjang >= BATAS_PANJANG_DESKRIPSI_TP ? 'var(--danger)' : 'var(--ink-soft)';
+      }
       document.getElementById('tpDeskripsi').addEventListener('input', function (e) {
         e.target.value = e.target.value.toLowerCase();
+        perbaruiCounterTpDeskripsi(e.target);
       });
 
       document.getElementById('formTujuan').addEventListener('submit', async function (e) {
         e.preventDefault();
-        var deskripsi = document.getElementById('tpDeskripsi').value.trim().toLowerCase().slice(0, 105);
+        var deskripsi = document.getElementById('tpDeskripsi').value.trim().toLowerCase().slice(0, BATAS_PANJANG_DESKRIPSI_TP);
         if (!deskripsi) return;
         var res = await supabaseClient.from('tujuan_pembelajaran').insert({
           guru_id: user.id,
@@ -1982,7 +1990,8 @@
           '<div class="field"><label>Urutan</label><input type="number" id="f_tpUrutan" min="0" step="1" value="' + existing.urutan + '"></div>' +
           '<div class="field"><label>Semester</label><select id="f_tpSemester">' + opsiSemesterHtml(existing.semester) + '</select></div>' +
           '<div class="field"><label>Status</label><select id="f_tpStatus">' + opsiStatusHtml(existing.is_aktif) + '</select></div>' +
-          '<div class="field" style="grid-column:1 / -1;"><label>Deskripsi</label><input type="text" id="f_tpDeskripsi" value="' + escapeHtml(existing.deskripsi) + '" maxlength="105" style="text-transform:lowercase;" required></div>' +
+          '<div class="field" style="grid-column:1 / -1;"><label>Deskripsi</label><input type="text" id="f_tpDeskripsi" value="' + escapeHtml(existing.deskripsi) + '" maxlength="' + BATAS_PANJANG_DESKRIPSI_TP + '" style="text-transform:lowercase;" required>' +
+          '<div id="f_tpDeskripsiCounter" style="font-size:11px;color:var(--ink-soft);margin-top:2px;">' + existing.deskripsi.length + '/' + BATAS_PANJANG_DESKRIPSI_TP + ' karakter</div></div>' +
           '</div>' +
           '<div class="modal-box__actions">' +
           '<button type="button" class="btn-small" id="modalCancelBtn">Batal</button>' +
@@ -1997,13 +2006,20 @@
         document.getElementById('modalCancelBtn').addEventListener('click', tutup);
         overlay.addEventListener('click', function (e) { if (e.target === overlay) tutup(); });
 
+        var fTpDeskripsiCounter = document.getElementById('f_tpDeskripsiCounter');
+        function perbaruiCounterFTpDeskripsi(el) {
+          var panjang = el.value.length;
+          fTpDeskripsiCounter.textContent = panjang + '/' + BATAS_PANJANG_DESKRIPSI_TP + ' karakter';
+          fTpDeskripsiCounter.style.color = panjang >= BATAS_PANJANG_DESKRIPSI_TP ? 'var(--danger)' : 'var(--ink-soft)';
+        }
         document.getElementById('f_tpDeskripsi').addEventListener('input', function (e) {
           e.target.value = e.target.value.toLowerCase();
+          perbaruiCounterFTpDeskripsi(e.target);
         });
 
         document.getElementById('formModalTujuan').addEventListener('submit', async function (e) {
           e.preventDefault();
-          var deskripsi = document.getElementById('f_tpDeskripsi').value.trim().toLowerCase().slice(0, 105);
+          var deskripsi = document.getElementById('f_tpDeskripsi').value.trim().toLowerCase().slice(0, BATAS_PANJANG_DESKRIPSI_TP);
           if (!deskripsi) return;
           var payload = {
             kode: document.getElementById('f_tpKode').value.trim() || null,
@@ -2073,7 +2089,9 @@
           for (var i = 0; i < rows.length; i++) {
             var row = rows[i];
             var kode = String(row['Kode'] || '').trim();
-            var deskripsi = String(row['Deskripsi'] || '').trim().toLowerCase().slice(0, 105);
+            var deskripsiAsli = String(row['Deskripsi'] || '').trim().toLowerCase();
+            var deskripsi = deskripsiAsli.slice(0, BATAS_PANJANG_DESKRIPSI_TP);
+            var deskripsiDipotong = deskripsiAsli.length > BATAS_PANJANG_DESKRIPSI_TP;
             var urutanRaw = row['Urutan'];
             var urutan = parseInt(urutanRaw, 10);
             if (isNaN(urutan)) urutan = 0;
@@ -2108,6 +2126,10 @@
               var ins = await supabaseClient.from('tujuan_pembelajaran').insert(payload);
               if (ins.error) { dilewati++; pesan.push('Baris ' + (i + 2) + (kode ? ' (' + kode + ')' : '') + ': gagal tambah — ' + ins.error.message); continue; }
               ditambah++;
+            }
+            if (deskripsiDipotong) {
+              pesan.push('Baris ' + (i + 2) + (kode ? ' (' + kode + ')' : '') + ': deskripsi ' + deskripsiAsli.length +
+                ' karakter, melebihi batas ' + BATAS_PANJANG_DESKRIPSI_TP + ' karakter — dipotong otomatis.');
             }
           }
 
