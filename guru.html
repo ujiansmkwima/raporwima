@@ -2373,48 +2373,37 @@
         return;
       }
 
-      // Leger HARUS menampilkan SEMUA mata pelajaran, bukan cuma yang
-      // kebetulan sudah ada nilainya — kalau tidak, mapel yang nilainya
-      // belum diisi (mis. semester berjalan) jadi "hilang" dari tabel.
-      // Diambil gabungan (union) mapel yang berlaku dari SETIAP kelas yang
-      // pernah ditempati siswa ini sepanjang Semester 1 s.d. 6 (kelas X,
-      // XI, XII bisa berbeda mapel kejuruannya) — sama seperti logika di
-      // Cetak Rapor & Rekap Nilai: mapel berlaku_untuk 'semua' selalu ikut,
-      // mapel 'tertentu' ikut kalau terhubung ke salah satu kelas itu lewat
-      // mapel_kelas — DENGAN SYARAT TAMBAHAN: kelas penghubung itu harus
-      // satu program keahlian (jurusan) dengan kelas yang diampu wali kelas
-      // sekarang. Ini supaya mapel kejuruan dari jurusan LAIN (mis. siswa
-      // dulu sempat di kelas X jurusan berbeda sebelum pindah) tidak ikut
-      // nyasar ke leger — hanya mapel jurusan siswa sendiri yang muncul.
+      // Leger HARUS menampilkan SEMUA mata pelajaran dari 6 semester itu,
+      // bukan cuma yang kebetulan sudah ada nilainya — kalau tidak, mapel
+      // yang nilainya belum diisi (mis. semester berjalan) jadi "hilang"
+      // dari tabel. Diambil gabungan (union) mapel yang berlaku dari SETIAP
+      // kelas yang pernah ditempati siswa ini sepanjang Semester 1 s.d. 6
+      // (kelas X, XI, XII bisa beda mapel kejuruannya sesuai program
+      // keahlian) — sama seperti logika di Cetak Rapor & Rekap Nilai: mapel
+      // berlaku_untuk 'semua' selalu ikut, mapel 'tertentu' (mis. "Dasar-
+      // dasar Program" yang isinya beda per jurusan: dasar-dasar otomotif /
+      // dasar-dasar animasi) ikut kalau terhubung ke SALAH SATU kelas yang
+      // pernah ditempati siswa ini lewat mapel_kelas — jurusan yang benar
+      // otomatis ikut karena mapel_kelas cuma menghubungkan tiap mapel ke
+      // kelas jurusannya sendiri (mis. "Dasar-dasar Teknik Otomotif" cuma
+      // terhubung ke kelas X jurusan Otomotif, bukan ke kelas X Animasi).
       var kelasIdList = [];
       Object.keys(semesterMap).forEach(function (ke) {
         var kid = semesterMap[ke].kelasId;
         if (kid && kelasIdList.indexOf(kid) === -1) kelasIdList.push(kid);
       });
-      var programKeahlianTarget = wk.kelas.program_keahlian || null;
 
       var mapelSemuaRes = await supabaseClient
         .from('mata_pelajaran')
         .select('id, nama, kode, jenis_mapel, urutan_rapor, berlaku_untuk, agama_spesifik');
       var mapelKelasRes = kelasIdList.length
-        ? await supabaseClient.from('mapel_kelas').select('mapel_id, kelas_id').in('kelas_id', kelasIdList)
+        ? await supabaseClient.from('mapel_kelas').select('mapel_id').in('kelas_id', kelasIdList)
         : { data: [] };
-      // mapelId -> true kalau terhubung ke SALAH SATU kelas riwayat siswa
-      // yang program keahliannya SAMA dengan kelas yang diampu wali kelas.
-      var kelasIdKeProgram = {};
-      Object.keys(semesterMap).forEach(function (ke) {
-        var m = semesterMap[ke];
-        if (m.kelasId) kelasIdKeProgram[m.kelasId] = m.programKeahlian;
-      });
-      var mapelKelasSetProgramCocok = {};
-      (mapelKelasRes.data || []).forEach(function (r) {
-        if ((kelasIdKeProgram[r.kelas_id] || null) === programKeahlianTarget) {
-          mapelKelasSetProgramCocok[r.mapel_id] = true;
-        }
-      });
+      var mapelKelasSet = {};
+      (mapelKelasRes.data || []).forEach(function (r) { mapelKelasSet[r.mapel_id] = true; });
 
       var mapelList = (mapelSemuaRes.data || []).filter(function (m) {
-        if (m.berlaku_untuk === 'tertentu' && !mapelKelasSetProgramCocok[m.id]) return false;
+        if (m.berlaku_untuk === 'tertentu' && !mapelKelasSet[m.id]) return false;
         // Mapel Pendidikan Agama versi lama (generik, tanpa agama_spesifik)
         // tetap ikut untuk semua siswa (namanya menyesuaikan saat dicetak).
         // Versi baru (agama_spesifik terisi) cuma ikut untuk siswa yang
