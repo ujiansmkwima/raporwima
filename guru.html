@@ -211,6 +211,16 @@
     return 'Pendidikan Agama ' + agama + (pakaiBudiPekerti ? ' dan Budi Pekerti' : '');
   }
 
+  // ---------- Label singkat mapel (Kode Mapel) untuk Rekap Nilai & Leger ----------
+  // Dipakai KHUSUS di tampilan Wali Kelas (Rekap Nilai Kelas & Rekap Leger 6
+  // Semester) supaya header tabel tidak terlalu lebar kalau nama mapel
+  // panjang. Kalau mapel belum diisi kodenya (kolom "kode" di menu admin
+  // masih kosong), fallback ke nama lengkap supaya kolom tidak kosong.
+  function labelMapel(m) {
+    if (!m) return '—';
+    return m.kode || m.nama;
+  }
+
   // ---------- Penomoran Semester 1–6 dari Tingkat kelas + Semester tahun ajaran ----------
   // Sama persis dengan yang dipakai admin di Leger Nilai (6 Semester):
   // Tingkat 10 Ganjil=1, Genap=2, Tingkat 11 Ganjil=3, Genap=4,
@@ -364,6 +374,17 @@
         renderRekapNilai(waliKelas);
       });
       menuWali.appendChild(itemRekap);
+
+      var itemLeger = document.createElement('a');
+      itemLeger.href = '#';
+      itemLeger.className = 'menu-item';
+      itemLeger.innerHTML = '<i data-lucide="layers" class="menu-icon"></i><span class="menu-item__title">Rekap Leger (6 Semester)</span><span class="menu-item__sub">' + waliKelas.kelas.nama + '</span>';
+      itemLeger.addEventListener('click', function (e) {
+        e.preventDefault();
+        setActiveMenuItem(itemLeger);
+        renderLegerWaliKelas(waliKelas);
+      });
+      menuWali.appendChild(itemLeger);
 
       var itemPresensi = document.createElement('a');
       itemPresensi.href = '#';
@@ -2116,7 +2137,7 @@
 
       var penugasanRes = await supabaseClient
         .from('penugasan_guru')
-        .select('mapel:mapel_id(id, nama, agama_spesifik)')
+        .select('mapel:mapel_id(id, nama, kode, agama_spesifik)')
         .eq('kelas_id', wk.kelas.id)
         .eq('tahun_ajaran_id', tahunAktif.id);
       var mapelMap = {};
@@ -2148,8 +2169,11 @@
       // kolomnya cuma relevan untuk siswa yang agamanya cocok, siswa lain
       // ditampilkan strip (–) tanpa label agama.
       var adaMapelAgamaGenerik = mapelList.some(function (m) { return isPendidikanAgama(m.nama) && !m.agama_spesifik; });
+      // Header pakai Kode Mapel (bukan nama lengkap) supaya tabel tidak
+      // terlalu lebar. title="" nama lengkap muncul saat kursor diarahkan
+      // ke header, kode-nya sendiri tetap ditandai * kalau mapel agama generik.
       var headerMapel = mapelList.map(function (m) {
-        return '<th>' + escapeHtml(m.nama) + (isPendidikanAgama(m.nama) && !m.agama_spesifik ? ' *' : '') + '</th>';
+        return '<th title="' + escapeHtml(m.nama) + '">' + escapeHtml(labelMapel(m)) + (isPendidikanAgama(m.nama) && !m.agama_spesifik ? ' *' : '') + '</th>';
       }).join('');
       var rowsHtml = siswaList.map(function (s, i) {
         var cells = mapelList.map(function (m) {
@@ -2168,10 +2192,180 @@
 
       content.innerHTML =
         '<div class="panel-head"><div><div class="panel-head__title">Rekap Nilai — ' + escapeHtml(wk.kelas.nama) + '</div>' +
-        '<div class="panel-head__desc">Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + ' — per mata pelajaran.</div></div></div>' +
+        '<div class="panel-head__desc">Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + ' — per mata pelajaran. Header kolom pakai Kode Mapel (arahkan kursor ke header untuk lihat nama lengkap).</div></div></div>' +
         '<div class="table-wrap"><table class="data-table"><thead><tr><th>No</th><th>Nama</th>' + headerMapel + '</tr></thead>' +
         '<tbody>' + rowsHtml + '</tbody></table></div>' +
         (adaMapelAgamaGenerik ? '<div class="panel-note">* Nama mapel otomatis menyesuaikan agama tiap siswa saat dicetak di rapor (contoh: siswa Buddha → "Pendidikan Agama Buddha dan Budi Pekerti").</div>' : '');
+    }
+
+    // ================= WALI KELAS: Rekap Leger (6 Semester) =================
+    // Versi wali kelas dari "Leger Nilai (6 Semester)" milik Admin, tapi
+    // dipersempit hanya untuk kelas yang diampu wali kelas ini — jadi tidak
+    // perlu langkah "pilih kelas" seperti di Admin, langsung ke daftar siswa.
+    // Header mata pelajaran pakai Kode Mapel (lihat labelMapel) supaya tabel
+    // 6 kolom semester tidak terlalu lebar.
+    async function renderLegerWaliKelas(wk) {
+      await renderLegerWaliSiswa(wk);
+    }
+
+    async function renderLegerWaliSiswa(wk) {
+      content.innerHTML = renderPlaceholder('Memuat...', 'Mengambil daftar siswa kelas ' + wk.kelas.nama + '.');
+
+      var siswaList = await ambilSiswaKelas(wk.kelas.id);
+
+      content.innerHTML =
+        '<div class="panel-head"><div><div class="panel-head__title">Rekap Leger — ' + escapeHtml(wk.kelas.nama) + '</div>' +
+        '<div class="panel-head__desc">Nilai Semester 1 s.d. 6 tiap siswa, digabung dari seluruh tahun ajaran siswa tersebut ada di kelas ini/kelas sebelumnya. Klik nama untuk membuka legernya.</div></div></div>' +
+        '<div class="toolbar">' +
+        '<div class="field" style="min-width:220px;"><label>Cari Nama/NIS</label><input type="text" id="legerWaliCari" placeholder="Ketik nama atau NIS..."></div>' +
+        '</div>' +
+        '<div id="legerWaliArea"><div class="panel-note">Memuat...</div></div>';
+
+      var area = document.getElementById('legerWaliArea');
+
+      if (!siswaList.length) {
+        area.innerHTML = '<div class="empty-state"><div class="empty-state__mark">！</div>' +
+          '<div class="empty-state__title">Belum ada siswa</div>' +
+          '<div class="empty-state__desc">Belum ada siswa yang ditempatkan di kelas ini pada tahun ajaran aktif.</div></div>';
+        return;
+      }
+
+      function tampilkanDaftar(filterTeks) {
+        var q = (filterTeks || '').trim().toLowerCase();
+        var filtered = !q ? siswaList : siswaList.filter(function (s) {
+          return (s.nama || '').toLowerCase().indexOf(q) !== -1 || (s.nis || '').toLowerCase().indexOf(q) !== -1;
+        });
+
+        area.innerHTML = '<div class="table-wrap"><table class="data-table"><thead><tr><th>Nama</th><th>NIS</th><th></th></tr></thead>' +
+          '<tbody>' + (filtered.length ? filtered.map(function (s) {
+            return '<tr><td>' + escapeHtml(s.nama) + '</td><td>' + escapeHtml(s.nis || '—') + '</td>' +
+              '<td><button class="btn-small" data-siswa-id="' + s.id + '">Lihat Leger</button></td></tr>';
+          }).join('') : '<tr><td colspan="3">Tidak ada siswa yang cocok dengan pencarian.</td></tr>') + '</tbody></table></div>';
+
+        area.querySelectorAll('button[data-siswa-id]').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var siswaObj = siswaList.find(function (s) { return s.id === btn.dataset.siswaId; });
+            renderLegerWaliDetail(siswaObj, wk);
+          });
+        });
+      }
+
+      tampilkanDaftar('');
+      document.getElementById('legerWaliCari').addEventListener('input', function (e) { tampilkanDaftar(e.target.value); });
+    }
+
+    async function renderLegerWaliDetail(siswaObj, wk) {
+      content.innerHTML =
+        '<div class="panel-head"><div><div class="panel-head__title">Leger Nilai — ' + escapeHtml(siswaObj.nama) + '</div>' +
+        '<div class="panel-head__desc">' + escapeHtml(wk.kelas.nama) + (siswaObj.nis ? ' · NIS ' + escapeHtml(siswaObj.nis) : '') + '. Nilai Semester 1 s.d. 6 ditampilkan berdampingan, header kolom pakai Kode Mapel.</div></div></div>' +
+        '<div class="toolbar">' +
+        '<button class="btn-small" id="btnLegerWaliKembali">← Kembali ke Daftar Siswa</button>' +
+        '<button class="btn-small" id="btnExportLegerWali" disabled>⬇ Unduh Leger (Excel)</button>' +
+        '</div>' +
+        '<div id="legerWaliDetailArea"><div class="panel-note">Memuat leger...</div></div>';
+
+      document.getElementById('btnLegerWaliKembali').addEventListener('click', function () { renderLegerWaliSiswa(wk); });
+
+      var area = document.getElementById('legerWaliDetailArea');
+      var btnExport = document.getElementById('btnExportLegerWali');
+
+      var skRes = await supabaseClient
+        .from('siswa_kelas')
+        .select('tahun_ajaran_id, kelas:kelas_id(nama, tingkat), tahun_ajaran:tahun_ajaran_id(nama, semester)')
+        .eq('siswa_id', siswaObj.id);
+
+      // Peta: semesterKe (1-6) -> { tahunAjaranId, kelasNama, taNama, taSemester }
+      var semesterMap = {};
+      (skRes.data || []).forEach(function (r) {
+        if (!r.kelas || !r.tahun_ajaran) return;
+        var ke = hitungSemesterKe(r.kelas.tingkat, r.tahun_ajaran.semester);
+        if (!ke) return;
+        semesterMap[ke] = {
+          tahunAjaranId: r.tahun_ajaran_id,
+          kelasNama: r.kelas.nama,
+          taNama: r.tahun_ajaran.nama,
+          taSemester: r.tahun_ajaran.semester
+        };
+      });
+
+      var tahunAjaranIdKeSemester = {};
+      Object.keys(semesterMap).forEach(function (ke) { tahunAjaranIdKeSemester[semesterMap[ke].tahunAjaranId] = Number(ke); });
+
+      var nilaiRes = await supabaseClient
+        .from('nilai')
+        .select('tahun_ajaran_id, nilai, mapel:mapel_id(id, nama, kode, urutan_rapor)')
+        .eq('siswa_id', siswaObj.id)
+        .eq('jenis', 'rapor');
+
+      // nilaiMap: semesterKe -> mapelId -> { nilai }
+      var nilaiMap = {};
+      var mapelMap = {}; // mapelId -> {id, nama, kode, urutan_rapor}
+      (nilaiRes.data || []).forEach(function (r) {
+        var ke = tahunAjaranIdKeSemester[r.tahun_ajaran_id];
+        if (!ke || !r.mapel) return;
+        mapelMap[r.mapel.id] = r.mapel;
+        if (!nilaiMap[ke]) nilaiMap[ke] = {};
+        nilaiMap[ke][r.mapel.id] = { nilai: r.nilai };
+      });
+
+      var mapelList = Object.keys(mapelMap).map(function (id) { return mapelMap[id]; });
+      mapelList.sort(function (a, b) {
+        var ua = (a.urutan_rapor === null || a.urutan_rapor === undefined) ? 9999 : a.urutan_rapor;
+        var ub = (b.urutan_rapor === null || b.urutan_rapor === undefined) ? 9999 : b.urutan_rapor;
+        if (ua !== ub) return ua - ub;
+        return a.nama.localeCompare(b.nama);
+      });
+
+      if (!mapelList.length) {
+        area.innerHTML = '<div class="empty-state"><div class="empty-state__mark">！</div>' +
+          '<div class="empty-state__title">Belum ada nilai</div>' +
+          '<div class="empty-state__desc">Siswa ini belum punya data nilai di semester manapun.</div></div>';
+        btnExport.disabled = true;
+        return;
+      }
+
+      var infoHtml = '<div class="panel-note">' +
+        [1, 2, 3, 4, 5, 6].map(function (ke) {
+          var m = semesterMap[ke];
+          return 'Semester ' + ke + ': ' + (m ? escapeHtml(m.kelasNama) + ' — TA ' + escapeHtml(m.taNama) + ' ' + escapeHtml(m.taSemester) : '<em>belum ada data</em>');
+        }).join(' &nbsp;·&nbsp; ') +
+        '</div>';
+
+      var headerSemester = [1, 2, 3, 4, 5, 6].map(function (ke) { return '<th>Semester ' + ke + '</th>'; }).join('');
+
+      var rowsHtml = mapelList.map(function (m) {
+        var cells = [1, 2, 3, 4, 5, 6].map(function (ke) {
+          var n = (nilaiMap[ke] && nilaiMap[ke][m.id]) || {};
+          var nilaiTampil = (n.nilai === undefined || n.nilai === null) ? '—' : Math.round(Number(n.nilai));
+          return '<td style="text-align:center;">' + nilaiTampil + '</td>';
+        }).join('');
+        return '<tr><td title="' + escapeHtml(m.nama) + '">' + escapeHtml(labelMapel(m)) + '</td>' + cells + '</tr>';
+      }).join('');
+
+      area.innerHTML = infoHtml +
+        '<div class="table-wrap"><table class="data-table"><thead><tr><th>Mapel</th>' + headerSemester + '</tr></thead>' +
+        '<tbody>' + rowsHtml + '</tbody></table></div>';
+
+      btnExport.disabled = false;
+      btnExport.addEventListener('click', function () {
+        var aoa = [];
+        aoa.push(['Leger Nilai — ' + siswaObj.nama + (siswaObj.nis ? ' (' + siswaObj.nis + ')' : '')]);
+        var headerRow = ['Kode Mapel', 'Mata Pelajaran'];
+        for (var ke = 1; ke <= 6; ke++) headerRow.push('Semester ' + ke);
+        aoa.push(headerRow);
+        mapelList.forEach(function (m) {
+          var row = [m.kode || '—', m.nama];
+          for (var ke = 1; ke <= 6; ke++) {
+            var n = (nilaiMap[ke] && nilaiMap[ke][m.id]) || {};
+            row.push(n.nilai === undefined || n.nilai === null ? '' : Math.round(Number(n.nilai)));
+          }
+          aoa.push(row);
+        });
+        var ws = XLSX.utils.aoa_to_sheet(aoa);
+        var wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Leger Nilai');
+        XLSX.writeFile(wb, 'leger_' + siswaObj.nama.replace(/[^a-z0-9]/gi, '_') + '.xlsx');
+      });
     }
 
     // ================= WALI KELAS: Presensi =================
