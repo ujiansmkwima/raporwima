@@ -3930,6 +3930,7 @@
           '<div class="rapor-cetak rapor-cetak--identitas">' +
 
           '<div class="rapor-cetak__bar">KETERANGAN TENTANG PESERTA DIDIK</div>' +
+          '<div class="rapor-cetak__bar rapor-cetak__bar--sub">A. IDENTITAS PESERTA DIDIK</div>' +
           '<table class="ident-table"><tbody>' +
           barisIdent('Nama Peserta Didik', siswa.nama) +
           barisIdent('NIS / NISN', (siswa.nis || '-') + ' / ' + (siswa.nisn || '-')) +
@@ -3941,10 +3942,11 @@
           barisIdent('Alamat Peserta Didik', siswa.alamat_siswa) +
           barisIdent('Nomor Telepon Rumah', siswa.no_telp_siswa) +
           barisIdent('Sekolah Asal', siswa.sekolah_asal) +
+          barisIdentKosong('Diterima di Sekolah Ini') +
           barisIdent('Pada Tanggal', formatTanggalIndonesia(siswa.tanggal_masuk)) +
           '</tbody></table>' +
 
-          '<div class="rapor-cetak__bar">DATA ORANG TUA</div>' +
+          '<div class="rapor-cetak__bar rapor-cetak__bar--sub">B. DATA ORANG TUA</div>' +
           '<table class="ident-table"><tbody>' +
           barisIdent('Nama Ayah', siswa.nama_ayah) +
           barisIdent('Nama Ibu', siswa.nama_ibu) +
@@ -3954,18 +3956,12 @@
           barisIdent('Pekerjaan Ibu', siswa.pekerjaan_ibu) +
           '</tbody></table>' +
 
-          '<div class="rapor-cetak__bar">DATA WALI PESERTA DIDIK</div>' +
+          '<div class="rapor-cetak__bar rapor-cetak__bar--sub">C. DATA WALI</div>' +
           '<table class="ident-table"><tbody>' +
           barisIdent('Nama Wali', siswa.nama_wali) +
           barisIdent('Alamat Wali', siswa.alamat_wali) +
           barisIdent('Nomor Telepon Rumah', siswa.no_telp_wali) +
           barisIdent('Pekerjaan Wali', siswa.pekerjaan_wali) +
-          '</tbody></table>' +
-
-          '<div class="rapor-cetak__bar">KETERANGAN PENERIMAAN</div>' +
-          '<table class="ident-table"><tbody>' +
-          barisIdentKosong('Diterima di Sekolah Ini') +
-          barisIdent('Di Kelas', siswa.kelas_masuk) +
           '</tbody></table>' +
 
           '<div class="rapor-cetak__footer">' +

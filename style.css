@@ -1467,6 +1467,15 @@ a { color: inherit; text-decoration: none; }
   border-bottom: 1px solid #000;
 }
 
+/* Sub-bar "A. IDENTITAS PESERTA DIDIK" / "B. DATA ORANG TUA" / "C. DATA
+   WALI" — rata kiri tanpa kotak/garis, mengikuti format Keterangan
+   Tentang Peserta Didik resmi (beda dari bar judul utama di atasnya). */
+.rapor-cetak--identitas .rapor-cetak__bar--sub {
+  text-align: left;
+  border: none;
+  padding: 10px 0 4px;
+}
+
 .ident-photo-box {
   width: 90px;
   height: 120px;
