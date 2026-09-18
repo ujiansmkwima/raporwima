@@ -59,6 +59,7 @@
     <div class="sidebar__footer">
       <div style="margin-bottom:8px; opacity:0.8;">SMK Widya Mandala Tambak · Banyumas</div>
       <a href="index.html" id="logoutBtn"><i data-lucide="log-out" style="width:13px;height:13px;"></i> Keluar</a>
+      <div style="margin-top:8px;font-size:10px;opacity:0.45;">developed by hhh</div>
     </div>
   </aside>
 
@@ -3926,12 +3927,11 @@
           '<td class="ident-value">' + escapeHtml(value || '-') + '</td></tr>';
       }
 
-      // Baris "diisi tangan" (mis. Diterima di sekolah ini) — sengaja
-      // dikosongkan (bukan diisi data), cukup garis bawah kosong tempat
-      // menulis, seperti kolom titik-titik di form aslinya.
+      // Baris "diisi tangan" (mis. Diterima di sekolah ini) — dikosongkan
+      // total, tanpa garis/strip placeholder, cukup label dan titik dua.
       function barisIdentKosong(label) {
         return '<tr><td class="ident-label">' + escapeHtml(label) + '</td><td class="ident-colon">:</td>' +
-          '<td class="ident-value"><span class="ident-value--blank"></span></td></tr>';
+          '<td class="ident-value"></td></tr>';
       }
 
       async function buatKartuIdentitas(siswaId) {
@@ -3966,6 +3966,7 @@
           barisIdent('Sekolah Asal', siswa.sekolah_asal) +
           barisIdentKosong('Diterima di Sekolah Ini') +
           barisIdent('Pada Tanggal', formatTanggalIndonesia(siswa.tanggal_masuk)) +
+          barisIdent('Di Kelas', siswa.kelas_masuk) +
           '</tbody></table>' +
 
           '<div class="rapor-cetak__bar rapor-cetak__bar--sub">B. DATA ORANG TUA</div>' +
