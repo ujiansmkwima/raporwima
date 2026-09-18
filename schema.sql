@@ -70,6 +70,11 @@ create table if not exists public.mata_pelajaran (
   kkm integer not null default 75,      -- kriteria ketuntasan minimal
   urutan_rapor integer,                 -- urutan tampil mapel ini di rapor
   berlaku_untuk text not null default 'semua' check (berlaku_untuk in ('semua', 'tertentu')),
+  -- Semester berlakunya mapel ini: 'semua' = Semester 1 s.d. 6,
+  -- 'tertentu' = hanya semester yang dicentang (lihat mapel_semester).
+  -- Penomoran 1-6 sama dengan Leger Nilai 6 Semester: 1-2 kelas X,
+  -- 3-4 kelas XI, 5-6 kelas XII.
+  berlaku_semester text not null default 'semua' check (berlaku_semester in ('semua', 'tertentu')),
   jenis_mapel text not null default 'umum' check (jenis_mapel in ('umum', 'kejuruan')),  -- A. Mata Pelajaran Umum / B. Mata Pelajaran Kejuruan
   -- Diisi HANYA untuk mapel Pendidikan Agama (mis. "Pendidikan Agama
   -- Islam dan Budi Pekerti"): menandai mapel ini khusus untuk siswa
@@ -88,6 +93,15 @@ create table if not exists public.mapel_kelas (
   mapel_id uuid not null references public.mata_pelajaran(id) on delete cascade,
   kelas_id uuid not null references public.kelas(id) on delete cascade,
   unique (mapel_id, kelas_id)
+);
+
+-- Semester (1-6) mana saja yang memakai mapel ini, KALAU
+-- berlaku_semester = 'tertentu'.
+create table if not exists public.mapel_semester (
+  id uuid primary key default gen_random_uuid(),
+  mapel_id uuid not null references public.mata_pelajaran(id) on delete cascade,
+  semester_ke integer not null check (semester_ke between 1 and 6),
+  unique (mapel_id, semester_ke)
 );
 
 create table if not exists public.kelas (
@@ -138,6 +152,7 @@ create table if not exists public.siswa (
 
 alter table public.mata_pelajaran enable row level security;
 alter table public.mapel_kelas enable row level security;
+alter table public.mapel_semester enable row level security;
 alter table public.kelas enable row level security;
 alter table public.siswa enable row level security;
 
@@ -148,6 +163,11 @@ create policy "Admin kelola mata_pelajaran" on public.mata_pelajaran for all
 
 create policy "Semua user login boleh baca mapel_kelas" on public.mapel_kelas for select using (auth.uid() is not null);
 create policy "Admin kelola mapel_kelas" on public.mapel_kelas for all
+  using (exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'))
+  with check (exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'));
+
+create policy "Semua user login boleh baca mapel_semester" on public.mapel_semester for select using (auth.uid() is not null);
+create policy "Admin kelola mapel_semester" on public.mapel_semester for all
   using (exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'))
   with check (exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'));
 

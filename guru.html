@@ -235,6 +235,20 @@
     return null;
   }
 
+  // ---------- Peta mapel_id -> daftar semester (1-6) yang berlaku ----------
+  // Dipakai untuk mapel dengan berlaku_semester = 'tertentu' (lihat menu
+  // Mata Pelajaran di Admin). Mapel dengan berlaku_semester = 'semua' tidak
+  // perlu dicek ke peta ini, otomatis berlaku di semester manapun.
+  async function ambilMapelSemesterSet() {
+    var res = await supabaseClient.from('mapel_semester').select('mapel_id, semester_ke');
+    var set = {};
+    (res.data || []).forEach(function (r) {
+      if (!set[r.mapel_id]) set[r.mapel_id] = [];
+      set[r.mapel_id].push(r.semester_ke);
+    });
+    return set;
+  }
+
   // ---------- Urutan tampil Mata Pelajaran (Rekap Nilai & Leger Wali Kelas) ----------
   // Supaya urutan kolom/baris mapel di Rekap Nilai Kelas dan Rekap Leger (6
   // Semester) SAMA PERSIS dengan urutan yang dipakai Admin di Cetak Rapor
@@ -2204,17 +2218,21 @@
       // kelas ini lewat mapel_kelas.
       var mapelSemuaRes = await supabaseClient
         .from('mata_pelajaran')
-        .select('id, nama, kode, jenis_mapel, urutan_rapor, berlaku_untuk, agama_spesifik');
+        .select('id, nama, kode, jenis_mapel, urutan_rapor, berlaku_untuk, berlaku_semester, agama_spesifik');
       var mapelKelasRes = await supabaseClient
         .from('mapel_kelas')
         .select('mapel_id')
         .eq('kelas_id', wk.kelas.id);
       var mapelKelasSet = {};
       (mapelKelasRes.data || []).forEach(function (r) { mapelKelasSet[r.mapel_id] = true; });
+      var mapelSemesterSet = await ambilMapelSemesterSet();
+      var semesterKeAktif = hitungSemesterKe(wk.kelas.tingkat, tahunAktif.semester);
       var urutanKelasMap = await ambilUrutanKelasMap(wk.kelas.id);
 
       var mapelList = (mapelSemuaRes.data || []).filter(function (m) {
-        return m.berlaku_untuk !== 'tertentu' || mapelKelasSet[m.id];
+        if (m.berlaku_untuk === 'tertentu' && !mapelKelasSet[m.id]) return false;
+        if (m.berlaku_semester === 'tertentu' && semesterKeAktif && (mapelSemesterSet[m.id] || []).indexOf(semesterKeAktif) === -1) return false;
+        return true;
       });
       mapelList = urutkanMapelList(mapelList, urutanKelasMap);
 
@@ -3447,7 +3465,7 @@
       // (urutan default yang diatur admin lewat menu Mata Pelajaran).
       var mapelSemuaRes = await supabaseClient
         .from('mata_pelajaran')
-        .select('id, nama, jenis_mapel, urutan_rapor, berlaku_untuk, agama_spesifik');
+        .select('id, nama, jenis_mapel, urutan_rapor, berlaku_untuk, berlaku_semester, agama_spesifik');
       var mapelKelasRes = await supabaseClient
         .from('mapel_kelas')
         .select('mapel_id')
@@ -3458,6 +3476,8 @@
         .eq('kelas_id', wk.kelas.id);
       var mapelKelasSet = {};
       (mapelKelasRes.data || []).forEach(function (r) { mapelKelasSet[r.mapel_id] = true; });
+      var mapelSemesterSet = await ambilMapelSemesterSet();
+      var semesterKeAktifCetak = hitungSemesterKe(wk.kelas.tingkat, tahunAktif.semester);
       var urutanKelasMap = {};
       (mapelUrutanKelasRes.data || []).forEach(function (r) { urutanKelasMap[r.mapel_id] = r.urutan_rapor; });
       function efektifUrutanRapor(m) {
@@ -3471,7 +3491,9 @@
         return a.nama.localeCompare(b.nama);
       }
       var mapelListKelasIni = (mapelSemuaRes.data || []).filter(function (m) {
-        return m.berlaku_untuk !== 'tertentu' || mapelKelasSet[m.id];
+        if (m.berlaku_untuk === 'tertentu' && !mapelKelasSet[m.id]) return false;
+        if (m.berlaku_semester === 'tertentu' && semesterKeAktifCetak && (mapelSemesterSet[m.id] || []).indexOf(semesterKeAktifCetak) === -1) return false;
+        return true;
       });
       var mapelUmum = mapelListKelasIni.filter(function (m) { return m.jenis_mapel !== 'kejuruan'; }).sort(urutkanMapel);
       var mapelKejuruan = mapelListKelasIni.filter(function (m) { return m.jenis_mapel === 'kejuruan'; }).sort(urutkanMapel);

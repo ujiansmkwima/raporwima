@@ -755,6 +755,11 @@
         }).join('')
       : '<span style="color:var(--ink-soft);">Belum ada kelas — tambahkan dulu di menu "Kelas".</span>';
 
+    var semesterChecklistHtml = [1, 2, 3, 4, 5, 6].map(function (n) {
+      return '<label style="display:flex;align-items:center;gap:6px;font-weight:400;">' +
+        '<input type="checkbox" class="mSemesterChk" value="' + n + '"> Semester ' + n + '</label>';
+    }).join('');
+
     content.innerHTML =
       '<div class="panel-head"><div><div class="panel-head__title">Mata Pelajaran</div>' +
       '<div class="panel-head__desc">Dibutuhkan sebagai pilihan saat menugaskan guru mengajar. "Kelas Tertentu" berguna untuk mapel produktif/kejuruan yang cuma diajarkan di kelas tertentu. Urutan di bawah ini berlaku sebagai default — untuk mengatur urutan nomor rapor yang berbeda per kelas, pakai menu "Mata Pelajaran Per Tingkat".</div></div>' +
@@ -766,6 +771,7 @@
       '<div class="field"><label>KKM</label><input type="number" id="mKkm" value="75"></div>' +
       '<div class="field"><label>Urutan pada Rapor</label><input type="number" id="mUrutan" placeholder="1"></div>' +
       '<div class="field"><label>Kelas</label><select id="mBerlaku"><option value="semua">Semua Kelas</option><option value="tertentu">Kelas Tertentu</option></select></div>' +
+      '<div class="field"><label>Semester</label><select id="mBerlakuSemester"><option value="semua">Semua Semester (1-6)</option><option value="tertentu">Semester Tertentu</option></select></div>' +
       '<div class="field"><label>Mapel Agama Untuk</label><select id="mAgama">' + opsiAgamaMapelHtml('') + '</select></div>' +
       '<button type="submit" class="btn-small btn-small--primary">Tambah</button>' +
       '</form>' +
@@ -774,10 +780,14 @@
       '<label style="font-weight:600;font-size:13px;display:block;margin-bottom:8px;">Pilih kelas yang memakai mapel ini</label>' +
       '<div style="display:flex;flex-wrap:wrap;gap:8px 18px;">' + kelasChecklistHtml + '</div>' +
       '</div>' +
+      '<div id="mSemesterTertentuWrap" style="display:none;margin:0 0 20px;">' +
+      '<label style="font-weight:600;font-size:13px;display:block;margin-bottom:8px;">Pilih semester (1-6) yang memakai mapel ini</label>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:8px 18px;">' + semesterChecklistHtml + '</div>' +
+      '</div>' +
       '<div class="toolbar">' +
       '<button class="btn-small btn-small--danger" id="btnHapusTerpilihMapel" disabled>🗑 Hapus Terpilih (<span id="mTerpilihCount">0</span>)</button>' +
       '</div>' +
-      '<div class="table-wrap"><table class="data-table"><thead><tr><th style="width:32px;"><input type="checkbox" id="mSelectAll"></th><th>Urutan</th><th>Kode</th><th>Nama Mapel</th><th>Jenis</th><th>KKM</th><th>Kelas</th><th></th></tr></thead><tbody id="mBody"></tbody></table></div>';
+      '<div class="table-wrap"><table class="data-table"><thead><tr><th style="width:32px;"><input type="checkbox" id="mSelectAll"></th><th>Urutan</th><th>Kode</th><th>Nama Mapel</th><th>Jenis</th><th>KKM</th><th>Kelas</th><th>Semester</th><th></th></tr></thead><tbody id="mBody"></tbody></table></div>';
 
     document.getElementById('btnKeMapelTingkat').addEventListener('click', function () {
       setActiveMenu('mapelTingkat');
@@ -788,6 +798,12 @@
     var kelasTertentuWrap = document.getElementById('mKelasTertentuWrap');
     berlakuSelect.addEventListener('change', function () {
       kelasTertentuWrap.style.display = berlakuSelect.value === 'tertentu' ? 'block' : 'none';
+    });
+
+    var berlakuSemesterSelect = document.getElementById('mBerlakuSemester');
+    var semesterTertentuWrap = document.getElementById('mSemesterTertentuWrap');
+    berlakuSemesterSelect.addEventListener('change', function () {
+      semesterTertentuWrap.style.display = berlakuSemesterSelect.value === 'tertentu' ? 'block' : 'none';
     });
 
     document.getElementById('formMapel').addEventListener('submit', async function (e) {
@@ -802,6 +818,13 @@
         if (!kelasIds.length) { alert('Pilih minimal satu kelas untuk mapel dengan "Kelas Tertentu".'); return; }
       }
 
+      var berlakuSemester = berlakuSemesterSelect.value;
+      var semesterList = [];
+      if (berlakuSemester === 'tertentu') {
+        document.querySelectorAll('.mSemesterChk:checked').forEach(function (chk) { semesterList.push(parseInt(chk.value, 10)); });
+        if (!semesterList.length) { alert('Pilih minimal satu semester untuk mapel dengan "Semester Tertentu".'); return; }
+      }
+
       var urutanVal = document.getElementById('mUrutan').value.trim();
 
       var res = await supabaseClient.from('mata_pelajaran').insert({
@@ -811,6 +834,7 @@
         kkm: parseInt(document.getElementById('mKkm').value, 10) || 75,
         urutan_rapor: urutanVal === '' ? null : parseInt(urutanVal, 10),
         berlaku_untuk: berlaku,
+        berlaku_semester: berlakuSemester,
         agama_spesifik: document.getElementById('mAgama').value || null
       }).select('id').single();
 
@@ -822,12 +846,18 @@
         if (relRes.error) { alert('Mapel tersimpan, tapi gagal menyimpan daftar kelasnya: ' + relRes.error.message); }
       }
 
+      if (berlakuSemester === 'tertentu') {
+        var semRows = semesterList.map(function (n) { return { mapel_id: res.data.id, semester_ke: n }; });
+        var semRes = await supabaseClient.from('mapel_semester').insert(semRows);
+        if (semRes.error) { alert('Mapel tersimpan, tapi gagal menyimpan daftar semesternya: ' + semRes.error.message); }
+      }
+
       renderMapel();
     });
 
     var listRes = await supabaseClient
       .from('mata_pelajaran')
-      .select('id, kode, nama, jenis_mapel, kkm, urutan_rapor, berlaku_untuk, agama_spesifik')
+      .select('id, kode, nama, jenis_mapel, kkm, urutan_rapor, berlaku_untuk, berlaku_semester, agama_spesifik')
       .order('urutan_rapor', { ascending: true, nullsFirst: false })
       .order('nama');
     var rows = listRes.data || [];
@@ -839,6 +869,8 @@
 
     var mapelKelasMap = {};
     var mapelKelasIdMap = {};
+    var mapelSemesterMap = {};
+    var mapelSemesterIdMap = {};
     if (rows.length) {
       var mkRes = await supabaseClient.from('mapel_kelas').select('mapel_id, kelas_id');
       (mkRes.data || []).forEach(function (r) {
@@ -847,14 +879,27 @@
         if (!mapelKelasIdMap[r.mapel_id]) mapelKelasIdMap[r.mapel_id] = [];
         mapelKelasIdMap[r.mapel_id].push(r.kelas_id);
       });
+
+      var msRes = await supabaseClient.from('mapel_semester').select('mapel_id, semester_ke');
+      (msRes.data || []).forEach(function (r) {
+        if (!mapelSemesterMap[r.mapel_id]) mapelSemesterMap[r.mapel_id] = [];
+        mapelSemesterMap[r.mapel_id].push(r.semester_ke);
+        if (!mapelSemesterIdMap[r.mapel_id]) mapelSemesterIdMap[r.mapel_id] = [];
+        mapelSemesterIdMap[r.mapel_id].push(r.semester_ke);
+      });
+      Object.keys(mapelSemesterMap).forEach(function (id) { mapelSemesterMap[id].sort(function (a, b) { return a - b; }); });
     }
 
     var body = document.getElementById('mBody');
-    body.innerHTML = rows.length ? '' : '<tr><td colspan="7">Belum ada mata pelajaran.</td></tr>';
+    body.innerHTML = rows.length ? '' : '<tr><td colspan="8">Belum ada mata pelajaran.</td></tr>';
     rows.forEach(function (r) {
       var kelasHtml = r.berlaku_untuk === 'tertentu'
         ? (mapelKelasMap[r.id] || []).map(escapeHtml).join(', ') || '<span style="color:var(--ink-soft);">— belum dipilih —</span>'
         : 'Semua Kelas';
+
+      var semesterHtml = r.berlaku_semester === 'tertentu'
+        ? (mapelSemesterMap[r.id] || []).map(function (n) { return 'Sem ' + n; }).join(', ') || '<span style="color:var(--ink-soft);">— belum dipilih —</span>'
+        : 'Semua Semester';
 
       var namaHtml = escapeHtml(r.nama) + (r.agama_spesifik ? ' <span class="chip chip--muted">Agama: ' + escapeHtml(r.agama_spesifik) + '</span>' : '');
 
@@ -866,12 +911,13 @@
         '<td>' + escapeHtml(jenisLabel[r.jenis_mapel] || jenisLabel.umum) + '</td>' +
         '<td>' + escapeHtml(r.kkm) + '</td>' +
         '<td>' + kelasHtml + '</td>' +
+        '<td>' + semesterHtml + '</td>' +
         '<td><button class="btn-small" data-edit-id="' + r.id + '">Edit</button> ' +
         '<button class="btn-small btn-small--danger" data-id="' + r.id + '">Hapus</button></td>';
       body.appendChild(tr);
 
       tr.querySelector('[data-edit-id]').addEventListener('click', function () {
-        bukaModalMapel(r, mapelKelasIdMap[r.id] || []);
+        bukaModalMapel(r, mapelKelasIdMap[r.id] || [], mapelSemesterIdMap[r.id] || []);
       });
     });
     body.querySelectorAll('button[data-id]').forEach(function (btn) {
@@ -895,7 +941,8 @@
     });
 
     // ---------- Modal Edit ----------
-    function bukaModalMapel(existing, kelasIdTerpilih) {
+    function bukaModalMapel(existing, kelasIdTerpilih, semesterTerpilih) {
+      semesterTerpilih = semesterTerpilih || [];
       var kelasChecklistEditHtml = kelasList.length
         ? kelasList.map(function (k) {
             var checked = kelasIdTerpilih.indexOf(k.id) !== -1 ? ' checked' : '';
@@ -903,6 +950,12 @@
               '<input type="checkbox" class="mKelasChkEdit" value="' + k.id + '"' + checked + '> ' + escapeHtml(k.nama) + '</label>';
           }).join('')
         : '<span style="color:var(--ink-soft);">Belum ada kelas.</span>';
+
+      var semesterChecklistEditHtml = [1, 2, 3, 4, 5, 6].map(function (n) {
+        var checked = semesterTerpilih.indexOf(n) !== -1 ? ' checked' : '';
+        return '<label style="display:flex;align-items:center;gap:6px;font-weight:400;">' +
+          '<input type="checkbox" class="mSemesterChkEdit" value="' + n + '"' + checked + '> Semester ' + n + '</label>';
+      }).join('');
 
       var overlay = document.createElement('div');
       overlay.className = 'modal-overlay';
@@ -924,11 +977,19 @@
         '<option value="semua"' + (existing.berlaku_untuk === 'semua' ? ' selected' : '') + '>Semua Kelas</option>' +
         '<option value="tertentu"' + (existing.berlaku_untuk === 'tertentu' ? ' selected' : '') + '>Kelas Tertentu</option>' +
         '</select></div>' +
+        '<div class="field"><label>Semester</label><select id="f_mBerlakuSemester">' +
+        '<option value="semua"' + (existing.berlaku_semester !== 'tertentu' ? ' selected' : '') + '>Semua Semester (1-6)</option>' +
+        '<option value="tertentu"' + (existing.berlaku_semester === 'tertentu' ? ' selected' : '') + '>Semester Tertentu</option>' +
+        '</select></div>' +
         '<div class="field"><label>Mapel Agama Untuk</label><select id="f_mAgama">' + opsiAgamaMapelHtml(existing.agama_spesifik || '') + '</select></div>' +
         '</div>' +
         '<div id="f_mKelasTertentuWrap" style="display:' + (existing.berlaku_untuk === 'tertentu' ? 'block' : 'none') + ';margin:0 0 20px;">' +
         '<label style="font-weight:600;font-size:13px;display:block;margin-bottom:8px;">Pilih kelas yang memakai mapel ini</label>' +
         '<div style="display:flex;flex-wrap:wrap;gap:8px 18px;">' + kelasChecklistEditHtml + '</div>' +
+        '</div>' +
+        '<div id="f_mSemesterTertentuWrap" style="display:' + (existing.berlaku_semester === 'tertentu' ? 'block' : 'none') + ';margin:0 0 20px;">' +
+        '<label style="font-weight:600;font-size:13px;display:block;margin-bottom:8px;">Pilih semester (1-6) yang memakai mapel ini</label>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:8px 18px;">' + semesterChecklistEditHtml + '</div>' +
         '</div>' +
         '<div class="modal-box__actions">' +
         '<button type="button" class="btn-small" id="modalCancelBtn">Batal</button>' +
@@ -949,6 +1010,12 @@
         fKelasTertentuWrap.style.display = fBerlakuSelect.value === 'tertentu' ? 'block' : 'none';
       });
 
+      var fBerlakuSemesterSelect = document.getElementById('f_mBerlakuSemester');
+      var fSemesterTertentuWrap = document.getElementById('f_mSemesterTertentuWrap');
+      fBerlakuSemesterSelect.addEventListener('change', function () {
+        fSemesterTertentuWrap.style.display = fBerlakuSemesterSelect.value === 'tertentu' ? 'block' : 'none';
+      });
+
       document.getElementById('formModalMapel').addEventListener('submit', async function (e) {
         e.preventDefault();
         var nama = document.getElementById('f_mNama').value.trim();
@@ -961,6 +1028,13 @@
           if (!kelasIdsBaru.length) { alert('Pilih minimal satu kelas untuk mapel dengan "Kelas Tertentu".'); return; }
         }
 
+        var berlakuSemesterBaru = fBerlakuSemesterSelect.value;
+        var semesterListBaru = [];
+        if (berlakuSemesterBaru === 'tertentu') {
+          document.querySelectorAll('.mSemesterChkEdit:checked').forEach(function (chk) { semesterListBaru.push(parseInt(chk.value, 10)); });
+          if (!semesterListBaru.length) { alert('Pilih minimal satu semester untuk mapel dengan "Semester Tertentu".'); return; }
+        }
+
         var urutanVal = document.getElementById('f_mUrutan').value.trim();
 
         var payload = {
@@ -970,6 +1044,7 @@
           kkm: parseInt(document.getElementById('f_mKkm').value, 10) || 75,
           urutan_rapor: urutanVal === '' ? null : parseInt(urutanVal, 10),
           berlaku_untuk: berlaku,
+          berlaku_semester: berlakuSemesterBaru,
           agama_spesifik: document.getElementById('f_mAgama').value || null
         };
 
@@ -984,6 +1059,16 @@
           var relRows = kelasIdsBaru.map(function (kid) { return { mapel_id: existing.id, kelas_id: kid }; });
           var relRes = await supabaseClient.from('mapel_kelas').insert(relRows);
           if (relRes.error) { alert('Mapel tersimpan, tapi gagal menyimpan daftar kelasnya: ' + relRes.error.message); }
+        }
+
+        // Selaraskan mapel_semester: hapus dulu relasi lama, lalu isi ulang kalau perlu.
+        var delSemRes = await supabaseClient.from('mapel_semester').delete().eq('mapel_id', existing.id);
+        if (delSemRes.error) { alert('Mapel tersimpan, tapi gagal memperbarui daftar semesternya: ' + delSemRes.error.message); tutup(); renderMapel(); return; }
+
+        if (berlakuSemesterBaru === 'tertentu') {
+          var semRowsBaru = semesterListBaru.map(function (n) { return { mapel_id: existing.id, semester_ke: n }; });
+          var semRelRes = await supabaseClient.from('mapel_semester').insert(semRowsBaru);
+          if (semRelRes.error) { alert('Mapel tersimpan, tapi gagal menyimpan daftar semesternya: ' + semRelRes.error.message); }
         }
 
         tutup();
