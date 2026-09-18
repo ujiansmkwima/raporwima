@@ -2413,15 +2413,28 @@
 
       var mapelSemuaRes = await supabaseClient
         .from('mata_pelajaran')
-        .select('id, nama, kode, jenis_mapel, urutan_rapor, berlaku_untuk, agama_spesifik');
+        .select('id, nama, kode, jenis_mapel, urutan_rapor, berlaku_untuk, berlaku_semester, agama_spesifik');
       var mapelKelasRes = kelasIdList.length
         ? await supabaseClient.from('mapel_kelas').select('mapel_id').in('kelas_id', kelasIdList)
         : { data: [] };
       var mapelKelasSet = {};
       (mapelKelasRes.data || []).forEach(function (r) { mapelKelasSet[r.mapel_id] = true; });
+      var mapelSemesterSet = await ambilMapelSemesterSet();
+      var semesterKeDijalani = Object.keys(semesterMap).map(Number);
 
       var mapelList = (mapelSemuaRes.data || []).filter(function (m) {
         if (m.berlaku_untuk === 'tertentu' && !mapelKelasSet[m.id]) return false;
+        // Mapel dengan cakupan Semester 'tertentu' (menu Mata Pelajaran →
+        // Semester) cuma ikut kalau salah satu semester yang dicentang
+        // pernah dijalani siswa ini — supaya mapel semester 1-2 (mis.
+        // "Dasar-dasar Otomotif" di kelas X) tetap muncul di leger walau
+        // siswa sekarang sudah XII, tapi mapel yang memang tidak pernah
+        // berlaku di semester manapun yang dijalani siswa tidak ikut.
+        if (m.berlaku_semester === 'tertentu') {
+          var daftarSemesterMapel = mapelSemesterSet[m.id] || [];
+          var pernahDijalani = daftarSemesterMapel.some(function (ke) { return semesterKeDijalani.indexOf(ke) !== -1; });
+          if (!pernahDijalani) return false;
+        }
         // Mapel Pendidikan Agama versi lama (generik, tanpa agama_spesifik)
         // tetap ikut untuk semua siswa (namanya menyesuaikan saat dicetak).
         // Versi baru (agama_spesifik terisi) cuma ikut untuk siswa yang
