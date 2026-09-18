@@ -235,6 +235,39 @@
     return null;
   }
 
+  // ---------- Urutan tampil Mata Pelajaran (Rekap Nilai & Leger Wali Kelas) ----------
+  // Supaya urutan kolom/baris mapel di Rekap Nilai Kelas dan Rekap Leger (6
+  // Semester) SAMA PERSIS dengan urutan yang dipakai Admin di Cetak Rapor
+  // (bukan urutan abjad, bukan urutan sembarang): Mapel Umum selalu
+  // didahulukan dari Mapel Kejuruan, lalu di dalam tiap kelompok diurutkan
+  // pakai "Urutan pada Rapor" khusus kelas ini (tabel mapel_urutan_kelas)
+  // kalau admin sudah mengaturnya, kalau belum jatuh balik ke urutan
+  // default di menu Mata Pelajaran (mata_pelajaran.urutan_rapor).
+  async function ambilUrutanKelasMap(kelasId) {
+    var res = await supabaseClient
+      .from('mapel_urutan_kelas')
+      .select('mapel_id, urutan_rapor')
+      .eq('kelas_id', kelasId);
+    var map = {};
+    (res.data || []).forEach(function (r) { map[r.mapel_id] = r.urutan_rapor; });
+    return map;
+  }
+  function efektifUrutanRapor(m, urutanKelasMap) {
+    if (urutanKelasMap && urutanKelasMap[m.id] !== undefined && urutanKelasMap[m.id] !== null) return urutanKelasMap[m.id];
+    return (m.urutan_rapor === null || m.urutan_rapor === undefined) ? 9999 : m.urutan_rapor;
+  }
+  function urutkanMapelList(list, urutanKelasMap) {
+    return list.slice().sort(function (a, b) {
+      var jenisA = a.jenis_mapel === 'kejuruan' ? 1 : 0;
+      var jenisB = b.jenis_mapel === 'kejuruan' ? 1 : 0;
+      if (jenisA !== jenisB) return jenisA - jenisB;
+      var ua = efektifUrutanRapor(a, urutanKelasMap);
+      var ub = efektifUrutanRapor(b, urutanKelasMap);
+      if (ua !== ub) return ua - ub;
+      return (a.nama || '').localeCompare(b.nama || '');
+    });
+  }
+
   // ---------- Format tanggal "12 Desember 2026" untuk Tanggal Rapor ----------
   // Dipakai di baris tanda tangan Cetak Rapor, mengambil dari kolom
   // tanggal_rapor di profil_sekolah (diisi Admin). Kalau belum diisi,
@@ -2162,19 +2195,31 @@
       }
       var siswaIds = siswaList.map(function (s) { return s.id; });
 
-      var penugasanRes = await supabaseClient
-        .from('penugasan_guru')
-        .select('mapel:mapel_id(id, nama, kode, agama_spesifik)')
-        .eq('kelas_id', wk.kelas.id)
-        .eq('tahun_ajaran_id', tahunAktif.id);
-      var mapelMap = {};
-      (penugasanRes.data || []).forEach(function (r) { if (r.mapel) mapelMap[r.mapel.id] = r.mapel; });
-      var mapelList = Object.keys(mapelMap)
-        .map(function (id) { return mapelMap[id]; })
-        .sort(function (a, b) { return a.nama.localeCompare(b.nama); });
+      // Rekap Nilai wali kelas HARUS menampilkan SEMUA mata pelajaran yang
+      // berlaku untuk kelas ini di semester aktif — bukan cuma mapel yang
+      // kebetulan sudah ada guru pengampunya (penugasan_guru), supaya kolom
+      // tidak "hilang" gara-gara penugasan guru belum diisi admin. Logikanya
+      // sama persis dengan yang dipakai di Cetak Rapor: mapel berlaku_untuk
+      // 'semua' selalu ikut, mapel 'tertentu' cuma ikut kalau terhubung ke
+      // kelas ini lewat mapel_kelas.
+      var mapelSemuaRes = await supabaseClient
+        .from('mata_pelajaran')
+        .select('id, nama, kode, jenis_mapel, urutan_rapor, berlaku_untuk, agama_spesifik');
+      var mapelKelasRes = await supabaseClient
+        .from('mapel_kelas')
+        .select('mapel_id')
+        .eq('kelas_id', wk.kelas.id);
+      var mapelKelasSet = {};
+      (mapelKelasRes.data || []).forEach(function (r) { mapelKelasSet[r.mapel_id] = true; });
+      var urutanKelasMap = await ambilUrutanKelasMap(wk.kelas.id);
+
+      var mapelList = (mapelSemuaRes.data || []).filter(function (m) {
+        return m.berlaku_untuk !== 'tertentu' || mapelKelasSet[m.id];
+      });
+      mapelList = urutkanMapelList(mapelList, urutanKelasMap);
 
       if (!mapelList.length) {
-        content.innerHTML = renderPlaceholder('Rekap Nilai — ' + wk.kelas.nama, 'Belum ada mata pelajaran yang ditugaskan untuk kelas ini di tahun ajaran aktif.');
+        content.innerHTML = renderPlaceholder('Rekap Nilai — ' + wk.kelas.nama, 'Belum ada mata pelajaran yang berlaku untuk kelas ini di tahun ajaran aktif.');
         return;
       }
 
@@ -2219,7 +2264,7 @@
 
       content.innerHTML =
         '<div class="panel-head"><div><div class="panel-head__title">Rekap Nilai — ' + escapeHtml(wk.kelas.nama) + '</div>' +
-        '<div class="panel-head__desc">Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + ' — per mata pelajaran. Header kolom pakai Kode Mapel (arahkan kursor ke header untuk lihat nama lengkap).</div></div></div>' +
+        '<div class="panel-head__desc">Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + ' — Semester ' + escapeHtml(tahunAktif.semester) + ' (aktif), seluruh mata pelajaran, diurutkan sesuai urutan mapel. Header kolom pakai Kode Mapel (arahkan kursor ke header untuk lihat nama lengkap).</div></div></div>' +
         '<div class="table-wrap"><table class="data-table"><thead><tr><th>No</th><th>Nama</th>' + headerMapel + '</tr></thead>' +
         '<tbody>' + rowsHtml + '</tbody></table></div>' +
         (adaMapelAgamaGenerik ? '<div class="panel-note">* Nama mapel otomatis menyesuaikan agama tiap siswa saat dicetak di rapor (contoh: siswa Buddha → "Pendidikan Agama Buddha dan Budi Pekerti").</div>' : '');
@@ -2320,13 +2365,13 @@
 
       var nilaiRes = await supabaseClient
         .from('nilai')
-        .select('tahun_ajaran_id, nilai, mapel:mapel_id(id, nama, kode, urutan_rapor)')
+        .select('tahun_ajaran_id, nilai, mapel:mapel_id(id, nama, kode, jenis_mapel, urutan_rapor)')
         .eq('siswa_id', siswaObj.id)
         .eq('jenis', 'rapor');
 
       // nilaiMap: semesterKe -> mapelId -> { nilai }
       var nilaiMap = {};
-      var mapelMap = {}; // mapelId -> {id, nama, kode, urutan_rapor}
+      var mapelMap = {}; // mapelId -> {id, nama, kode, jenis_mapel, urutan_rapor}
       (nilaiRes.data || []).forEach(function (r) {
         var ke = tahunAjaranIdKeSemester[r.tahun_ajaran_id];
         if (!ke || !r.mapel) return;
@@ -2335,13 +2380,12 @@
         nilaiMap[ke][r.mapel.id] = { nilai: r.nilai };
       });
 
-      var mapelList = Object.keys(mapelMap).map(function (id) { return mapelMap[id]; });
-      mapelList.sort(function (a, b) {
-        var ua = (a.urutan_rapor === null || a.urutan_rapor === undefined) ? 9999 : a.urutan_rapor;
-        var ub = (b.urutan_rapor === null || b.urutan_rapor === undefined) ? 9999 : b.urutan_rapor;
-        if (ua !== ub) return ua - ub;
-        return a.nama.localeCompare(b.nama);
-      });
+      // Urutan baris mapel di leger dibuat KONSISTEN, sama seperti urutan
+      // mapel yang dipakai Admin di rapor kelas X s.d. XII (mapel_urutan_kelas
+      // milik kelas yang diampu wali kelas ini, jatuh balik ke urutan_rapor
+      // default), bukan urutan abjad — supaya baris tidak acak antar siswa.
+      var urutanKelasMapLeger = await ambilUrutanKelasMap(wk.kelas.id);
+      var mapelList = urutkanMapelList(Object.keys(mapelMap).map(function (id) { return mapelMap[id]; }), urutanKelasMapLeger);
 
       if (!mapelList.length) {
         area.innerHTML = '<div class="empty-state"><div class="empty-state__mark">！</div>' +
