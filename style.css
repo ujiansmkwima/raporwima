@@ -1459,18 +1459,21 @@ a { color: inherit; text-decoration: none; }
    aturan halaman/watermark/margin cetak yang sama dengan Cetak Rapor,
    cuma isinya beda (tabel label:nilai satu kolom, bukan tabel nilai). */
 
-/* Modifier .rapor-cetak--identitas: bar judul section tetap ada garis
-   kotak & teks tebal, tapi TANPA warna kuning seperti di Cetak Rapor
-   (khusus diminta polos/tidak berwarna untuk lembar identitas ini). */
+/* Modifier .rapor-cetak--identitas: bar judul utama polos — tanpa
+   warna kuning, tanpa kotak/garis, dan tanpa blok putih (supaya
+   watermark logo di belakang tidak terpotong kotak solid), hanya
+   teks tebal rata tengah mengikuti tampilan dasarnya. */
 .rapor-cetak--identitas .rapor-cetak__bar {
-  background: #fff;
-  border-bottom: 1px solid #000;
+  background: transparent;
+  border: none;
 }
 
 /* Sub-bar "A. IDENTITAS PESERTA DIDIK" / "B. DATA ORANG TUA" / "C. DATA
-   WALI" — rata kiri tanpa kotak/garis, mengikuti format Keterangan
-   Tentang Peserta Didik resmi (beda dari bar judul utama di atasnya). */
+   WALI" — rata kiri tanpa kotak/garis/blok putih, mengikuti format
+   Keterangan Tentang Peserta Didik resmi (beda dari bar judul utama
+   di atasnya). */
 .rapor-cetak--identitas .rapor-cetak__bar--sub {
+  background: transparent;
   text-align: left;
   border: none;
   padding: 10px 0 4px;

@@ -1333,6 +1333,8 @@
       '<button class="btn-small btn-small--danger" id="btnHapusTerpilihSiswa" disabled>🗑 Hapus Terpilih (<span id="sTerpilihCount">0</span>)</button>' +
       '</div>' +
       '<div class="toolbar" style="align-items:center;flex-wrap:wrap;gap:14px;">' +
+      '<label style="font-size:13px;color:#555;display:flex;align-items:center;gap:6px;">Cari' +
+      '<input type="text" id="sCari" placeholder="Nama atau NIS..." style="min-width:200px;"></label>' +
       '<label style="font-size:13px;color:#555;display:flex;align-items:center;gap:6px;">Urutkan berdasarkan' +
       '<select id="sSortBy"><option value="nama">Nama (A-Z)</option><option value="kelas">Kelas</option></select></label>' +
       '<label style="font-size:13px;color:#555;display:flex;align-items:center;gap:6px;">Filter Kelas' +
@@ -1381,6 +1383,16 @@
         siswaList = siswaList.filter(function (r) { return r.kelasId === filterVal; });
       }
 
+      // ---- Cari berdasarkan Nama atau NIS ----
+      var kataCari = ((document.getElementById('sCari') || {}).value || '').trim().toLowerCase();
+      if (kataCari) {
+        siswaList = siswaList.filter(function (r) {
+          var nama = (r.data.nama || '').toLowerCase();
+          var nis = String(r.data.nis || '').toLowerCase();
+          return nama.indexOf(kataCari) !== -1 || nis.indexOf(kataCari) !== -1;
+        });
+      }
+
       // ---- Sort: per Nama (default, A-Z) atau per Kelas (lalu Nama) ----
       var sortVal = (document.getElementById('sSortBy') || {}).value || 'nama';
       if (sortVal === 'kelas') {
@@ -1397,13 +1409,15 @@
       // ---- Keterangan total siswa ----
       var totalInfo = document.getElementById('sTotalInfo');
       if (totalInfo) {
-        totalInfo.textContent = filterVal
+        totalInfo.textContent = (filterVal || kataCari)
           ? 'Menampilkan ' + siswaList.length + ' dari ' + totalSemua + ' siswa'
           : 'Total ' + totalSemua + ' siswa';
       }
 
       var body = document.getElementById('sBody');
-      body.innerHTML = siswaList.length ? '' : '<tr><td colspan="6">Belum ada siswa.</td></tr>';
+      body.innerHTML = siswaList.length ? '' : (kataCari
+        ? '<tr><td colspan="6">Tidak ada siswa yang cocok dengan pencarian "' + escapeHtml(kataCari) + '".</td></tr>'
+        : '<tr><td colspan="6">Belum ada siswa.</td></tr>');
 
       siswaList.forEach(function (row) {
         var s = row.data;
@@ -1449,6 +1463,12 @@
 
     document.getElementById('sSortBy').addEventListener('change', muatUlangDaftar);
     document.getElementById('sFilterKelas').addEventListener('change', muatUlangDaftar);
+
+    var timerCariSiswa = null;
+    document.getElementById('sCari').addEventListener('input', function () {
+      clearTimeout(timerCariSiswa);
+      timerCariSiswa = setTimeout(function () { muatUlangDaftar(); }, 250);
+    });
 
     document.getElementById('btnTambahSiswa').addEventListener('click', function () {
       bukaModalSiswa(null, kelasList, '');
