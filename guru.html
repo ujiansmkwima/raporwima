@@ -10,6 +10,9 @@
 <script src="https://unpkg.com/lucide@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="pdf-cetak.js?v=1"></script>
 <script src="unsaved-guard.js?v=1"></script>
 <script src="supabase-client.js"></script>
 </head>
@@ -3666,7 +3669,8 @@
             '<td>' + escapeHtml(b.nama_dudi || '—') + '</td>' +
             '<td class="tc-center">' +
             '<button class="btn-small btn-pkl-preview" data-siswa="' + b.siswa_id + '"><i data-lucide="eye" style="width:14px;height:14px;"></i> Preview</button> ' +
-            '<button class="btn-small btn-small--primary btn-pkl-cetak-satu" data-siswa="' + b.siswa_id + '"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak</button>' +
+            '<button class="btn-small btn-small--primary btn-pkl-cetak-satu" data-siswa="' + b.siswa_id + '"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak</button> ' +
+            '<button class="btn-small btn-pkl-pdf-satu" data-siswa="' + b.siswa_id + '"><i data-lucide="file-down" style="width:14px;height:14px;"></i> PDF</button>' +
             '</td></tr>';
         }
 
@@ -3675,6 +3679,8 @@
           '<div class="no-print" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">' +
           '<button class="btn-small" id="btnPklCetakTerpilih"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak Terpilih</button>' +
           '<button class="btn-small btn-small--primary" id="btnPklCetakSemua"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak Semua</button>' +
+          '<button class="btn-small" id="btnPklPdfTerpilih"><i data-lucide="file-down" style="width:14px;height:14px;"></i> PDF Terpilih</button>' +
+          '<button class="btn-small" id="btnPklPdfSemua"><i data-lucide="file-down" style="width:14px;height:14px;"></i> PDF Semua</button>' +
           '</div>' +
           '<div class="table-wrap no-print"><table class="data-table"><thead><tr>' +
           '<th class="tc-center"><input type="checkbox" id="checkSemuaPklCetak"></th>' +
@@ -3701,6 +3707,17 @@
         document.getElementById('btnPklCetakSemua').addEventListener('click', function () {
           cetakFormatPkl(binaanList.map(function (b) { return b.siswa_id; }), this);
         });
+        body.querySelectorAll('.btn-pkl-pdf-satu').forEach(function (btn) {
+          btn.addEventListener('click', function () { cetakFormatPkl([this.getAttribute('data-siswa')], this, 'pdf'); });
+        });
+        document.getElementById('btnPklPdfTerpilih').addEventListener('click', function () {
+          var ids = Array.prototype.slice.call(body.querySelectorAll('.pkl-cetak-check:checked')).map(function (c) { return c.value; });
+          if (!ids.length) { alert('Centang minimal satu siswa terlebih dahulu.'); return; }
+          cetakFormatPkl(ids, this, 'pdf');
+        });
+        document.getElementById('btnPklPdfSemua').addEventListener('click', function () {
+          cetakFormatPkl(binaanList.map(function (b) { return b.siswa_id; }), this, 'pdf');
+        });
 
         async function tampilkanPreviewPkl(siswaId) {
           var b = cariBinaan(siswaId);
@@ -3711,10 +3728,12 @@
             '<div class="no-print" style="display:flex;gap:8px;margin:14px 0;align-items:center;flex-wrap:wrap;">' +
             '<button class="btn-small" id="btnKembaliDaftarPkl"><i data-lucide="arrow-left" style="width:14px;height:14px;"></i> Kembali ke Daftar</button>' +
             '<button class="btn-small btn-small--primary" id="btnCetakDariPreviewPkl"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak</button>' +
+            '<button class="btn-small" id="btnPdfDariPreviewPkl"><i data-lucide="file-down" style="width:14px;height:14px;"></i> Unduh PDF</button>' +
             '</div>' + html;
           lucide.createIcons();
           document.getElementById('btnKembaliDaftarPkl').addEventListener('click', function () { renderLangkahCetak(); });
           document.getElementById('btnCetakDariPreviewPkl').addEventListener('click', function () { cetakFormatPkl([siswaId], this); });
+          document.getElementById('btnPdfDariPreviewPkl').addEventListener('click', function () { cetakFormatPkl([siswaId], this, 'pdf'); });
         }
 
         // Empat Tujuan Pembelajaran PKL baku (sama untuk semua siswa,
@@ -3801,18 +3820,24 @@
             '<div class="ident-footer-ttd"><div class="rapor-cetak__footer-date">' + escapeHtml(NAMA_KOTA_TTD) + ', ' + (TANGGAL_CETAK || '…........') + '</div><div>Kepala Sekolah</div><div class="rapor-cetak__ttd-space"></div><div><strong>' + escapeHtml(NAMA_KEPALA_SEKOLAH) + '</strong></div></div>' +
             '</div>' +
             '</div>' +
+            '<div class="rapor-cetak__page-no">1</div>' +
             '</div>';
         }
 
         // Mencetak 1 siswa (dari tombol "Cetak" per baris/preview) atau
         // beberapa siswa sekaligus ("Cetak Terpilih"/"Cetak Semua") — tiap
         // siswa mulai di halaman barunya sendiri, sama seperti Cetak Rapor.
-        async function cetakFormatPkl(siswaIds, triggerBtn) {
+        async function cetakFormatPkl(siswaIds, triggerBtn, mode) {
           var teksAsliBtn = triggerBtn ? triggerBtn.innerHTML : null;
           if (triggerBtn) { triggerBtn.disabled = true; triggerBtn.innerHTML = 'Menyiapkan...'; }
           var judulAsli = document.title;
           try {
             var potongan = await Promise.all(siswaIds.map(function (id) { return buatFormatPkl(id); }));
+            if (mode === 'pdf') {
+              var judulPdf = 'PKL - ' + (siswaIds.length === 1 ? (cariBinaan(siswaIds[0]).siswa.nama + ' - ' + cariBinaan(siswaIds[0]).kelas.nama) : (siswaIds.length + ' siswa'));
+              await unduhPdfCetak(potongan, judulPdf);
+              return;
+            }
             var area = document.getElementById('cetakPklArea');
             if (!area) { area = document.createElement('div'); area.id = 'cetakPklArea'; body.appendChild(area); }
             area.innerHTML = potongan.join(''); // tiap siswa mulai halaman baru lewat aturan ".rapor-cetak + .rapor-cetak { page-break-before: always; }"
@@ -3954,174 +3979,8 @@
         '<div class="table-wrap"><table class="data-table"><thead>' +
         '<tr><th rowspan="2">No</th><th rowspan="2">NIS</th><th rowspan="2">Nama Siswa</th><th rowspan="2">Tempat PKL</th><th rowspan="2">Waktu PKL</th><th rowspan="2">Pembimbing</th>' + pkluTpHeadGroups + '<th rowspan="2">Nilai Akhir DUDI</th><th rowspan="2">Nilai Akhir Penguji</th><th rowspan="2">Nilai Akhir Total</th></tr>' +
         '<tr>' + pkluTpSubHeads + '</tr>' +
-        '</thead><tbody>' + ujiList.map(barisSiswaUji).join('') + '</tbody></table></div>' +
-        '<div class="panel-head no-print" style="margin-top:22px;"><div><div class="panel-head__title">Cetak Nilai PKL</div>' +
-        '<div class="panel-head__desc">Format cetak berisi identitas &amp; tanda tangan Guru Pembimbing dan Guru Penguji. Pastikan Nilai Penguji sudah disimpan sebelum mencetak.</div></div></div>' +
-        '<div class="no-print" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">' +
-        '<button class="btn-small" id="btnPkluCetakTerpilih"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak Terpilih</button>' +
-        '<button class="btn-small btn-small--primary" id="btnPkluCetakSemua"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak Semua</button>' +
-        '</div>' +
-        '<div class="table-wrap no-print"><table class="data-table"><thead><tr>' +
-        '<th class="tc-center"><input type="checkbox" id="checkSemuaPkluCetak"></th>' +
-        '<th class="rc-th-no">No</th><th>NIS</th><th>Nama Siswa</th><th>Tempat PKL</th><th class="tc-center">Aksi</th>' +
-        '</tr></thead><tbody>' + ujiList.map(function (r, i) {
-          var pb = pembimbingMap[r.siswa_id] || {};
-          return '<tr>' +
-            '<td class="tc-center"><input type="checkbox" class="pklu-cetak-check" value="' + r.siswa_id + '"></td>' +
-            '<td class="tc-center">' + (i + 1) + '</td>' +
-            '<td>' + escapeHtml(r.siswa.nis || '—') + '</td>' +
-            '<td>' + escapeHtml(r.siswa.nama) + '</td>' +
-            '<td>' + escapeHtml(pb.nama_dudi || '—') + '</td>' +
-            '<td class="tc-center">' +
-            '<button class="btn-small btn-pklu-preview" data-siswa="' + r.siswa_id + '"><i data-lucide="eye" style="width:14px;height:14px;"></i> Preview</button> ' +
-            '<button class="btn-small btn-small--primary btn-pklu-cetak-satu" data-siswa="' + r.siswa_id + '"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak</button>' +
-            '</td></tr>';
-        }).join('') + '</tbody></table></div>' +
-        '<div id="cetakPklPengujiArea"></div>';
+        '</thead><tbody>' + ujiList.map(barisSiswaUji).join('') + '</tbody></table></div>';
       lucide.createIcons();
-
-      // =========================================================
-      // CETAK NILAI PKL (sisi Penguji) — format sama seperti yang
-      // dicetak guru Pembimbing (berisi identitas & tanda tangan
-      // Guru Pembimbing MAUPUN Guru Penguji), supaya guru Penguji
-      // juga bisa melihat/mencetak sendiri format lengkapnya.
-      // =========================================================
-      var TEKS_TP_PKL_UJI = [
-        'Menerapkan soft skills yang dibutuhkan dalam dunia kerja (tempat PKL)',
-        'Menerapkan norma, POS dan K3LH yang ada pada dunia kerja (tempat PKL)',
-        'Menerapkan kompetensi teknis yang sudah dipelajari di sekolah dan/atau baru dipelajari pada dunia kerja (tempat PKL)',
-        'Memahami alur bisnis dunia kerja tempat PKL'
-      ];
-      function barisIdent2Uji(l1, v1, l2, v2) {
-        return '<tr><td class="ident-label">' + escapeHtml(l1) + '</td><td class="ident-colon">:</td><td class="ident-value">' + escapeHtml(v1 || '-') + '</td>' +
-          (l2 ? '<td class="ident-label" style="padding-left:24px;">' + escapeHtml(l2) + '</td><td class="ident-colon">:</td><td class="ident-value">' + escapeHtml(v2 || '-') + '</td>' : '<td colspan="3"></td>') +
-          '</tr>';
-      }
-      function barisIdent1Uji(label, value) {
-        return '<tr><td class="ident-label">' + escapeHtml(label) + '</td><td class="ident-colon">:</td><td class="ident-value" colspan="4">' + escapeHtml(value || '-') + '</td></tr>';
-      }
-
-      async function buatFormatPklUji(siswaId) {
-        var r = ujiList.filter(function (x) { return x.siswa_id === siswaId; })[0];
-        var pb = pembimbingMap[siswaId] || {};
-        var pasangan = nilaiMap[siswaId] || {};
-        var du = pasangan.dudi || {};
-        var pg = pasangan.penguji || {};
-        var namaPembimbing = pb.guru ? pb.guru.nama : '—';
-        var namaPengujiSaatIni = nama; // guru yang sedang login (Penguji)
-        var akhirTotal = rataTaPkl(du.nilai_akhir, pg.nilai_akhir);
-
-        var profilRes = await supabaseClient.from('profil_sekolah').select('*').maybeSingle();
-        var profilSekolah = profilRes.data || {};
-        var NAMA_SEKOLAH = profilSekolah.nama_sekolah || 'SMK Widya Mandala Tambak';
-        var NAMA_KEPALA_SEKOLAH = profilSekolah.kepala_sekolah || '—';
-        var NAMA_KOTA_TTD = profilSekolah.kota_ttd || 'Tambak';
-        var TANGGAL_CETAK = formatTanggalIndonesia(profilSekolah.tanggal_rapor);
-
-        function skorGabunganTp(n) {
-          var vals = [du['tp' + n], pg['tp' + n]].filter(function (v) { return v !== null && v !== undefined; });
-          if (!vals.length) return null;
-          return vals.reduce(function (a, v) { return a + Number(v); }, 0) / vals.length;
-        }
-
-        var tglMulaiFmt = formatTanggalIndonesia(pb.tanggal_mulai);
-        var tglSelesaiFmt = formatTanggalIndonesia(pb.tanggal_selesai);
-        var tanggalPklGabungan = (tglMulaiFmt || tglSelesaiFmt) ? ((tglMulaiFmt || '…........') + ' s.d. ' + (tglSelesaiFmt || '…........')) : null;
-
-        return '<div class="rapor-cetak rapor-cetak--identitas" id="cetakPkluUji-' + siswaId + '">' +
-          '<div class="rapor-cetak__bar" style="line-height:1.6;">DAFTAR NILAI PESERTA DIDIK MATA PELAJARAN PKL<br>' + escapeHtml(NAMA_SEKOLAH.toUpperCase()) + '<br>TAHUN AJARAN ' + escapeHtml(tahunAktif.nama) + '</div>' +
-
-          '<table class="ident-table" style="margin-top:10px;"><tbody>' +
-          barisIdent2Uji('Nama Peserta Didik', r.siswa.nama, 'Kelas', r.kelas.nama) +
-          barisIdent2Uji('NISN', r.siswa.nisn, 'Program Keahlian', r.kelas.program_keahlian) +
-          barisIdent2Uji('Tempat PKL', pb.nama_dudi, 'Konsentrasi Keahlian', r.kelas.konsentrasi_keahlian) +
-          barisIdent1Uji('Tanggal PKL', tanggalPklGabungan) +
-          barisIdent1Uji('Nama Instruktur', pb.nama_pembimbing_dudi) +
-          barisIdent2Uji('Nama Pembimbing', namaPembimbing, 'Nama Penguji', namaPengujiSaatIni) +
-          '</tbody></table>' +
-
-          '<table class="rapor-cetak__pkl"><thead><tr><th class="rc-th-pkl-tp">Tujuan Pembelajaran</th><th class="rc-th-pkl-skor tc-center">Skor</th><th>Deskripsi</th></tr></thead><tbody>' +
-          [1, 2, 3, 4].map(function (n) {
-            return '<tr><td>' + n + '. ' + escapeHtml(TEKS_TP_PKL_UJI[n - 1]) + '</td>' +
-              '<td class="tc-center">' + fmtN(skorGabunganTp(n)) + '</td>' +
-              '<td>' + escapeHtml(pb['deskripsi_tp' + n] || '') + '</td></tr>';
-          }).join('') +
-          '<tr><td><strong>NILAI AKHIR</strong></td><td class="tc-center"><strong>' + fmtN(akhirTotal) + '</strong></td><td></td></tr>' +
-          '</tbody></table>' +
-
-          '<div class="rapor-cetak__bar rapor-cetak__bar--sub">CATATAN</div>' +
-          '<div class="rapor-cetak__box">' + (pb.catatan ? escapeHtml(pb.catatan) : '—') + '</div>' +
-
-          '<div class="rapor-cetak__bar rapor-cetak__bar--sub">KEHADIRAN</div>' +
-          '<table class="rapor-cetak__kehadiran" style="width:260px;"><tbody>' +
-          '<tr><td class="rc-label">Sakit</td><td class="rc-colon">:</td><td class="tc-center">' + (pb.sakit || 0) + '</td><td>Hari</td></tr>' +
-          '<tr><td class="rc-label">Ijin</td><td class="rc-colon">:</td><td class="tc-center">' + (pb.ijin || 0) + '</td><td>Hari</td></tr>' +
-          '<tr><td class="rc-label">Tanpa Keterangan</td><td class="rc-colon">:</td><td class="tc-center">' + (pb.tanpa_keterangan || 0) + '</td><td>Hari</td></tr>' +
-          '</tbody></table>' +
-
-          '<div class="rapor-cetak__footer">' +
-          '<div class="ident-footer-row" style="justify-content:space-between;">' +
-          '<div class="ident-footer-ttd"><div>Guru Pembimbing</div><div class="rapor-cetak__ttd-space"></div><div><strong>' + escapeHtml(namaPembimbing || '-') + '</strong></div></div>' +
-          '<div class="ident-footer-ttd"><div>Guru Penguji</div><div class="rapor-cetak__ttd-space"></div><div><strong>' + escapeHtml(namaPengujiSaatIni || '-') + '</strong></div></div>' +
-          '<div class="ident-footer-ttd"><div class="rapor-cetak__footer-date">' + escapeHtml(NAMA_KOTA_TTD) + ', ' + (TANGGAL_CETAK || '…........') + '</div><div>Kepala Sekolah</div><div class="rapor-cetak__ttd-space"></div><div><strong>' + escapeHtml(NAMA_KEPALA_SEKOLAH) + '</strong></div></div>' +
-          '</div>' +
-          '</div>' +
-          '</div>';
-      }
-
-      async function cetakFormatPklUji(siswaIds, triggerBtn) {
-        var teksAsliBtn = triggerBtn ? triggerBtn.innerHTML : null;
-        if (triggerBtn) { triggerBtn.disabled = true; triggerBtn.innerHTML = 'Menyiapkan...'; }
-        var judulAsli = document.title;
-        try {
-          var potongan = await Promise.all(siswaIds.map(function (id) { return buatFormatPklUji(id); }));
-          var area = document.getElementById('cetakPklPengujiArea');
-          area.innerHTML = potongan.join('');
-          var satuSiswa = siswaIds.length === 1 ? ujiList.filter(function (x) { return x.siswa_id === siswaIds[0]; })[0] : null;
-          document.title = 'PKL - ' + (satuSiswa ? (satuSiswa.siswa.nama + ' - ' + satuSiswa.kelas.nama) : (siswaIds.length + ' siswa'));
-          await new Promise(function (resolve) { setTimeout(resolve, 150); });
-          window.print();
-        } catch (err) {
-          alert('Gagal menyiapkan cetak: ' + (err && err.message ? err.message : err));
-        } finally {
-          document.title = judulAsli;
-          if (triggerBtn) { triggerBtn.disabled = false; triggerBtn.innerHTML = teksAsliBtn; lucide.createIcons(); }
-        }
-      }
-
-      async function tampilkanPreviewPklUji(siswaId) {
-        var r = ujiList.filter(function (x) { return x.siswa_id === siswaId; })[0];
-        var area = document.getElementById('cetakPklPengujiArea');
-        area.innerHTML = '<div class="panel-note no-print">Memuat data cetak PKL ' + escapeHtml(r.siswa.nama) + '...</div>';
-        var html = await buatFormatPklUji(siswaId);
-        area.innerHTML =
-          '<div class="no-print" style="display:flex;gap:8px;margin:14px 0;align-items:center;flex-wrap:wrap;">' +
-          '<button class="btn-small" id="btnKembaliCetakPkluDariPreview"><i data-lucide="arrow-left" style="width:14px;height:14px;"></i> Tutup Preview</button>' +
-          '<button class="btn-small btn-small--primary" id="btnCetakDariPreviewPkluItem"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak</button>' +
-          '</div>' + html;
-        lucide.createIcons();
-        document.getElementById('btnKembaliCetakPkluDariPreview').addEventListener('click', function () { area.innerHTML = ''; });
-        document.getElementById('btnCetakDariPreviewPkluItem').addEventListener('click', function () { cetakFormatPklUji([siswaId], this); });
-      }
-
-      document.querySelectorAll('.btn-pklu-preview').forEach(function (btn) {
-        btn.addEventListener('click', function () { tampilkanPreviewPklUji(this.getAttribute('data-siswa')); });
-      });
-      document.querySelectorAll('.btn-pklu-cetak-satu').forEach(function (btn) {
-        btn.addEventListener('click', function () { cetakFormatPklUji([this.getAttribute('data-siswa')], this); });
-      });
-      document.getElementById('checkSemuaPkluCetak').addEventListener('change', function () {
-        var checked = this.checked;
-        document.querySelectorAll('.pklu-cetak-check').forEach(function (c) { c.checked = checked; });
-      });
-      document.getElementById('btnPkluCetakTerpilih').addEventListener('click', function () {
-        var ids = Array.prototype.slice.call(document.querySelectorAll('.pklu-cetak-check:checked')).map(function (c) { return c.value; });
-        if (!ids.length) { alert('Centang minimal satu siswa terlebih dahulu.'); return; }
-        cetakFormatPklUji(ids, this);
-      });
-      document.getElementById('btnPkluCetakSemua').addEventListener('click', function () {
-        cetakFormatPklUji(ujiList.map(function (r) { return r.siswa_id; }), this);
-      });
 
       function perbaruiAkhirPenguji(sId) {
         var inputs = document.querySelectorAll('.pklu-tp-input[data-siswa="' + sId + '"]');
@@ -5068,7 +4927,8 @@
             '<td>' + escapeHtml(s.nama) + '</td>' +
             '<td class="tc-center">' +
             '<button class="btn-small btn-cetak-preview" data-id="' + s.id + '"><i data-lucide="eye" style="width:14px;height:14px;"></i> Preview</button> ' +
-            '<button class="btn-small btn-small--primary btn-cetak-satu" data-id="' + s.id + '"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak</button>' +
+            '<button class="btn-small btn-small--primary btn-cetak-satu" data-id="' + s.id + '"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak</button> ' +
+            '<button class="btn-small btn-cetak-pdf-satu" data-id="' + s.id + '"><i data-lucide="file-down" style="width:14px;height:14px;"></i> PDF</button>' +
             '</td></tr>';
         }).join('');
 
@@ -5078,6 +4938,8 @@
           '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
           '<button class="btn-small" id="btnCetakTerpilih"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak Terpilih</button>' +
           '<button class="btn-small btn-small--primary" id="btnCetakSemua"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak Semua</button>' +
+          '<button class="btn-small" id="btnPdfTerpilih"><i data-lucide="file-down" style="width:14px;height:14px;"></i> PDF Terpilih</button>' +
+          '<button class="btn-small" id="btnPdfSemua"><i data-lucide="file-down" style="width:14px;height:14px;"></i> PDF Semua</button>' +
           '</div></div>' +
           '<div class="table-wrap no-print"><table class="data-table"><thead><tr>' +
           '<th class="tc-center"><input type="checkbox" id="checkSemuaCetak"></th>' +
@@ -5104,6 +4966,17 @@
         document.getElementById('btnCetakSemua').addEventListener('click', function () {
           cetakSiswa(siswaList.map(function (s) { return s.id; }), this);
         });
+        document.querySelectorAll('.btn-cetak-pdf-satu').forEach(function (btn) {
+          btn.addEventListener('click', function () { cetakSiswa([this.getAttribute('data-id')], this, 'pdf'); });
+        });
+        document.getElementById('btnPdfTerpilih').addEventListener('click', function () {
+          var ids = Array.prototype.slice.call(document.querySelectorAll('.cetak-rapor-check:checked')).map(function (c) { return c.value; });
+          if (!ids.length) { alert('Centang minimal satu siswa terlebih dahulu.'); return; }
+          cetakSiswa(ids, this, 'pdf');
+        });
+        document.getElementById('btnPdfSemua').addEventListener('click', function () {
+          cetakSiswa(siswaList.map(function (s) { return s.id; }), this, 'pdf');
+        });
       }
 
       // Tampilkan hasil rapor 1 siswa di layar (tanpa langsung mencetak),
@@ -5117,10 +4990,12 @@
           '<div class="no-print" style="display:flex;gap:8px;margin:14px 0;align-items:center;flex-wrap:wrap;">' +
           '<button class="btn-small" id="btnKembaliDaftarCetak"><i data-lucide="arrow-left" style="width:14px;height:14px;"></i> Kembali ke Daftar</button>' +
           '<button class="btn-small btn-small--primary" id="btnCetakDariPreview"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak</button>' +
+          '<button class="btn-small" id="btnPdfDariPreview"><i data-lucide="file-down" style="width:14px;height:14px;"></i> Unduh PDF</button>' +
           '</div>' + html;
         lucide.createIcons();
         document.getElementById('btnKembaliDaftarCetak').addEventListener('click', renderDaftarSiswa);
         document.getElementById('btnCetakDariPreview').addEventListener('click', function () { cetakSiswa([siswaId], this); });
+        document.getElementById('btnPdfDariPreview').addEventListener('click', function () { cetakSiswa([siswaId], this, 'pdf'); });
         area.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
 
@@ -5173,8 +5048,8 @@
       function terapkanTinggiIdentitasCetak(area) {
         var PX_PER_MM = 96 / 25.4; // 96 CSS px = 1 inch = 25.4mm
         var GAP_MM = 3; // jarak antara kotak identitas & isi rapor di bawahnya
-        var TOP_MARGIN_MM = 16; // margin atas @page (lihat style.css)
-        var BOTTOM_MARGIN_MM = 16; // margin bawah @page (lihat style.css)
+        var TOP_MARGIN_MM = 12.7; // margin atas @page = Narrow (lihat style.css)
+        var BOTTOM_MARGIN_MM = 12.7; // margin bawah @page = Narrow (lihat style.css)
 
         // Diukur dari .rapor-cetak__biodata (elemen <table> aslinya)
         // LANGSUNG di dalam <thead>, supaya tidak salah ukur akibat
@@ -5205,7 +5080,7 @@
         }
         styleEl.textContent =
           '@media print {' +
-          '.rapor-cetak__page1 { min-height: ' + tinggiHalamanPertamaMm.toFixed(2) + 'mm; }' +
+          '.rapor-cetak__page1, .rapor-cetak__page2 { min-height: ' + tinggiHalamanPertamaMm.toFixed(2) + 'mm; }' +
           '}';
       }
 
@@ -5218,7 +5093,7 @@
       // ".rapor-cetak + .rapor-cetak { page-break-before: always; }" di
       // @media print), jadi halaman tiap siswa tidak pernah bercampur
       // dengan siswa lain walau digabung dalam satu dokumen/file.
-      async function cetakSiswa(idList, triggerBtn) {
+      async function cetakSiswa(idList, triggerBtn, mode) {
         var teksAsliBtn = triggerBtn ? triggerBtn.innerHTML : null;
         if (triggerBtn) { triggerBtn.disabled = true; triggerBtn.innerHTML = 'Menyiapkan...'; }
 
@@ -5228,6 +5103,7 @@
           for (var i = 0; i < idList.length; i++) {
             htmlParts.push(await buatKartuRapor(idList[i]));
           }
+          if (mode === 'pdf') { await unduhPdfCetak(htmlParts, judulCetakRapor(idList)); return; }
           var area = document.getElementById('cetakRaporArea');
           area.innerHTML = htmlParts.join('');
 
@@ -5419,6 +5295,8 @@
           '<table class="rapor-cetak__nilai"><thead><tr><th class="rc-th-no">NO</th><th>Mata Pelajaran</th><th class="rc-th-nilai">Nilai Akhir</th><th>Capaian Kompetensi</th></tr></thead>' +
           '<tbody>' + nilaiRowsHtml + '</tbody></table>' +
 
+          '<div class="rapor-cetak__page-no">1</div>' +
+
           '</div>' + // /rapor-cetak__page1
 
           // ---------- HALAMAN 2: Kokurikuler s.d. tanda tangan ----------
@@ -5457,6 +5335,8 @@
           '<div class="rapor-cetak__footer-col"><div class="rapor-cetak__footer-date">' + escapeHtml(NAMA_KOTA_TTD) + ', ' + (TANGGAL_RAPOR_CETAK ? escapeHtml(TANGGAL_RAPOR_CETAK) : '…........' + escapeHtml(tahunAkhir)) + '</div><div>Wali Kelas</div><div class="rapor-cetak__ttd-space"></div><div><strong>' + escapeHtml(nama) + '</strong></div></div>' +
           '</div>' +
           '</div>' +
+
+          '<div class="rapor-cetak__page-no">2</div>' +
 
           '</div>' + // /rapor-cetak__page2
 
@@ -5504,7 +5384,8 @@
             '<td>' + escapeHtml(s.nama) + '</td>' +
             '<td class="tc-center">' +
             '<button class="btn-small btn-ident-preview" data-id="' + s.id + '"><i data-lucide="eye" style="width:14px;height:14px;"></i> Preview</button> ' +
-            '<button class="btn-small btn-small--primary btn-ident-satu" data-id="' + s.id + '"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak</button>' +
+            '<button class="btn-small btn-small--primary btn-ident-satu" data-id="' + s.id + '"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak</button> ' +
+            '<button class="btn-small btn-ident-pdf-satu" data-id="' + s.id + '"><i data-lucide="file-down" style="width:14px;height:14px;"></i> PDF</button>' +
             '</td></tr>';
         }).join('');
 
@@ -5514,6 +5395,8 @@
           '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
           '<button class="btn-small" id="btnIdentCetakTerpilih"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak Terpilih</button>' +
           '<button class="btn-small btn-small--primary" id="btnIdentCetakSemua"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak Semua</button>' +
+          '<button class="btn-small" id="btnIdentPdfTerpilih"><i data-lucide="file-down" style="width:14px;height:14px;"></i> PDF Terpilih</button>' +
+          '<button class="btn-small" id="btnIdentPdfSemua"><i data-lucide="file-down" style="width:14px;height:14px;"></i> PDF Semua</button>' +
           '</div></div>' +
           '<div class="table-wrap no-print"><table class="data-table"><thead><tr>' +
           '<th class="tc-center"><input type="checkbox" id="checkSemuaIdent"></th>' +
@@ -5540,6 +5423,17 @@
         document.getElementById('btnIdentCetakSemua').addEventListener('click', function () {
           cetakIdentitasSiswa(siswaList.map(function (s) { return s.id; }), this);
         });
+        document.querySelectorAll('.btn-ident-pdf-satu').forEach(function (btn) {
+          btn.addEventListener('click', function () { cetakIdentitasSiswa([this.getAttribute('data-id')], this, 'pdf'); });
+        });
+        document.getElementById('btnIdentPdfTerpilih').addEventListener('click', function () {
+          var ids = Array.prototype.slice.call(document.querySelectorAll('.cetak-identitas-check:checked')).map(function (c) { return c.value; });
+          if (!ids.length) { alert('Centang minimal satu siswa terlebih dahulu.'); return; }
+          cetakIdentitasSiswa(ids, this, 'pdf');
+        });
+        document.getElementById('btnIdentPdfSemua').addEventListener('click', function () {
+          cetakIdentitasSiswa(siswaList.map(function (s) { return s.id; }), this, 'pdf');
+        });
       }
 
       // Tampilkan hasil identitas 1 siswa di layar (tanpa langsung
@@ -5553,10 +5447,12 @@
           '<div class="no-print" style="display:flex;gap:8px;margin:14px 0;align-items:center;flex-wrap:wrap;">' +
           '<button class="btn-small" id="btnKembaliDaftarIdent"><i data-lucide="arrow-left" style="width:14px;height:14px;"></i> Kembali ke Daftar</button>' +
           '<button class="btn-small btn-small--primary" id="btnCetakDariPreviewIdent"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak</button>' +
+          '<button class="btn-small" id="btnPdfDariPreviewIdent"><i data-lucide="file-down" style="width:14px;height:14px;"></i> Unduh PDF</button>' +
           '</div>' + html;
         lucide.createIcons();
         document.getElementById('btnKembaliDaftarIdent').addEventListener('click', renderDaftarSiswa);
         document.getElementById('btnCetakDariPreviewIdent').addEventListener('click', function () { cetakIdentitasSiswa([siswaId], this); });
+        document.getElementById('btnPdfDariPreviewIdent').addEventListener('click', function () { cetakIdentitasSiswa([siswaId], this, 'pdf'); });
         area.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
 
@@ -5580,7 +5476,7 @@
       // lewat aturan ".rapor-cetak + .rapor-cetak { page-break-before:
       // always; }" di @media print, jadi halaman antar siswa tidak
       // pernah bercampur walau digabung jadi satu dokumen/file cetak.
-      async function cetakIdentitasSiswa(idList, triggerBtn) {
+      async function cetakIdentitasSiswa(idList, triggerBtn, mode) {
         var teksAsliBtn = triggerBtn ? triggerBtn.innerHTML : null;
         if (triggerBtn) { triggerBtn.disabled = true; triggerBtn.innerHTML = 'Menyiapkan...'; }
 
@@ -5590,6 +5486,7 @@
           for (var i = 0; i < idList.length; i++) {
             htmlParts.push(await buatKartuIdentitas(idList[i]));
           }
+          if (mode === 'pdf') { await unduhPdfCetak(htmlParts, judulCetakIdentitas(idList)); return; }
           var area = document.getElementById('cetakIdentitasArea');
           area.innerHTML = htmlParts.join('');
 
@@ -5678,6 +5575,8 @@
           '<div class="ident-footer-ttd"><div class="rapor-cetak__footer-date">' + escapeHtml(NAMA_KOTA_TTD) + ', ' + (TANGGAL_IDENTITAS_CETAK ? escapeHtml(TANGGAL_IDENTITAS_CETAK) : '…........' + escapeHtml(tahunAkhir)) + '</div><div>Kepala Sekolah</div><div class="rapor-cetak__ttd-space"></div><div><strong>' + escapeHtml(NAMA_KEPALA_SEKOLAH) + '</strong></div></div>' +
           '</div>' +
           '</div>' +
+
+          '<div class="rapor-cetak__page-no">1</div>' +
 
           '</div>'
         );
