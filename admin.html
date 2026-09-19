@@ -418,7 +418,8 @@
       '<div class="field"><label>Semester</label><select id="taSemester"><option value="Ganjil">Ganjil</option><option value="Genap">Genap</option></select></div>' +
       '<button type="submit" class="btn-small btn-small--primary">Tambah</button>' +
       '</form>' +
-      '<div class="table-wrap"><table class="data-table"><thead><tr><th>Nama</th><th>Semester</th><th>Status</th><th></th></tr></thead><tbody id="taBody"></tbody></table></div>';
+      '<div class="table-wrap"><table class="data-table"><thead><tr><th>Nama</th><th>Semester</th><th>Status</th><th></th></tr></thead><tbody id="taBody"></tbody></table></div>' +
+      '<div id="nkWrap"></div>';
 
     document.getElementById('formTA').addEventListener('submit', async function (e) {
       e.preventDefault();
@@ -461,6 +462,8 @@
       });
     });
 
+    renderNaikKelasPanel(rows);
+
     // ---------- Modal Edit ----------
     function bukaModalTahunAjaran(existing) {
       var overlay = document.createElement('div');
@@ -502,6 +505,300 @@
         renderTahunAjaran();
       });
     }
+  }
+
+
+  // ================= NAIK KELAS & KELULUSAN =================
+  // Dipanggil dari panel Tahun Ajaran. Memindahkan siswa AKTIF dari
+  // tahun ajaran ASAL ke tahun ajaran TUJUAN:
+  //   Tingkat 10 -> kelas Tingkat 11, Tingkat 11 -> kelas Tingkat 12,
+  //   Tingkat 12 -> status siswa menjadi 'lulus'.
+  // Yang dilakukan hanya INSERT ke siswa_kelas (baris tahun lama tidak
+  // disentuh, jadi riwayat/leger aman) dan UPDATE siswa.status untuk
+  // yang lulus. Siswa yang SUDAH punya penempatan di tahun tujuan
+  // dilewati, jadi proses ini aman diulang.
+
+  // "XI ANM 1" -> "ANM1": awalan tingkat & pemisah dibuang, huruf besar.
+  // Dipakai untuk menebak pasangan kelas ("X ANM 1" <-> "XI ANM 1").
+  function kunciNamaKelas(nama) {
+    var s = String(nama || '').trim().toUpperCase();
+    s = s.replace(/^(XII|XI|X|12|11|10)(?=[\s\-_.]|$)[\s\-_.]*/, '');
+    return s.replace(/[\s\-_.]+/g, '');
+  }
+
+  function tebakKelasTujuan(kelasAsal, kandidat) {
+    var kunci = kunciNamaKelas(kelasAsal.nama);
+    var cocokNama = kandidat.filter(function (k) { return kunci && kunciNamaKelas(k.nama) === kunci; });
+    if (cocokNama.length === 1) return cocokNama[0].id;
+
+    var punyaProgram = !!(kelasAsal.program_keahlian || kelasAsal.konsentrasi_keahlian);
+    if (!punyaProgram) return '';
+    var cocokProgram = kandidat.filter(function (k) {
+      return (k.program_keahlian || '') === (kelasAsal.program_keahlian || '') &&
+        (k.konsentrasi_keahlian || '') === (kelasAsal.konsentrasi_keahlian || '');
+    });
+    return cocokProgram.length === 1 ? cocokProgram[0].id : '';
+  }
+
+  // Supabase membatasi 1000 baris per permintaan, jadi diambil bertahap.
+  async function ambilSemuaBaris(buatQuery) {
+    var hasil = [];
+    var ukuran = 1000;
+    for (var dari = 0; ; dari += ukuran) {
+      var r = await buatQuery().range(dari, dari + ukuran - 1);
+      if (r.error) throw r.error;
+      var data = r.data || [];
+      hasil = hasil.concat(data);
+      if (data.length < ukuran) break;
+    }
+    return hasil;
+  }
+
+  function renderNaikKelasPanel(semuaTA) {
+    var wrap = document.getElementById('nkWrap');
+    if (!wrap) return;
+
+    var headHtml =
+      '<div class="panel-head" style="margin-top:32px;"><div><div class="panel-head__title">Naik Kelas &amp; Kelulusan</div>' +
+      '<div class="panel-head__desc">Dipakai saat pergantian tahun ajaran: siswa Tingkat 10 naik ke Tingkat 11, Tingkat 11 naik ke Tingkat 12, dan siswa Tingkat 12 dinyatakan lulus. ' +
+      'Data tahun ajaran lama tidak diubah atau dihapus.</div></div></div>';
+
+    if (semuaTA.length < 2) {
+      wrap.innerHTML = headHtml + '<div class="panel-note">Buat dulu tahun ajaran tujuan (mis. 2027/2028 Ganjil) lewat form di atas, lalu proses kenaikan kelas dari sini.</div>';
+      return;
+    }
+
+    var asalDefault = semuaTA.filter(function (t) { return t.is_aktif; })[0] || semuaTA[0];
+    var kandidatTujuan = semuaTA
+      .filter(function (t) { return t.id !== asalDefault.id && t.nama > asalDefault.nama; })
+      .sort(function (a, b) {
+        if (a.nama !== b.nama) return a.nama < b.nama ? -1 : 1;
+        return a.semester === 'Ganjil' ? -1 : 1;
+      });
+    var tujuanDefault = kandidatTujuan.length ? kandidatTujuan[0].id : '';
+
+    function opsiTA(selectedId, placeholder) {
+      return (placeholder ? '<option value="">' + placeholder + '</option>' : '') + semuaTA.map(function (t) {
+        return '<option value="' + t.id + '"' + (t.id === selectedId ? ' selected' : '') + '>' +
+          escapeHtml(t.nama + ' — ' + t.semester + (t.is_aktif ? ' (aktif)' : '')) + '</option>';
+      }).join('');
+    }
+
+    wrap.innerHTML = headHtml +
+      '<form class="add-form" id="formNK">' +
+      '<div class="field"><label>Dari tahun ajaran</label><select id="nkAsal">' + opsiTA(asalDefault.id) + '</select></div>' +
+      '<div class="field"><label>Ke tahun ajaran</label><select id="nkTujuan">' + opsiTA(tujuanDefault, '— pilih —') + '</select></div>' +
+      '<button type="submit" class="btn-small btn-small--primary">Lihat Pratinjau</button>' +
+      '</form>' +
+      '<div id="nkPreview"></div>';
+
+    document.getElementById('formNK').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var asal = semuaTA.filter(function (t) { return t.id === document.getElementById('nkAsal').value; })[0];
+      var tujuan = semuaTA.filter(function (t) { return t.id === document.getElementById('nkTujuan').value; })[0];
+      var box = document.getElementById('nkPreview');
+      if (!asal || !tujuan) { box.innerHTML = '<div class="panel-note">Pilih tahun ajaran asal dan tujuan dulu.</div>'; return; }
+      if (asal.id === tujuan.id) { box.innerHTML = '<div class="panel-note">Tahun ajaran asal dan tujuan tidak boleh sama.</div>'; return; }
+      muatPratinjauNaikKelas(asal, tujuan);
+    });
+  }
+
+  async function muatPratinjauNaikKelas(asal, tujuan) {
+    var box = document.getElementById('nkPreview');
+    box.innerHTML = '<div class="panel-note">Memuat data siswa...</div>';
+
+    var kelasList, skAsal, skTujuan;
+    try {
+      var kelasRes = await supabaseClient.from('kelas')
+        .select('id, nama, tingkat, program_keahlian, konsentrasi_keahlian').order('tingkat').order('nama');
+      if (kelasRes.error) throw kelasRes.error;
+      kelasList = kelasRes.data || [];
+
+      skAsal = await ambilSemuaBaris(function () {
+        return supabaseClient.from('siswa_kelas')
+          .select('id, siswa_id, kelas_id, siswa:siswa_id(id, nama, nis, status)')
+          .eq('tahun_ajaran_id', asal.id).order('id');
+      });
+      skTujuan = await ambilSemuaBaris(function () {
+        return supabaseClient.from('siswa_kelas').select('id, siswa_id')
+          .eq('tahun_ajaran_id', tujuan.id).order('id');
+      });
+    } catch (err) {
+      box.innerHTML = '<div class="panel-note">Gagal memuat data: ' + escapeHtml(err.message || err) + '</div>';
+      return;
+    }
+
+    var sudahDiTujuan = {};
+    skTujuan.forEach(function (r) { sudahDiTujuan[r.siswa_id] = true; });
+    var kelasMap = {};
+    kelasList.forEach(function (k) { kelasMap[k.id] = k; });
+
+    // Kelompokkan siswa AKTIF per kelas asal. Siswa berstatus lulus/pindah/
+    // keluar tidak ikut diproses.
+    var kelompok = {};
+    var jumlahNonAktif = 0;
+    skAsal.forEach(function (r) {
+      var k = kelasMap[r.kelas_id];
+      var s = r.siswa;
+      if (!k || !s) return;
+      if (s.status !== 'aktif') { jumlahNonAktif++; return; }
+      if (!kelompok[k.id]) kelompok[k.id] = { kelas: k, siswa: [] };
+      kelompok[k.id].siswa.push({ id: s.id, nama: s.nama || '', nis: s.nis, sudah: !!sudahDiTujuan[s.id] });
+    });
+    var daftar = Object.keys(kelompok).map(function (id) { return kelompok[id]; }).sort(function (a, b) {
+      if (a.kelas.tingkat !== b.kelas.tingkat) return a.kelas.tingkat - b.kelas.tingkat;
+      return a.kelas.nama.localeCompare(b.kelas.nama, 'id', { numeric: true });
+    });
+    daftar.forEach(function (g) { g.siswa.sort(function (a, b) { return a.nama.localeCompare(b.nama); }); });
+
+    if (!daftar.length) {
+      box.innerHTML = '<div class="panel-note">Tidak ada siswa aktif yang tercatat di kelas pada tahun ajaran ' +
+        escapeHtml(asal.nama + ' ' + asal.semester) + '.</div>';
+      return;
+    }
+
+    // Peringatan kalau kombinasi tahun ajaran tidak lazim.
+    var peringatan = [];
+    if (asal.semester !== 'Genap' || tujuan.semester !== 'Ganjil') {
+      peringatan.push('Kenaikan kelas biasanya dilakukan dari semester Genap ke semester Ganjil tahun ajaran berikutnya. ' +
+        'Kamu memilih ' + asal.nama + ' ' + asal.semester + ' → ' + tujuan.nama + ' ' + tujuan.semester + '.');
+    }
+    var thAsal = parseInt(String(asal.nama).slice(0, 4), 10);
+    var thTujuan = parseInt(String(tujuan.nama).slice(0, 4), 10);
+    if (!isNaN(thAsal) && !isNaN(thTujuan) && thTujuan !== thAsal + 1) {
+      peringatan.push('Tahun ajaran tujuan (' + tujuan.nama + ') bukan tahun berikutnya dari tahun ajaran asal (' + asal.nama + ').');
+    }
+
+    var barisHtml = daftar.map(function (g) {
+      var tingkat = g.kelas.tingkat;
+      var jumlahSudah = g.siswa.filter(function (s) { return s.sudah; }).length;
+
+      var aksiHtml;
+      if (tingkat >= 12) {
+        aksiHtml = '<span class="chip chip--aktif">Lulus</span>';
+      } else {
+        var kandidat = kelasList.filter(function (k) { return k.tingkat === tingkat + 1; });
+        if (!kandidat.length) {
+          aksiHtml = '<span class="chip chip--danger">Belum ada kelas Tingkat ' + (tingkat + 1) + '</span>';
+        } else {
+          var tebakan = tebakKelasTujuan(g.kelas, kandidat);
+          aksiHtml = '<select data-nk-kelas="' + g.kelas.id + '">' +
+            '<option value="">— pilih kelas tujuan (kosong = lewati) —</option>' +
+            kandidat.map(function (k) {
+              return '<option value="' + k.id + '"' + (k.id === tebakan ? ' selected' : '') + '>' + escapeHtml(k.nama) + '</option>';
+            }).join('') + '</select>';
+        }
+      }
+
+      var siswaHtml = g.siswa.map(function (s) {
+        return '<label style="display:block;font-size:13px;padding:2px 0;">' +
+          '<input type="checkbox" class="nkTidak" value="' + s.id + '"' + (s.sudah ? ' disabled' : '') + '> ' +
+          escapeHtml(s.nama) + (s.nis ? ' <span style="color:#888;">(' + escapeHtml(s.nis) + ')</span>' : '') +
+          (s.sudah ? ' <span style="color:#b45309;">— sudah punya kelas di tahun tujuan, dilewati</span>' : '') +
+          '</label>';
+      }).join('');
+
+      return '<tr>' +
+        '<td><strong>' + escapeHtml(g.kelas.nama) + '</strong>' +
+        '<details style="margin-top:6px;"><summary style="cursor:pointer;font-size:12px;color:#555;">Ada yang tidak naik / tidak lulus? Ceklis di sini</summary>' +
+        '<div style="margin-top:6px;max-height:220px;overflow:auto;">' + siswaHtml + '</div></details></td>' +
+        '<td>' + escapeHtml(tingkat) + '</td>' +
+        '<td>' + g.siswa.length + (jumlahSudah ? ' <span style="color:#b45309;font-size:12px;">(' + jumlahSudah + ' sudah ada)</span>' : '') + '</td>' +
+        '<td>' + aksiHtml + '</td>' +
+        '</tr>';
+    }).join('');
+
+    box.innerHTML =
+      (peringatan.length
+        ? '<div class="panel-note" style="border-left:4px solid var(--danger);"><strong>Periksa dulu:</strong><br>' +
+          peringatan.map(escapeHtml).join('<br>') + '</div>'
+        : '') +
+      '<div class="panel-note">Pratinjau: <strong>' + escapeHtml(asal.nama + ' ' + asal.semester) + '</strong> → <strong>' +
+      escapeHtml(tujuan.nama + ' ' + tujuan.semester) + '</strong>. ' +
+      'Tingkat 12 akan berstatus <em>lulus</em>. ' +
+      (jumlahNonAktif ? jumlahNonAktif + ' siswa berstatus non-aktif (lulus/pindah/keluar) tidak ikut diproses. ' : '') +
+      'Kelas tujuan sudah ditebak dari nama kelas — periksa dan ubah kalau perlu.</div>' +
+      '<div class="table-wrap"><table class="data-table"><thead><tr><th>Kelas Asal</th><th>Tingkat</th><th>Siswa</th><th>Kelas Tujuan</th></tr></thead>' +
+      '<tbody>' + barisHtml + '</tbody></table></div>' +
+      '<div class="toolbar"><button class="btn-small btn-small--primary" id="nkProses">Proses Naik Kelas &amp; Kelulusan</button></div>' +
+      '<div id="nkHasil"></div>';
+
+    document.getElementById('nkProses').addEventListener('click', async function () {
+      var btn = this;
+      var hasilBox = document.getElementById('nkHasil');
+
+      var tidakSet = {};
+      box.querySelectorAll('.nkTidak:checked').forEach(function (c) { tidakSet[c.value] = true; });
+
+      var barisSiswaKelas = [];
+      var idLulus = [];
+      var kelasDilewati = [];
+      daftar.forEach(function (g) {
+        var ikut = g.siswa.filter(function (s) { return !s.sudah && !tidakSet[s.id]; });
+        if (!ikut.length) return;
+        if (g.kelas.tingkat >= 12) {
+          ikut.forEach(function (s) { idLulus.push(s.id); });
+          return;
+        }
+        var sel = box.querySelector('select[data-nk-kelas="' + g.kelas.id + '"]');
+        var kelasTujuanId = sel ? sel.value : '';
+        if (!kelasTujuanId) {
+          kelasDilewati.push(g.kelas.nama + ' (' + ikut.length + ' siswa)');
+          return;
+        }
+        ikut.forEach(function (s) {
+          barisSiswaKelas.push({ siswa_id: s.id, kelas_id: kelasTujuanId, tahun_ajaran_id: tujuan.id });
+        });
+      });
+
+      if (!barisSiswaKelas.length && !idLulus.length) {
+        hasilBox.innerHTML = '<div class="panel-note">Tidak ada siswa yang bisa diproses. Pilih kelas tujuan dulu.</div>';
+        return;
+      }
+
+      var pesan = 'Proses ' + asal.nama + ' ' + asal.semester + ' → ' + tujuan.nama + ' ' + tujuan.semester + ':\n\n' +
+        '• ' + barisSiswaKelas.length + ' siswa dinaikkan kelas\n' +
+        '• ' + idLulus.length + ' siswa Tingkat 12 dinyatakan LULUS\n' +
+        (kelasDilewati.length ? '• Dilewati (kelas tujuan belum dipilih): ' + kelasDilewati.join(', ') + '\n' : '') +
+        (peringatan.length ? '\nPERHATIAN:\n' + peringatan.join('\n') + '\n' : '') +
+        '\nLanjutkan?';
+      if (!confirm(pesan)) return;
+
+      btn.disabled = true;
+      btn.textContent = 'Memproses...';
+
+      var errorList = [];
+      var berhasilNaik = 0;
+      var berhasilLulus = 0;
+
+      for (var i = 0; i < barisSiswaKelas.length; i += 500) {
+        var batch = barisSiswaKelas.slice(i, i + 500);
+        var r1 = await supabaseClient.from('siswa_kelas')
+          .upsert(batch, { onConflict: 'siswa_id,tahun_ajaran_id', ignoreDuplicates: true });
+        if (r1.error) { errorList.push('Penempatan kelas: ' + r1.error.message); break; }
+        berhasilNaik += batch.length;
+      }
+
+      for (var j = 0; j < idLulus.length; j += 100) {
+        var batchId = idLulus.slice(j, j + 100);
+        var r2 = await supabaseClient.from('siswa').update({ status: 'lulus' }).in('id', batchId);
+        if (r2.error) { errorList.push('Status lulus: ' + r2.error.message); break; }
+        berhasilLulus += batchId.length;
+      }
+
+      btn.disabled = false;
+      btn.textContent = 'Proses Naik Kelas & Kelulusan';
+
+      hasilBox.innerHTML =
+        '<div class="panel-note">' +
+        (errorList.length ? '<strong>Selesai dengan kendala:</strong><br>' + errorList.map(escapeHtml).join('<br>') + '<br><br>' : '<strong>Selesai.</strong> ') +
+        berhasilNaik + ' siswa dinaikkan kelas, ' + berhasilLulus + ' siswa dinyatakan lulus.' +
+        (kelasDilewati.length ? '<br>Belum diproses (kelas tujuan kosong): ' + escapeHtml(kelasDilewati.join(', ')) + '.' : '') +
+        '<br><br>Langkah berikutnya: aktifkan tahun ajaran ' + escapeHtml(tujuan.nama + ' ' + tujuan.semester) +
+        ' di tabel atas, lalu isi Penugasan Guru dan Wali Kelas untuk tahun ajaran itu. ' +
+        'Siswa yang tinggal kelas bisa ditempatkan manual lewat menu Siswa.' +
+        '</div>';
+    });
   }
 
   // ================= PANEL: KELAS =================
@@ -1426,6 +1723,8 @@
       '<select id="sSortBy"><option value="nama">Nama (A-Z)</option><option value="kelas">Kelas</option></select></label>' +
       '<label style="font-size:13px;color:#555;display:flex;align-items:center;gap:6px;">Filter Kelas' +
       '<select id="sFilterKelas"><option value="">Semua Kelas</option></select></label>' +
+      '<label style="font-size:13px;color:#555;display:flex;align-items:center;gap:6px;">Status' +
+      '<select id="sFilterStatus"><option value="aktif">Aktif</option><option value="">Semua Status</option><option value="lulus">Lulus</option><option value="pindah">Pindah</option><option value="keluar">Keluar</option></select></label>' +
       '<div id="sTotalInfo" style="margin-left:auto;font-size:13px;color:#555;font-weight:600;"></div>' +
       '</div>' +
       '<div class="table-wrap"><table class="data-table"><thead><tr><th style="width:32px;"><input type="checkbox" id="sSelectAll"></th><th>NIS</th><th>NISN</th><th>Nama</th><th>Kelas (' + escapeHtml(tahunAktif.nama) + ')</th><th></th></tr></thead><tbody id="sBody"></tbody></table></div>';
@@ -1462,6 +1761,12 @@
 
       var totalSemua = siswaList.length;
 
+      // ---- Filter per status (default: hanya siswa aktif) ----
+      var filterStatus = (document.getElementById('sFilterStatus') || {}).value;
+      if (filterStatus) {
+        siswaList = siswaList.filter(function (r) { return (r.data.status || 'aktif') === filterStatus; });
+      }
+
       // ---- Filter per kelas ----
       var filterVal = (document.getElementById('sFilterKelas') || {}).value || '';
       if (filterVal === '__tanpa_kelas__') {
@@ -1496,7 +1801,7 @@
       // ---- Keterangan total siswa ----
       var totalInfo = document.getElementById('sTotalInfo');
       if (totalInfo) {
-        totalInfo.textContent = (filterVal || kataCari)
+        totalInfo.textContent = (filterVal || kataCari || filterStatus)
           ? 'Menampilkan ' + siswaList.length + ' dari ' + totalSemua + ' siswa'
           : 'Total ' + totalSemua + ' siswa';
       }
@@ -1550,6 +1855,7 @@
 
     document.getElementById('sSortBy').addEventListener('change', muatUlangDaftar);
     document.getElementById('sFilterKelas').addEventListener('change', muatUlangDaftar);
+    document.getElementById('sFilterStatus').addEventListener('change', muatUlangDaftar);
 
     var timerCariSiswa = null;
     document.getElementById('sCari').addEventListener('input', function () {
