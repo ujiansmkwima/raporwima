@@ -38,6 +38,7 @@
       <a href="#" class="menu-item menu-item--nested" data-view="mapelTingkat"><i data-lucide="corner-down-right" class="menu-icon"></i><span class="menu-item__title">Mata Pelajaran Per Tingkat</span></a>
       <a href="#" class="menu-item" data-view="penugasan"><i data-lucide="briefcase" class="menu-icon"></i><span class="menu-item__title">Penugasan Guru</span></a>
       <a href="#" class="menu-item" data-view="ekskul"><i data-lucide="medal" class="menu-icon"></i><span class="menu-item__title">Ekstrakurikuler</span></a>
+      <a href="#" class="menu-item" data-view="pkl"><i data-lucide="briefcase-business" class="menu-icon"></i><span class="menu-item__title">PKL</span></a>
       <a href="#" class="menu-item" data-view="leger"><i data-lucide="layers" class="menu-icon"></i><span class="menu-item__title">Leger Nilai (6 Semester)</span></a>
     </nav>
 
@@ -2291,6 +2292,7 @@
       '<button class="btn-small btn-small--danger" id="btnHapusTerpilihPenugasan" disabled>🗑 Hapus Terpilih (<span id="pTerpilihCount">0</span>)</button>' +
       '</div>' +
       '<div id="importSummaryPenugasan"></div>' +
+      '<div class="panel-note">Format Excel: kolom <strong>Guru</strong>, <strong>Mata Pelajaran</strong>, lalu satu kolom untuk tiap <strong>Kelas</strong> (sama seperti "Unduh Format Ceklis"). Isi <strong>1</strong> di kolom kelas untuk menandai guru tersebut mengajar mapel itu di kelas tersebut, kosongkan kalau tidak. Boleh beberapa baris punya Mata Pelajaran yang sama dengan Guru berbeda. Penulisan nama Guru &amp; Mata Pelajaran tidak perlu 100% sama persis dengan data di sistem — perbedaan kecil (spasi, tanda titik/koma pada gelar, huruf besar-kecil, atau salah ketik ringan) akan otomatis dicocokkan.</div>' +
       '<form class="add-form" id="formPenugasan" style="flex-wrap:wrap;">' +
       '<div class="field"><label>Guru</label><select id="pGuru">' + opsi(guruList) + '</select></div>' +
       '<div class="field"><label>Kelas</label><select id="pKelasMode"><option value="semua">Semua Kelas</option><option value="tertentu">Kelas Tertentu</option></select></div>' +
@@ -2585,6 +2587,70 @@
     var contohMapel = mapelList[0] ? mapelList[0].nama : 'Nama Mata Pelajaran';
     var contohKelas = kelasList[0] ? kelasList[0].nama : 'Nama Kelas';
 
+    // ================= Pencocokan nama dengan toleransi (untuk import) ================
+    // Dipakai supaya import Excel tetap berhasil walau ada sedikit perbedaan
+    // penulisan nama Guru / Mata Pelajaran (spasi ganda, tanda titik/koma pada
+    // gelar, huruf besar-kecil, atau salah ketik ringan) dibanding data di sistem.
+    function normalisasiNama(s) {
+      return String(s || '')
+        .toLowerCase()
+        .replace(/[.,'"()]/g, '')   // buang tanda baca umum pada gelar (S.Pd., S. Kom, dll.)
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+    function jarakLevenshtein(a, b) {
+      var m = a.length, n = b.length;
+      if (!m) return n;
+      if (!n) return m;
+      var dp = new Array(m + 1);
+      for (var i = 0; i <= m; i++) { dp[i] = [i]; }
+      for (var j = 0; j <= n; j++) { dp[0][j] = j; }
+      for (i = 1; i <= m; i++) {
+        for (j = 1; j <= n; j++) {
+          dp[i][j] = a[i - 1] === b[j - 1]
+            ? dp[i - 1][j - 1]
+            : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+        }
+      }
+      return dp[m][n];
+    }
+    function skorKemiripan(a, b) {
+      var na = normalisasiNama(a), nb = normalisasiNama(b);
+      if (!na || !nb) return 0;
+      if (na === nb) return 1;
+      var jarak = jarakLevenshtein(na, nb);
+      var panjangMax = Math.max(na.length, nb.length);
+      return panjangMax ? 1 - (jarak / panjangMax) : 0;
+    }
+    // Cari item di `list` ({id, nama}) yang namanya sama/mirip dengan `nama`.
+    // Balikan: null kalau tidak ketemu, atau { id, nama, persis } kalau ketemu.
+    // `persis` = false berarti dicocokkan lewat toleransi kemiripan (bukan sama persis).
+    function cariMiripDenganToleransi(nama, list, ambangBatas) {
+      var target = normalisasiNama(nama);
+      if (!target) return null;
+      for (var i = 0; i < list.length; i++) {
+        if (normalisasiNama(list[i].nama) === target) {
+          return { id: list[i].id, nama: list[i].nama, persis: true };
+        }
+      }
+      var terbaik = null, skorTerbaik = 0;
+      list.forEach(function (x) {
+        var skor = skorKemiripan(nama, x.nama);
+        if (skor > skorTerbaik) { skorTerbaik = skor; terbaik = x; }
+      });
+      if (terbaik && skorTerbaik >= (ambangBatas || 0.8)) {
+        return { id: terbaik.id, nama: terbaik.nama, persis: false, skor: skorTerbaik };
+      }
+      return null;
+    }
+    // Anggap sel "dicentang" kalau isinya 1, "1", ya/yes/y/true/v/x/✓ (huruf besar-kecil bebas).
+    function selDicentang(v) {
+      if (v === 1 || v === true) return true;
+      if (v === 0 || v === false || v === '' || v === null || v === undefined) return false;
+      var s = String(v).trim().toLowerCase();
+      return ['1', 'ya', 'y', 'yes', 'true', 'v', 'x', '✓', '√'].indexOf(s) !== -1;
+    }
+
     function tulisExcel(rows, headers, sheetName, namaFile) {
       var ws = XLSX.utils.json_to_sheet(rows, { header: headers });
       var wb = XLSX.utils.book_new();
@@ -2617,8 +2683,14 @@
       tulisExcel(rows, ['Guru', 'Mata Pelajaran', 'Kelas'], 'Penugasan Guru', 'data_penugasan_guru.xlsx');
     });
     document.getElementById('btnTemplatePenugasan').addEventListener('click', function () {
-      var contoh = { 'Guru': contohGuru, 'Mata Pelajaran': contohMapel, 'Kelas': contohKelas };
-      tulisExcel([contoh], ['Guru', 'Mata Pelajaran', 'Kelas'], 'Template Penugasan Guru', 'template_import_penugasan_guru.xlsx');
+      if (!kelasList.length) { alert('Belum ada kelas yang diinput. Tambahkan dulu di menu "Kelas" sebelum mengunduh template ini.'); return; }
+      var kolomKelas = kelasList.map(function (k) { return k.nama; });
+      var headers = ['Guru', 'Mata Pelajaran'].concat(kolomKelas);
+      var contoh = { 'Guru': contohGuru, 'Mata Pelajaran': contohMapel };
+      kolomKelas.forEach(function (nm, idx) { contoh[nm] = idx === 0 ? 1 : ''; });
+      var baris2 = { 'Guru': '', 'Mata Pelajaran': '' };
+      kolomKelas.forEach(function (nm) { baris2[nm] = ''; });
+      tulisExcel([contoh, baris2, baris2], headers, 'Template Penugasan Guru', 'template_import_penugasan_guru.xlsx');
     });
     document.getElementById('btnExportPenugasanCeklis').addEventListener('click', async function () {
       if (!kelasList.length) { alert('Belum ada kelas yang diinput.'); return; }
@@ -2661,29 +2733,106 @@
     document.getElementById('fileImportPenugasan').addEventListener('change', function (e) {
       var file = e.target.files[0];
       if (!file) return;
+      var AMBANG_BATAS_MIRIP = 0.8; // 0-1, semakin tinggi semakin ketat toleransi kemiripan nama
       bacaExcel(file, async function (rows) {
+        if (!rows.length) {
+          tampilkanRingkasan('importSummaryPenugasan', 0, 0, 0, ['File kosong atau formatnya tidak terbaca.'], 'penugasan');
+          document.getElementById('fileImportPenugasan').value = '';
+          return;
+        }
+
         var existingRes = await supabaseClient.from('penugasan_guru').select('guru_id, mapel_id, kelas_id').eq('tahun_ajaran_id', tahunAktif.id);
         var existingSet = {};
         (existingRes.data || []).forEach(function (x) { existingSet[x.guru_id + '|' + x.mapel_id + '|' + x.kelas_id] = true; });
 
+        var headerKeys = Object.keys(rows[0]);
+        // Format lama (1 baris = 1 kombinasi): kolomnya persis Guru, Mata Pelajaran, Kelas.
+        var formatCeklis = !(headerKeys.indexOf('Kelas') !== -1 && headerKeys.length <= 3);
+
         var ditambah = 0, dilewati = 0, pesan = [];
-        for (var i = 0; i < rows.length; i++) {
-          var row = rows[i];
-          var namaGuru = String(row['Guru'] || '').trim();
-          var namaMapel = String(row['Mata Pelajaran'] || '').trim();
-          var namaKelas = String(row['Kelas'] || '').trim();
-          var gId = guruIdByNama[namaGuru.toLowerCase()];
-          var mId = mapelIdByNama[namaMapel.toLowerCase()];
-          var kId = kelasIdByNama[namaKelas.toLowerCase()];
-          if (!namaGuru || !namaMapel || !namaKelas) { dilewati++; pesan.push('Baris ' + (i + 2) + ': dilewati (Guru/Mata Pelajaran/Kelas belum lengkap).'); continue; }
-          if (!gId || !mId || !kId) { dilewati++; pesan.push('Baris ' + (i + 2) + ': dilewati (Guru/Mata Pelajaran/Kelas "' + (namaGuru + ' / ' + namaMapel + ' / ' + namaKelas) + '" tidak ditemukan).'); continue; }
-          var key = gId + '|' + mId + '|' + kId;
-          if (existingSet[key]) { dilewati++; pesan.push('Baris ' + (i + 2) + ': dilewati (sudah ditugaskan sebelumnya).'); continue; }
-          var ins = await supabaseClient.from('penugasan_guru').insert({ guru_id: gId, mapel_id: mId, kelas_id: kId, tahun_ajaran_id: tahunAktif.id });
-          if (ins.error) { dilewati++; pesan.push('Baris ' + (i + 2) + ': gagal — ' + ins.error.message); continue; }
-          existingSet[key] = true;
-          ditambah++;
+        var rowsUntukDisimpan = [];
+
+        if (!formatCeklis) {
+          // ---------- Format lama: Guru, Mata Pelajaran, Kelas ----------
+          for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            var namaGuru = String(row['Guru'] || '').trim();
+            var namaMapel = String(row['Mata Pelajaran'] || '').trim();
+            var namaKelas = String(row['Kelas'] || '').trim();
+            if (!namaGuru && !namaMapel && !namaKelas) continue;
+            if (!namaGuru || !namaMapel || !namaKelas) { dilewati++; pesan.push('Baris ' + (i + 2) + ': dilewati (Guru/Mata Pelajaran/Kelas belum lengkap).'); continue; }
+
+            var gMatch = cariMiripDenganToleransi(namaGuru, guruList, AMBANG_BATAS_MIRIP);
+            var mMatch = cariMiripDenganToleransi(namaMapel, mapelList, AMBANG_BATAS_MIRIP);
+            var kId = kelasIdByNama[namaKelas.trim().toLowerCase()];
+            if (!gMatch || !mMatch || !kId) {
+              dilewati++;
+              pesan.push('Baris ' + (i + 2) + ': dilewati (Guru/Mata Pelajaran/Kelas "' + (namaGuru + ' / ' + namaMapel + ' / ' + namaKelas) + '" tidak ditemukan, meski sudah dicoba dengan toleransi kemiripan nama).');
+              continue;
+            }
+            if (!gMatch.persis) pesan.push('Baris ' + (i + 2) + ': nama guru "' + namaGuru + '" dicocokkan sebagai "' + gMatch.nama + '".');
+            if (!mMatch.persis) pesan.push('Baris ' + (i + 2) + ': nama mata pelajaran "' + namaMapel + '" dicocokkan sebagai "' + mMatch.nama + '".');
+
+            var key = gMatch.id + '|' + mMatch.id + '|' + kId;
+            if (existingSet[key]) { dilewati++; pesan.push('Baris ' + (i + 2) + ': dilewati (sudah ditugaskan sebelumnya).'); continue; }
+            existingSet[key] = true;
+            rowsUntukDisimpan.push({ guru_id: gMatch.id, mapel_id: mMatch.id, kelas_id: kId, tahun_ajaran_id: tahunAktif.id });
+          }
+        } else {
+          // ---------- Format ceklis (matriks): Guru, Mata Pelajaran, <tiap Kelas jadi kolom, isi 1 = mengajar> ----------
+          var kolomKelasHeaders = headerKeys.filter(function (h) { return h !== 'Guru' && h !== 'Mata Pelajaran'; });
+          var petaKolomKelas = {};
+          kolomKelasHeaders.forEach(function (h) {
+            petaKolomKelas[h] = cariMiripDenganToleransi(h, kelasList, AMBANG_BATAS_MIRIP);
+          });
+          var kolomTakDikenal = kolomKelasHeaders.filter(function (h) { return !petaKolomKelas[h]; });
+          if (kolomTakDikenal.length) {
+            pesan.push('Kolom kelas berikut tidak dikenali dan diabaikan: ' + kolomTakDikenal.join(', ') + '.');
+          }
+
+          for (var r = 0; r < rows.length; r++) {
+            var baris = rows[r];
+            var gNama = String(baris['Guru'] || '').trim();
+            var mNama = String(baris['Mata Pelajaran'] || '').trim();
+            if (!gNama && !mNama) continue; // baris kosong, lewati diam-diam
+
+            var adaKelasDiceklis = kolomKelasHeaders.some(function (h) { return petaKolomKelas[h] && selDicentang(baris[h]); });
+            if (!gNama || !mNama) {
+              if (adaKelasDiceklis) { dilewati++; pesan.push('Baris ' + (r + 2) + ': dilewati (Guru/Mata Pelajaran belum lengkap).'); }
+              continue;
+            }
+
+            var gCocok = cariMiripDenganToleransi(gNama, guruList, AMBANG_BATAS_MIRIP);
+            var mCocok = cariMiripDenganToleransi(mNama, mapelList, AMBANG_BATAS_MIRIP);
+            if (!gCocok) { dilewati++; pesan.push('Baris ' + (r + 2) + ': guru "' + gNama + '" tidak ditemukan, meski sudah dicoba dengan toleransi kemiripan nama.'); continue; }
+            if (!mCocok) { dilewati++; pesan.push('Baris ' + (r + 2) + ': mata pelajaran "' + mNama + '" tidak ditemukan, meski sudah dicoba dengan toleransi kemiripan nama.'); continue; }
+            if (!gCocok.persis) pesan.push('Baris ' + (r + 2) + ': nama guru "' + gNama + '" dicocokkan sebagai "' + gCocok.nama + '".');
+            if (!mCocok.persis) pesan.push('Baris ' + (r + 2) + ': nama mata pelajaran "' + mNama + '" dicocokkan sebagai "' + mCocok.nama + '".');
+
+            var adaDitugaskan = false;
+            kolomKelasHeaders.forEach(function (h) {
+              var kCocok = petaKolomKelas[h];
+              if (!kCocok || !selDicentang(baris[h])) return;
+              adaDitugaskan = true;
+              var key = gCocok.id + '|' + mCocok.id + '|' + kCocok.id;
+              if (existingSet[key]) { dilewati++; pesan.push('Baris ' + (r + 2) + ' kelas "' + kCocok.nama + '": dilewati (sudah ditugaskan sebelumnya).'); return; }
+              existingSet[key] = true;
+              rowsUntukDisimpan.push({ guru_id: gCocok.id, mapel_id: mCocok.id, kelas_id: kCocok.id, tahun_ajaran_id: tahunAktif.id });
+            });
+            if (!adaDitugaskan) pesan.push('Baris ' + (r + 2) + ': tidak ada kelas yang ditandai "1" untuk ' + gNama + ' / ' + mNama + '.');
+          }
         }
+
+        if (rowsUntukDisimpan.length) {
+          var ins = await supabaseClient.from('penugasan_guru')
+            .upsert(rowsUntukDisimpan, { onConflict: 'guru_id,mapel_id,kelas_id,tahun_ajaran_id', ignoreDuplicates: true });
+          if (ins.error) {
+            pesan.push('Sebagian/seluruh data gagal disimpan: ' + ins.error.message);
+          } else {
+            ditambah = rowsUntukDisimpan.length;
+          }
+        }
+
         tampilkanRingkasan('importSummaryPenugasan', ditambah, 0, dilewati, pesan, 'penugasan');
         document.getElementById('fileImportPenugasan').value = '';
         renderPenugasan();
@@ -3718,7 +3867,680 @@
     }
   }
 
-  var views = { dashboard: renderDashboard, profilSekolah: renderProfilSekolah, tahunAjaran: renderTahunAjaran, siswa: renderSiswa, leger: renderLeger, kelas: renderKelas, mapel: renderMapel, mapelTingkat: renderMapelTingkat, penugasan: renderPenugasan, guru: renderGuru, ekskul: renderEkstrakurikuler };
+  // =========================================================
+  // PKL (PRAKTIK KERJA LAPANGAN) — modul penilaian tersendiri,
+  // TIDAK lewat menu Penugasan Guru / Input Nilai biasa.
+  //
+  //   A. Pembimbing PKL — Admin memilih siswa TERTENTU (per nama
+  //      anak, boleh dari kelas manapun) lalu menugaskan satu
+  //      guru sebagai pembimbing PKL siswa itu. Guru tsb otomatis
+  //      mendapat menu "Nilai PKL" di dashboardnya, dan mengisi
+  //      data DUDI (nama/alamat DUDI, waktu PKL) + Nilai DUDI.
+  //   B. Penguji PKL — Admin menunjuk guru penguji per siswa,
+  //      TERPISAH dari pembimbing (boleh guru yang sama, boleh
+  //      berbeda). Guru tsb otomatis mendapat menu "Nilai PKL
+  //      (Penguji)" di dashboardnya, dan HANYA mengisi Nilai
+  //      Penguji (tidak mengisi data DUDI).
+  //   C. Rekap Nilai PKL — daftar semua siswa yang sudah punya
+  //      pembimbing PKL beserta Nilai Akhir DUDI, Nilai Akhir
+  //      Penguji, dan Nilai Akhir PKL (rata-rata keduanya). Nilai
+  //      ini TIDAK muncul di Cetak Rapor biasa — rekap ini semata
+  //      untuk pemantauan Admin & bahan format cetak PKL tersendiri
+  //      (dicetak guru pembimbing lewat dashboard Guru).
+  // =========================================================
+  async function renderPkl() {
+    if (!tahunAktif) {
+      content.innerHTML = '<div class="empty-state"><div class="empty-state__mark">！</div><div class="empty-state__title">Belum ada tahun ajaran aktif</div><div class="empty-state__desc">Aktifkan tahun ajaran dulu sebelum mengelola PKL.</div></div>';
+      return;
+    }
+
+    var guruRes = await supabaseClient.from('profiles').select('id, nama').eq('role', 'guru').order('nama');
+    var guruList = guruRes.data || [];
+    var kelasRes = await supabaseClient.from('kelas').select('id, nama').order('nama');
+    var kelasList = kelasRes.data || [];
+
+    function opsi(list) { return list.map(function (x) { return '<option value="' + x.id + '">' + escapeHtml(x.nama) + '</option>'; }).join(''); }
+
+    function tulisExcelPkl(rows, headers, sheetName, namaFile) {
+      var ws = XLSX.utils.json_to_sheet(rows, { header: headers });
+      var wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, sheetName);
+      XLSX.writeFile(wb, namaFile);
+    }
+
+    // ================= Pencocokan nama Guru dengan toleransi (untuk import) =================
+    // Sama seperti yang dipakai di import Penugasan Guru: kalau nama guru di
+    // Excel tidak sama PERSIS dengan data di sistem (salah ketik ringan, spasi
+    // ganda, tanda titik pada gelar, dll.), tapi SECARA GARIS BESAR nama
+    // lengkapnya benar, tetap dicocokkan otomatis ke guru yang sudah ada.
+    function normalisasiNamaPkl(s) {
+      return String(s || '')
+        .toLowerCase()
+        .replace(/[.,'"()]/g, '')   // buang tanda baca umum pada gelar (S.Pd., S. Kom, dll.)
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+    function jarakLevenshteinPkl(a, b) {
+      var m = a.length, n = b.length;
+      if (!m) return n;
+      if (!n) return m;
+      var dp = new Array(m + 1);
+      for (var i = 0; i <= m; i++) { dp[i] = [i]; }
+      for (var j = 0; j <= n; j++) { dp[0][j] = j; }
+      for (i = 1; i <= m; i++) {
+        for (j = 1; j <= n; j++) {
+          dp[i][j] = a[i - 1] === b[j - 1]
+            ? dp[i - 1][j - 1]
+            : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+        }
+      }
+      return dp[m][n];
+    }
+    function skorKemiripanPkl(a, b) {
+      var na = normalisasiNamaPkl(a), nb = normalisasiNamaPkl(b);
+      if (!na || !nb) return 0;
+      if (na === nb) return 1;
+      var jarak = jarakLevenshteinPkl(na, nb);
+      var panjangMax = Math.max(na.length, nb.length);
+      return panjangMax ? 1 - (jarak / panjangMax) : 0;
+    }
+    // Cari guru di `guruList` yang namanya sama/mirip `nama`. Balikan: null
+    // kalau tidak ketemu, atau { id, nama, persis } kalau ketemu (`persis` =
+    // false berarti dicocokkan lewat toleransi kemiripan, bukan sama persis).
+    function cariGuruMiripPkl(nama, ambangBatas) {
+      var target = normalisasiNamaPkl(nama);
+      if (!target) return null;
+      for (var i = 0; i < guruList.length; i++) {
+        if (normalisasiNamaPkl(guruList[i].nama) === target) {
+          return { id: guruList[i].id, nama: guruList[i].nama, persis: true };
+        }
+      }
+      var terbaik = null, skorTerbaik = 0;
+      guruList.forEach(function (g) {
+        var skor = skorKemiripanPkl(nama, g.nama);
+        if (skor > skorTerbaik) { skorTerbaik = skor; terbaik = g; }
+      });
+      if (terbaik && skorTerbaik >= (ambangBatas || 0.8)) {
+        return { id: terbaik.id, nama: terbaik.nama, persis: false, skor: skorTerbaik };
+      }
+      return null;
+    }
+
+    // ================= Tanggal fleksibel (untuk import) =================
+    // Terima tanggal dari Excel dalam beberapa bentuk: objek Date (dari sel
+    // bertipe tanggal), "YYYY-MM-DD", "DD/MM/YYYY" atau "DD-MM-YYYY", dan
+    // format Indonesia seperti "13 Juni 2026" (boleh diawali nama hari,
+    // mis. "Sabtu, 13 Juni 2026").
+    var BULAN_INDONESIA_PKL = {
+      januari: 1, jan: 1, februari: 2, feb: 2, maret: 3, mar: 3, april: 4, apr: 4,
+      mei: 5, juni: 6, jun: 6, juli: 7, jul: 7, agustus: 8, agu: 8, ags: 8,
+      september: 9, sep: 9, sept: 9, oktober: 10, okt: 10, november: 11, nov: 11,
+      desember: 12, des: 12
+    };
+    function tanggalExcelPkl(v) {
+      if (v === '' || v === null || v === undefined) return null;
+      if (v instanceof Date) {
+        var tz = v.getTimezoneOffset() * 60000;
+        return new Date(v.getTime() - tz).toISOString().slice(0, 10);
+      }
+      var s = String(v).trim();
+      if (!s) return null;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s; // sudah ISO
+      var mNum = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+      if (mNum) return mNum[3] + '-' + ('0' + mNum[2]).slice(-2) + '-' + ('0' + mNum[1]).slice(-2);
+      // Format Indonesia, boleh diawali nama hari + koma (mis. "Sabtu, 13 Juni 2026").
+      var bersih = s.replace(/^[A-Za-z]+,\s*/, '').trim();
+      var mIndo = bersih.match(/^(\d{1,2})\s+([A-Za-z]+)\.?\s+(\d{4})$/);
+      if (mIndo) {
+        var bulanIndo = BULAN_INDONESIA_PKL[mIndo[2].toLowerCase()];
+        if (bulanIndo) {
+          return mIndo[3] + '-' + ('0' + bulanIndo).slice(-2) + '-' + ('0' + mIndo[1]).slice(-2);
+        }
+      }
+      return s || null; // tidak dikenali — dibiarkan apa adanya
+    }
+
+    var COLLAPSE_STORAGE_PREFIX = 'erapor_collapsed_';
+    function isSectionCollapsed(key) { return localStorage.getItem(COLLAPSE_STORAGE_PREFIX + key) === '1'; }
+    function setSectionCollapsed(key, collapsed) {
+      if (collapsed) localStorage.setItem(COLLAPSE_STORAGE_PREFIX + key, '1');
+      else localStorage.removeItem(COLLAPSE_STORAGE_PREFIX + key);
+    }
+    var clsPembimbing = isSectionCollapsed('bodyPklPembimbing') ? ' is-collapsed' : '';
+    var clsPenguji = isSectionCollapsed('bodyPklPenguji') ? ' is-collapsed' : '';
+    var clsRekap = isSectionCollapsed('bodyPklRekap') ? ' is-collapsed' : '';
+
+    content.innerHTML =
+      '<div class="panel-head panel-head--toggle" data-target="bodyPklPembimbing"><div><div class="panel-head__title">Pembimbing PKL</div>' +
+      '<div class="panel-head__desc">Pilih Guru &amp; Kelas, lalu centang siswa yang dibimbing guru tsb untuk PKL pada Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + '. Satu siswa hanya punya satu pembimbing PKL — mencentang siswa yang sudah punya pembimbing lain akan memindahkannya ke guru yang baru dipilih. Admin juga bisa langsung mengisi Tempat PKL &amp; Lama Waktu PKL (Tanggal Mulai/Selesai) di tabel — begitu disimpan, datanya otomatis muncul di menu "Nilai PKL" milik guru tsb. Guru Pembimbing mengisi data DUDI dan Nilai DUDI (bukan nilai penguji).</div></div>' +
+      '<span class="panel-head__toggle-icon">☰</span></div>' +
+      '<div class="collapsible-body' + clsPembimbing + '" id="bodyPklPembimbing">' +
+      '<div class="add-form">' +
+      '<div class="field"><label>Guru Pembimbing</label><select id="pklGuru">' + opsi(guruList) + '</select></div>' +
+      '<div class="field"><label>Kelas</label><select id="pklKelas"><option value="">— Pilih Kelas —</option>' + opsi(kelasList) + '</select></div>' +
+      '<button type="button" class="btn-small" id="btnTampilkanPkl">Tampilkan Siswa</button>' +
+      '</div>' +
+      '<div id="pklPembimbingArea"></div>' +
+      '</div>' +
+      '<hr class="panel-divider">' +
+      '<div class="panel-head panel-head--toggle" data-target="bodyPklPenguji"><div><div class="panel-head__title">Penguji PKL</div>' +
+      '<div class="panel-head__desc">Pilih Guru &amp; Kelas, lalu centang siswa yang diuji guru tsb untuk PKL pada Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + '. Penguji TERPISAH dari Pembimbing (boleh guru yang sama, boleh berbeda) — satu siswa hanya punya satu penguji PKL. Guru yang ditunjuk otomatis dapat menu "Nilai PKL (Penguji)" di dashboardnya dan HANYA mengisi Nilai Penguji, tidak mengisi data DUDI.</div></div>' +
+      '<span class="panel-head__toggle-icon">☰</span></div>' +
+      '<div class="collapsible-body' + clsPenguji + '" id="bodyPklPenguji">' +
+      '<div class="add-form">' +
+      '<div class="field"><label>Guru Penguji</label><select id="pklGuruPenguji">' + opsi(guruList) + '</select></div>' +
+      '<div class="field"><label>Kelas</label><select id="pklKelasPenguji"><option value="">— Pilih Kelas —</option>' + opsi(kelasList) + '</select></div>' +
+      '<button type="button" class="btn-small" id="btnTampilkanPklPenguji">Tampilkan Siswa</button>' +
+      '</div>' +
+      '<div id="pklPengujiArea"></div>' +
+      '</div>' +
+      '<hr class="panel-divider">' +
+      '<div class="panel-head panel-head--toggle" data-target="bodyPklRekap"><div><div class="panel-head__title">Rekap Nilai PKL</div>' +
+      '<div class="panel-head__desc">Nilai PKL diisi guru pembimbing (Nilai DUDI) &amp; guru penguji (Nilai Penguji) lewat dashboard Guru, dan TIDAK muncul di Cetak Rapor biasa (ada format cetak PKL tersendiri). Rekap di bawah untuk pemantauan Admin.</div></div>' +
+      '<span class="panel-head__toggle-icon">☰</span></div>' +
+      '<div class="collapsible-body' + clsRekap + '" id="bodyPklRekap">' +
+      '<div class="toolbar"><button class="btn-small" id="btnExportRekapPkl">⬇ Unduh Rekap (Excel)</button></div>' +
+      '<div id="pklRekapArea"><div class="panel-note">Memuat rekap...</div></div>' +
+      '</div>';
+
+    document.querySelectorAll('.panel-head--toggle').forEach(function (head) {
+      head.addEventListener('click', function () {
+        var body = document.getElementById(head.dataset.target);
+        var collapsed = body.classList.toggle('is-collapsed');
+        setSectionCollapsed(head.dataset.target, collapsed);
+      });
+    });
+
+    if (!guruList.length) {
+      document.getElementById('pklPembimbingArea').innerHTML = '<div class="panel-note">Belum ada akun dengan role "guru".</div>';
+      document.getElementById('pklPengujiArea').innerHTML = '<div class="panel-note">Belum ada akun dengan role "guru".</div>';
+    }
+
+    // ---------- A. Pembimbing PKL: tampilkan & centang siswa per kelas ----------
+    document.getElementById('btnTampilkanPkl').addEventListener('click', async function () {
+      var guruIdDipilih = document.getElementById('pklGuru').value;
+      var kelasId = document.getElementById('pklKelas').value;
+      var area = document.getElementById('pklPembimbingArea');
+      if (!guruIdDipilih || !kelasId) {
+        area.innerHTML = '<div class="panel-note">Pilih guru dan kelas dulu.</div>';
+        return;
+      }
+
+      area.innerHTML = '<div class="panel-note">Memuat daftar siswa...</div>';
+
+      var skRes = await supabaseClient
+        .from('siswa_kelas')
+        .select('siswa:siswa_id(id, nis, nama)')
+        .eq('kelas_id', kelasId)
+        .eq('tahun_ajaran_id', tahunAktif.id);
+      var siswaList = (skRes.data || []).map(function (r) { return r.siswa; }).filter(Boolean);
+      siswaList.sort(function (a, b) { return a.nama.localeCompare(b.nama); });
+
+      if (!siswaList.length) {
+        area.innerHTML = '<div class="panel-note">Belum ada siswa di kelas ini pada tahun ajaran aktif.</div>';
+        return;
+      }
+
+      var siswaIds = siswaList.map(function (s) { return s.id; });
+      var pembimbingRes = await supabaseClient
+        .from('pkl_pembimbing')
+        .select('id, siswa_id, nama_dudi, tanggal_mulai, tanggal_selesai, guru:guru_id(id, nama)')
+        .eq('tahun_ajaran_id', tahunAktif.id)
+        .in('siswa_id', siswaIds);
+      var pembimbingMap = {};
+      (pembimbingRes.data || []).forEach(function (r) { pembimbingMap[r.siswa_id] = r; });
+
+      // Dipakai supaya template/import Excel gabungan di bawah juga bisa
+      // menampilkan & mengisi Guru Penguji sekaligus (tidak perlu buka
+      // panel "Penguji PKL" terpisah untuk kasus yang mengisi lewat Excel).
+      var pengujiRes = await supabaseClient
+        .from('pkl_penguji')
+        .select('siswa_id, guru:guru_id(id, nama)')
+        .eq('tahun_ajaran_id', tahunAktif.id)
+        .in('siswa_id', siswaIds);
+      var pengujiMapGabungan = {};
+      (pengujiRes.data || []).forEach(function (r) { if (r.guru) pengujiMapGabungan[r.siswa_id] = r.guru; });
+
+      var rowsHtml = siswaList.map(function (s, i) {
+        var pb = pembimbingMap[s.id];
+        var sudahGuruIni = pb && pb.guru && pb.guru.id === guruIdDipilih;
+        var checked = sudahGuruIni ? ' checked' : '';
+        var keterangan = pb && pb.guru ? (sudahGuruIni ? 'Guru ini' : 'Sudah dibimbing: ' + escapeHtml(pb.guru.nama)) : '—';
+        // Tempat PKL & Lama Waktu PKL hanya diambil dari data yang sudah
+        // tersimpan untuk guru yang SEDANG dipilih di atas. Kalau siswa
+        // masih dibimbing guru lain, kolom ini dikosongkan dulu — admin
+        // perlu mencentang "Dibimbing?" (memindahkan ke guru ini) sebelum
+        // mengisi Tempat/Lama Waktu PKL untuk guru yang baru.
+        var tempatVal = sudahGuruIni ? (pb.nama_dudi || '') : '';
+        var mulaiVal = sudahGuruIni ? (pb.tanggal_mulai || '') : '';
+        var selesaiVal = sudahGuruIni ? (pb.tanggal_selesai || '') : '';
+        return '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(s.nis || '—') + '</td><td>' + escapeHtml(s.nama) + '</td>' +
+          '<td class="pkl-status" data-siswa="' + s.id + '">' + keterangan + '</td>' +
+          '<td><input type="text" class="pkl-admin-tempat" data-siswa="' + s.id + '" value="' + escapeHtml(tempatVal) + '" placeholder="Nama DUDI / Tempat PKL" style="width:170px;"></td>' +
+          '<td><input type="date" class="pkl-admin-mulai" data-siswa="' + s.id + '" value="' + mulaiVal + '" style="width:135px;"></td>' +
+          '<td><input type="date" class="pkl-admin-selesai" data-siswa="' + s.id + '" value="' + selesaiVal + '" style="width:135px;"></td>' +
+          '<td style="text-align:center;"><input type="checkbox" class="pkl-check" data-siswa="' + s.id + '"' + checked + '></td></tr>';
+      }).join('');
+
+      area.innerHTML =
+        '<div class="toolbar">' +
+        '<button class="btn-small" id="btnTemplatePklPembimbing">⬇ Unduh Template Excel</button>' +
+        '<button class="btn-small" id="btnImportPklPembimbing">⬆ Import dari Excel</button>' +
+        '<input type="file" id="fileImportPklPembimbing" accept=".xlsx,.xls" style="display:none;">' +
+        '</div>' +
+        '<div class="panel-note">Cara pakai: unduh template, isi/ubah kolom <strong>Guru Pembimbing</strong> &amp; <strong>Guru Penguji</strong> sekaligus dalam satu file (boleh guru yang sama, boleh berbeda; usahakan sama dengan sheet "Daftar Guru" — typo ringan tetap dicocokkan otomatis selama nama lengkapnya secara garis besar benar), Tempat PKL, dan Tanggal (boleh format "13 Juni 2026" atau "13-06-2026"), lalu import lagi — kedua penugasan langsung tersimpan ke sistem tanpa perlu mencentang satu per satu. Kolom yang dikosongkan (Guru Pembimbing atau Guru Penguji) akan DILEWATI (tidak menghapus penugasan yang sudah ada untuk kolom itu).</div>' +
+        '<div id="importSummaryPklPembimbing"></div>' +
+        '<div class="table-wrap"><table class="data-table"><thead><tr><th>No</th><th>NIS</th><th>Nama</th><th>Status Pembimbing Saat Ini</th>' +
+        '<th>Tempat PKL (DUDI)</th><th>Tanggal Mulai</th><th>Tanggal Selesai</th>' +
+        '<th style="text-align:center;">Dibimbing?<br><label style="font-weight:normal;font-size:11px;"><input type="checkbox" id="pklSelectAllChk"> Pilih Semua</label></th></tr></thead>' +
+        '<tbody>' + rowsHtml + '</tbody></table></div>' +
+        '<div class="panel-note">Cara ini (centang manual) hanya menugaskan ke guru "' + escapeHtml((guruList.filter(function (g) { return g.id === guruIdDipilih; })[0] || {}).nama || '') + '" yang dipilih di atas. Tempat PKL &amp; Tanggal Mulai/Selesai di tabel ini hanya berlaku untuk siswa yang dicentang "Dibimbing?" — guru pembimbing masih bisa mengubahnya sendiri lewat menu "Nilai PKL".</div>' +
+        '<button class="btn-small btn-small--primary" id="btnSimpanPkl" style="margin-top:10px;">Simpan Pembimbing PKL</button>' +
+        '<div id="pklSimpanMsg"></div>';
+
+      // =========================================================
+      // Unduh Template & Import Excel — PEMBAGIAN Guru Pembimbing PKL
+      //
+      // Beda dengan tabel centang di bawah (yang menugaskan SATU guru
+      // terpilih ke banyak siswa), fitur ini untuk MEMBAGI banyak siswa
+      // di kelas ini ke guru pembimbing yang BERBEDA-BEDA sekaligus:
+      // admin isi kolom "Guru Pembimbing" per baris siswa di Excel
+      // (nama guru bebas berbeda tiap baris), lalu import — sistem
+      // langsung menugaskan/mengganti pembimbing PKL tiap siswa sesuai
+      // nama guru di baris itu (dicocokkan dari sheet "Daftar Guru").
+      // =========================================================
+      document.getElementById('btnTemplatePklPembimbing').addEventListener('click', function () {
+        var rows = siswaList.map(function (s, i) {
+          var pb = pembimbingMap[s.id];
+          var pg = pengujiMapGabungan[s.id];
+          return {
+            'No': i + 1,
+            'NIS': s.nis || '',
+            'Nama': s.nama,
+            'Guru Pembimbing': pb && pb.guru ? pb.guru.nama : '',
+            'Guru Penguji': pg ? pg.nama : '',
+            'Tempat PKL (DUDI)': pb ? (pb.nama_dudi || '') : '',
+            'Tanggal Mulai': pb ? (pb.tanggal_mulai || '') : '',
+            'Tanggal Selesai': pb ? (pb.tanggal_selesai || '') : ''
+          };
+        });
+        var headers = ['No', 'NIS', 'Nama', 'Guru Pembimbing', 'Guru Penguji', 'Tempat PKL (DUDI)', 'Tanggal Mulai', 'Tanggal Selesai'];
+        var ws = XLSX.utils.json_to_sheet(rows, { header: headers });
+        var wsGuru = XLSX.utils.json_to_sheet(
+          guruList.map(function (g) { return { 'Nama Guru (salin persis ke kolom Guru Pembimbing / Guru Penguji)': g.nama }; }),
+          { header: ['Nama Guru (salin persis ke kolom Guru Pembimbing / Guru Penguji)'] }
+        );
+        var wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Pembimbing & Penguji PKL');
+        XLSX.utils.book_append_sheet(wb, wsGuru, 'Daftar Guru');
+        var namaKelasDipilih = (kelasList.filter(function (k) { return k.id === kelasId; })[0] || {}).nama || 'kelas';
+        XLSX.writeFile(wb, 'template_pkl_' + namaKelasDipilih.replace(/[^a-z0-9]/gi, '_') + '.xlsx');
+      });
+
+      document.getElementById('btnImportPklPembimbing').addEventListener('click', function () {
+        document.getElementById('fileImportPklPembimbing').click();
+      });
+
+      document.getElementById('fileImportPklPembimbing').addEventListener('change', function (e) {
+        var file = e.target.files[0];
+        if (!file) return;
+
+        var reader = new FileReader();
+        reader.onload = async function (evt) {
+          var data = new Uint8Array(evt.target.result);
+          var wb = XLSX.read(data, { type: 'array', cellDates: true });
+          var sheet = wb.Sheets[wb.SheetNames[0]];
+          var rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+          var siswaByNis = {};
+          siswaList.forEach(function (s) { if (s.nis) siswaByNis[String(s.nis).trim()] = s; });
+
+          var jobs = [];
+          var jobKind = []; // paralel dengan `jobs` — 'pembimbing' / 'penguji', dipakai untuk hitung ringkasan
+          var baitsDiproses = 0, baitsDilewati = 0;
+          var pesan = [];
+
+          rows.forEach(function (row, i) {
+            var nis = String(row['NIS'] || '').trim();
+            if (!nis) { baitsDilewati++; pesan.push('Baris ' + (i + 2) + ': dilewati (NIS belum diisi).'); return; }
+            var s = siswaByNis[nis];
+            if (!s) { baitsDilewati++; pesan.push('Baris ' + (i + 2) + ': dilewati (NIS ' + nis + ' tidak ada di kelas ini).'); return; }
+
+            var namaPembimbing = String(row['Guru Pembimbing'] || '').trim();
+            var namaPenguji = String(row['Guru Penguji'] || '').trim();
+            var adaPenugasan = false;
+
+            if (namaPembimbing) {
+              var gPembimbing = cariGuruMiripPkl(namaPembimbing);
+              if (!gPembimbing) {
+                pesan.push('Baris ' + (i + 2) + ' (' + s.nama + '): Guru Pembimbing "' + namaPembimbing + '" dilewati (tidak ditemukan, meski sudah dicoba dengan toleransi kemiripan nama — cek ejaan di sheet "Daftar Guru").');
+              } else {
+                if (!gPembimbing.persis) pesan.push('Baris ' + (i + 2) + ' (' + s.nama + '): nama Guru Pembimbing "' + namaPembimbing + '" dicocokkan otomatis sebagai "' + gPembimbing.nama + '".');
+                jobs.push(supabaseClient.from('pkl_pembimbing').upsert({
+                  siswa_id: s.id, guru_id: gPembimbing.id, kelas_id: kelasId, tahun_ajaran_id: tahunAktif.id,
+                  nama_dudi: String(row['Tempat PKL (DUDI)'] || '').trim() || null,
+                  tanggal_mulai: tanggalExcelPkl(row['Tanggal Mulai']),
+                  tanggal_selesai: tanggalExcelPkl(row['Tanggal Selesai'])
+                }, { onConflict: 'siswa_id,tahun_ajaran_id' }));
+                jobKind.push('pembimbing');
+                adaPenugasan = true;
+              }
+            }
+
+            if (namaPenguji) {
+              var gPenguji = cariGuruMiripPkl(namaPenguji);
+              if (!gPenguji) {
+                pesan.push('Baris ' + (i + 2) + ' (' + s.nama + '): Guru Penguji "' + namaPenguji + '" dilewati (tidak ditemukan, meski sudah dicoba dengan toleransi kemiripan nama — cek ejaan di sheet "Daftar Guru").');
+              } else {
+                if (!gPenguji.persis) pesan.push('Baris ' + (i + 2) + ' (' + s.nama + '): nama Guru Penguji "' + namaPenguji + '" dicocokkan otomatis sebagai "' + gPenguji.nama + '".');
+                jobs.push(supabaseClient.from('pkl_penguji').upsert({
+                  siswa_id: s.id, guru_id: gPenguji.id, kelas_id: kelasId, tahun_ajaran_id: tahunAktif.id
+                }, { onConflict: 'siswa_id,tahun_ajaran_id' }));
+                jobKind.push('penguji');
+                adaPenugasan = true;
+              }
+            }
+
+            if (!namaPembimbing && !namaPenguji) {
+              baitsDilewati++;
+              pesan.push('Baris ' + (i + 2) + ' (' + s.nama + '): dilewati (kolom Guru Pembimbing & Guru Penguji dua-duanya kosong).');
+              return;
+            }
+            if (adaPenugasan) baitsDiproses++; else baitsDilewati++;
+          });
+
+          document.getElementById('fileImportPklPembimbing').value = '';
+
+          if (!jobs.length) {
+            document.getElementById('importSummaryPklPembimbing').innerHTML =
+              '<div class="import-summary">Tidak ada baris yang bisa diproses. ' + baitsDilewati + ' baris dilewati.' +
+              (pesan.length ? '\n\n' + escapeHtml(pesan.join('\n')) : '') + '</div>';
+            return;
+          }
+
+          var btnImp = document.getElementById('btnImportPklPembimbing');
+          btnImp.disabled = true;
+          btnImp.textContent = 'Mengimpor...';
+
+          var hasil = await Promise.all(jobs);
+          var gagal = [];
+          var berhasilPembimbing = 0, berhasilPenguji = 0;
+          hasil.forEach(function (r, idx) {
+            if (r.error) { gagal.push(r); return; }
+            if (jobKind[idx] === 'pembimbing') berhasilPembimbing++; else berhasilPenguji++;
+          });
+
+          btnImp.disabled = false;
+          btnImp.textContent = '⬆ Import dari Excel';
+          document.getElementById('importSummaryPklPembimbing').innerHTML =
+            '<div class="import-summary"><strong>Hasil import:</strong> ' + berhasilPembimbing + ' penugasan pembimbing PKL & ' + berhasilPenguji + ' penugasan penguji PKL tersimpan ke sistem (dari ' + baitsDiproses + ' baris), ' + baitsDilewati + ' baris dilewati' +
+            (gagal.length ? ', ' + gagal.length + ' penugasan gagal disimpan (' + gagal[0].error.message + ')' : '') + '.' +
+            (pesan.length ? '\n\n' + escapeHtml(pesan.join('\n')) : '') + '</div>';
+
+          document.getElementById('btnTampilkanPkl').click(); // muat ulang tabel supaya status terbaru
+          dataExportRekapPkl = await muatRekapPkl(); // muat ulang rekap di bawah
+        };
+        reader.readAsArrayBuffer(file);
+      });
+
+      var pklSelectAll = document.getElementById('pklSelectAllChk');
+      function pklChkList() { return document.querySelectorAll('.pkl-check'); }
+      function refreshPklSelectAll() {
+        var semua = pklChkList();
+        var terpilih = Array.prototype.filter.call(semua, function (c) { return c.checked; });
+        pklSelectAll.checked = semua.length > 0 && terpilih.length === semua.length;
+        pklSelectAll.indeterminate = terpilih.length > 0 && terpilih.length < semua.length;
+      }
+      pklSelectAll.addEventListener('change', function () {
+        Array.prototype.forEach.call(pklChkList(), function (c) { c.checked = pklSelectAll.checked; });
+      });
+      Array.prototype.forEach.call(pklChkList(), function (c) { c.addEventListener('change', refreshPklSelectAll); });
+      refreshPklSelectAll();
+
+      document.getElementById('btnSimpanPkl').addEventListener('click', async function () {
+        var btn = this;
+        btn.disabled = true;
+        btn.textContent = 'Menyimpan...';
+
+        var dicentang = {};
+        Array.prototype.forEach.call(pklChkList(), function (c) { dicentang[c.getAttribute('data-siswa')] = c.checked; });
+
+        var jobs = [];
+        siswaList.forEach(function (s) {
+          var pb = pembimbingMap[s.id];
+          var sudahGuruIni = pb && pb.guru && pb.guru.id === guruIdDipilih;
+          if (dicentang[s.id]) {
+            // Dicentang (baru ditugaskan atau tetap guru ini) -> simpan
+            // penugasan SEKALIGUS Tempat PKL & Lama Waktu PKL (Tanggal
+            // Mulai/Selesai) yang diisi Admin di tabel, supaya otomatis
+            // muncul di menu "Nilai PKL" guru tsb.
+            var tempatEl = area.querySelector('.pkl-admin-tempat[data-siswa="' + s.id + '"]');
+            var mulaiEl = area.querySelector('.pkl-admin-mulai[data-siswa="' + s.id + '"]');
+            var selesaiEl = area.querySelector('.pkl-admin-selesai[data-siswa="' + s.id + '"]');
+            jobs.push(supabaseClient.from('pkl_pembimbing').upsert({
+              siswa_id: s.id, guru_id: guruIdDipilih, kelas_id: kelasId, tahun_ajaran_id: tahunAktif.id,
+              nama_dudi: tempatEl && tempatEl.value.trim() ? tempatEl.value.trim() : null,
+              tanggal_mulai: mulaiEl && mulaiEl.value ? mulaiEl.value : null,
+              tanggal_selesai: selesaiEl && selesaiEl.value ? selesaiEl.value : null
+            }, { onConflict: 'siswa_id,tahun_ajaran_id' }));
+          } else if (!dicentang[s.id] && sudahGuruIni) {
+            // Dilepas centangnya & sebelumnya memang guru ini -> hapus penugasan.
+            jobs.push(supabaseClient.from('pkl_pembimbing').delete().eq('id', pb.id));
+          }
+        });
+
+        var hasil = await Promise.all(jobs);
+        var gagal = hasil.filter(function (r) { return r.error; });
+
+        btn.disabled = false;
+        btn.textContent = 'Simpan Pembimbing PKL';
+        document.getElementById('pklSimpanMsg').innerHTML = gagal.length
+          ? '<div class="import-summary">Tersimpan, tapi ' + gagal.length + ' baris gagal (' + gagal[0].error.message + ').</div>'
+          : '<div class="import-summary">' + (jobs.length || 0) + ' perubahan pembimbing PKL disimpan.</div>';
+        document.getElementById('btnTampilkanPkl').click();
+      });
+    });
+
+    // ---------- B. Penguji PKL: tampilkan & centang siswa per kelas ----------
+    // Sama seperti Pembimbing PKL di atas, tapi TIDAK ada kolom data
+    // DUDI/tanggal — penguji hanya ditunjuk dan mengisi Nilai Penguji
+    // lewat menu "Nilai PKL (Penguji)" di dashboard Guru.
+    document.getElementById('btnTampilkanPklPenguji').addEventListener('click', async function () {
+      var guruIdDipilih = document.getElementById('pklGuruPenguji').value;
+      var kelasId = document.getElementById('pklKelasPenguji').value;
+      var area = document.getElementById('pklPengujiArea');
+      if (!guruIdDipilih || !kelasId) {
+        area.innerHTML = '<div class="panel-note">Pilih guru dan kelas dulu.</div>';
+        return;
+      }
+
+      area.innerHTML = '<div class="panel-note">Memuat daftar siswa...</div>';
+
+      var skRes = await supabaseClient
+        .from('siswa_kelas')
+        .select('siswa:siswa_id(id, nis, nama)')
+        .eq('kelas_id', kelasId)
+        .eq('tahun_ajaran_id', tahunAktif.id);
+      var siswaList = (skRes.data || []).map(function (r) { return r.siswa; }).filter(Boolean);
+      siswaList.sort(function (a, b) { return a.nama.localeCompare(b.nama); });
+
+      if (!siswaList.length) {
+        area.innerHTML = '<div class="panel-note">Belum ada siswa di kelas ini pada tahun ajaran aktif.</div>';
+        return;
+      }
+
+      var siswaIds = siswaList.map(function (s) { return s.id; });
+      var pengujiRes = await supabaseClient
+        .from('pkl_penguji')
+        .select('id, siswa_id, guru:guru_id(id, nama)')
+        .eq('tahun_ajaran_id', tahunAktif.id)
+        .in('siswa_id', siswaIds);
+      var pengujiMap = {};
+      (pengujiRes.data || []).forEach(function (r) { pengujiMap[r.siswa_id] = r; });
+
+      var rowsHtml = siswaList.map(function (s, i) {
+        var pg = pengujiMap[s.id];
+        var sudahGuruIni = pg && pg.guru && pg.guru.id === guruIdDipilih;
+        var checked = sudahGuruIni ? ' checked' : '';
+        var keterangan = pg && pg.guru ? (sudahGuruIni ? 'Guru ini' : 'Sudah diuji: ' + escapeHtml(pg.guru.nama)) : '—';
+        return '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(s.nis || '—') + '</td><td>' + escapeHtml(s.nama) + '</td>' +
+          '<td class="pkl-penguji-status" data-siswa="' + s.id + '">' + keterangan + '</td>' +
+          '<td style="text-align:center;"><input type="checkbox" class="pkl-penguji-check" data-siswa="' + s.id + '"' + checked + '></td></tr>';
+      }).join('');
+
+      area.innerHTML =
+        '<div class="panel-note">Import lewat Excel untuk Guru Penguji sekarang digabung jadi satu file dengan Guru Pembimbing — buka panel <strong>"Pembimbing PKL"</strong> di atas, unduh template di sana (sudah ada kolom "Guru Penguji"), lalu import lagi. Cara centang manual di bawah ini tetap bisa dipakai kalau hanya mau menunjuk SATU guru penguji untuk beberapa siswa sekaligus tanpa Excel.</div>' +
+        '<div class="table-wrap"><table class="data-table"><thead><tr><th>No</th><th>NIS</th><th>Nama</th><th>Status Penguji Saat Ini</th>' +
+        '<th style="text-align:center;">Diuji?<br><label style="font-weight:normal;font-size:11px;"><input type="checkbox" id="pklPengujiSelectAllChk"> Pilih Semua</label></th></tr></thead>' +
+        '<tbody>' + rowsHtml + '</tbody></table></div>' +
+        '<div class="panel-note">Cara ini (centang manual) hanya menugaskan ke guru "' + escapeHtml((guruList.filter(function (g) { return g.id === guruIdDipilih; })[0] || {}).nama || '') + '" yang dipilih di atas.</div>' +
+        '<button class="btn-small btn-small--primary" id="btnSimpanPklPenguji" style="margin-top:10px;">Simpan Penguji PKL</button>' +
+        '<div id="pklPengujiSimpanMsg"></div>';
+
+      var pklPengujiSelectAll = document.getElementById('pklPengujiSelectAllChk');
+      function pklPengujiChkList() { return document.querySelectorAll('.pkl-penguji-check'); }
+      function refreshPklPengujiSelectAll() {
+        var semua = pklPengujiChkList();
+        var terpilih = Array.prototype.filter.call(semua, function (c) { return c.checked; });
+        pklPengujiSelectAll.checked = semua.length > 0 && terpilih.length === semua.length;
+        pklPengujiSelectAll.indeterminate = terpilih.length > 0 && terpilih.length < semua.length;
+      }
+      pklPengujiSelectAll.addEventListener('change', function () {
+        Array.prototype.forEach.call(pklPengujiChkList(), function (c) { c.checked = pklPengujiSelectAll.checked; });
+      });
+      Array.prototype.forEach.call(pklPengujiChkList(), function (c) { c.addEventListener('change', refreshPklPengujiSelectAll); });
+      refreshPklPengujiSelectAll();
+
+      document.getElementById('btnSimpanPklPenguji').addEventListener('click', async function () {
+        var btn = this;
+        btn.disabled = true;
+        btn.textContent = 'Menyimpan...';
+
+        var dicentang = {};
+        Array.prototype.forEach.call(pklPengujiChkList(), function (c) { dicentang[c.getAttribute('data-siswa')] = c.checked; });
+
+        var jobs = [];
+        siswaList.forEach(function (s) {
+          var pg = pengujiMap[s.id];
+          var sudahGuruIni = pg && pg.guru && pg.guru.id === guruIdDipilih;
+          if (dicentang[s.id]) {
+            jobs.push(supabaseClient.from('pkl_penguji').upsert({
+              siswa_id: s.id, guru_id: guruIdDipilih, kelas_id: kelasId, tahun_ajaran_id: tahunAktif.id
+            }, { onConflict: 'siswa_id,tahun_ajaran_id' }));
+          } else if (!dicentang[s.id] && sudahGuruIni) {
+            jobs.push(supabaseClient.from('pkl_penguji').delete().eq('id', pg.id));
+          }
+        });
+
+        var hasil = await Promise.all(jobs);
+        var gagal = hasil.filter(function (r) { return r.error; });
+
+        btn.disabled = false;
+        btn.textContent = 'Simpan Penguji PKL';
+        document.getElementById('pklPengujiSimpanMsg').innerHTML = gagal.length
+          ? '<div class="import-summary">Tersimpan, tapi ' + gagal.length + ' baris gagal (' + gagal[0].error.message + ').</div>'
+          : '<div class="import-summary">' + (jobs.length || 0) + ' perubahan penguji PKL disimpan.</div>';
+        document.getElementById('btnTampilkanPklPenguji').click();
+        dataExportRekapPkl = await muatRekapPkl();
+      });
+    });
+
+    // ---------- C. Rekap Nilai PKL ----------
+    async function muatRekapPkl() {
+      var rekapArea = document.getElementById('pklRekapArea');
+
+      var pembimbingRes = await supabaseClient
+        .from('pkl_pembimbing')
+        .select('siswa_id, nama_dudi, tanggal_mulai, tanggal_selesai, siswa:siswa_id(nis, nama), kelas:kelas_id(nama), guru:guru_id(nama)')
+        .eq('tahun_ajaran_id', tahunAktif.id);
+      var pembimbingRows = (pembimbingRes.data || []).filter(function (r) { return r.siswa && r.kelas && r.guru; });
+      pembimbingRows.sort(function (a, b) {
+        if (a.kelas.nama === b.kelas.nama) return a.siswa.nama.localeCompare(b.siswa.nama);
+        return a.kelas.nama.localeCompare(b.kelas.nama);
+      });
+
+      if (!pembimbingRows.length) {
+        rekapArea.innerHTML = '<div class="panel-note">Belum ada siswa yang ditugaskan pembimbing PKL di tahun ajaran ini.</div>';
+        return [];
+      }
+
+      var siswaIds = pembimbingRows.map(function (r) { return r.siswa_id; });
+      var pengujiRes = await supabaseClient
+        .from('pkl_penguji')
+        .select('siswa_id, guru:guru_id(nama)')
+        .eq('tahun_ajaran_id', tahunAktif.id)
+        .in('siswa_id', siswaIds);
+      var pengujiMap = {}; // siswa_id -> nama guru penguji
+      (pengujiRes.data || []).forEach(function (r) { if (r.guru) pengujiMap[r.siswa_id] = r.guru.nama; });
+
+      var nilaiRes = await supabaseClient
+        .from('nilai_pkl')
+        .select('siswa_id, sumber, nilai_akhir')
+        .eq('tahun_ajaran_id', tahunAktif.id)
+        .in('siswa_id', siswaIds);
+      var nilaiMap = {}; // siswa_id -> { dudi: n, penguji: n }
+      (nilaiRes.data || []).forEach(function (r) {
+        if (!nilaiMap[r.siswa_id]) nilaiMap[r.siswa_id] = {};
+        nilaiMap[r.siswa_id][r.sumber] = r.nilai_akhir;
+      });
+
+      function fmtNilai(n) { return (n === null || n === undefined) ? '—' : Number(n).toFixed(2); }
+      function nilaiAkhirPkl(pasangan) {
+        if (!pasangan) return null;
+        var a = pasangan.dudi, b = pasangan.penguji;
+        if (a === null || a === undefined || b === null || b === undefined) return null;
+        return (Number(a) + Number(b)) / 2;
+      }
+      function fmtTgl(iso) {
+        if (!iso) return '';
+        var p = String(iso).split('-');
+        if (p.length !== 3) return iso;
+        return p[2] + '-' + p[1] + '-' + p[0];
+      }
+      function fmtLama(r) {
+        if (!r.tanggal_mulai && !r.tanggal_selesai) return '—';
+        return fmtTgl(r.tanggal_mulai || '…') + ' s.d. ' + fmtTgl(r.tanggal_selesai || '…');
+      }
+
+      var dataExport = [];
+      var rowsHtml = pembimbingRows.map(function (r, i) {
+        var pasangan = nilaiMap[r.siswa_id] || {};
+        var akhir = nilaiAkhirPkl(pasangan);
+        var namaPenguji = pengujiMap[r.siswa_id] || '';
+        dataExport.push({
+          'No': i + 1, 'Nama Siswa': r.siswa.nama, 'NIS': r.siswa.nis || '', 'Kelas': r.kelas.nama,
+          'Guru Pembimbing': r.guru.nama, 'Guru Penguji': namaPenguji, 'Tempat DUDI': r.nama_dudi || '',
+          'Tanggal Mulai': r.tanggal_mulai || '', 'Tanggal Selesai': r.tanggal_selesai || '',
+          'Nilai DUDI': fmtNilai(pasangan.dudi), 'Nilai Penguji': fmtNilai(pasangan.penguji),
+          'Nilai Akhir PKL': fmtNilai(akhir)
+        });
+        return '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(r.siswa.nis || '—') + '</td><td>' + escapeHtml(r.siswa.nama) + '</td>' +
+          '<td>' + escapeHtml(r.kelas.nama) + '</td><td>' + escapeHtml(r.guru.nama) + '</td>' +
+          '<td>' + escapeHtml(namaPenguji || '—') + '</td>' +
+          '<td>' + escapeHtml(r.nama_dudi || '—') + '</td>' +
+          '<td>' + escapeHtml(fmtLama(r)) + '</td>' +
+          '<td class="tc-center">' + fmtNilai(pasangan.dudi) + '</td>' +
+          '<td class="tc-center">' + fmtNilai(pasangan.penguji) + '</td>' +
+          '<td class="tc-center"><strong>' + fmtNilai(akhir) + '</strong></td></tr>';
+      }).join('');
+
+      rekapArea.innerHTML = '<div class="table-wrap"><table class="data-table"><thead><tr>' +
+        '<th>No</th><th>NIS</th><th>Nama Siswa</th><th>Kelas</th><th>Guru Pembimbing</th><th>Guru Penguji</th><th>Tempat DUDI</th><th>Lama Waktu PKL</th>' +
+        '<th>Nilai DUDI</th><th>Nilai Penguji</th><th>Nilai Akhir PKL</th></tr></thead>' +
+        '<tbody>' + rowsHtml + '</tbody></table></div>';
+
+      return dataExport;
+    }
+
+    var dataExportRekapPkl = await muatRekapPkl();
+
+    document.getElementById('btnExportRekapPkl').addEventListener('click', function () {
+      if (!dataExportRekapPkl || !dataExportRekapPkl.length) { alert('Belum ada data untuk diunduh.'); return; }
+      tulisExcelPkl(dataExportRekapPkl, Object.keys(dataExportRekapPkl[0]), 'Rekap PKL', 'rekap_nilai_pkl.xlsx');
+    });
+  }
+
+  var views = { dashboard: renderDashboard, profilSekolah: renderProfilSekolah, tahunAjaran: renderTahunAjaran, siswa: renderSiswa, leger: renderLeger, kelas: renderKelas, mapel: renderMapel, mapelTingkat: renderMapelTingkat, penugasan: renderPenugasan, guru: renderGuru, ekskul: renderEkstrakurikuler, pkl: renderPkl };
 
   document.querySelectorAll('#menuAdmin .menu-item').forEach(function (item) {
     item.addEventListener('click', function (e) {

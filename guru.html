@@ -47,13 +47,14 @@
     <div class="sidebar__section-label" id="labelKokurikuler" style="display:none;">Kokurikuler</div>
     <nav class="menu-list" id="menuKokurikuler"></nav>
 
+    <div class="sidebar__section-label" id="labelPkl" style="display:none;">PKL</div>
+    <nav class="menu-list" id="menuPkl"></nav>
+
     <div class="sidebar__section-label" id="labelWaliKelas" style="display:none;">Wali Kelas</div>
     <nav class="menu-list" id="menuWaliKelas"></nav>
 
-    <div class="sidebar__section-label" id="labelCetakIdentitas" style="display:none;">Cetak Identitas</div>
+    <div class="sidebar__section-label" id="labelCetak" style="display:none;">Cetak</div>
     <nav class="menu-list" id="menuCetakIdentitas"></nav>
-
-    <div class="sidebar__section-label" id="labelCetakRapor" style="display:none;">Cetak Rapor</div>
     <nav class="menu-list" id="menuCetakRapor"></nav>
 
     <div class="sidebar__footer">
@@ -465,7 +466,7 @@
       // Siswa (diisi Admin lewat menu Data Siswa) + Profil Sekolah
       // (kepala sekolah, kota & tanggal tanda tangan). Ditaruh di atas
       // menu Cetak Rapor, skema tombol/preview/cetak sama persis.
-      document.getElementById('labelCetakIdentitas').style.display = '';
+      document.getElementById('labelCetak').style.display = '';
       var menuCetakIdentitas = document.getElementById('menuCetakIdentitas');
       var itemCetakIdentitas = document.createElement('a');
       itemCetakIdentitas.href = '#';
@@ -481,7 +482,6 @@
       // Cetak Rapor — hanya untuk wali kelas, mencetak rapor per siswa
       // di kelas yang diampunya (gabungan Nilai, Capaian Pembelajaran,
       // Ekstrakurikuler, Kokurikuler, dan rekap Presensi).
-      document.getElementById('labelCetakRapor').style.display = '';
       var menuCetak = document.getElementById('menuCetakRapor');
       var itemCetak = document.createElement('a');
       itemCetak.href = '#';
@@ -593,6 +593,63 @@
         });
         menuKoku.appendChild(itemRekapKoku);
       }
+    }
+
+    // 5d. Cek apakah guru ini ditugaskan sebagai PEMBIMBING PKL (Praktik
+    //    Kerja Lapangan) untuk siswa tertentu pada tahun ajaran aktif.
+    //    Modul PKL berdiri sendiri (bukan lewat Penugasan Guru mapel
+    //    biasa) — Admin menunjuk nama siswa satu-satu ke seorang guru
+    //    lewat menu Admin → "PKL" → "Pembimbing PKL". Kalau guru ini
+    //    punya siswa binaan PKL, tampil menu "Nilai PKL" berisi semua
+    //    siswa binaannya (bisa lintas kelas).
+    var pklPembimbingResult = await supabaseClient
+      .from('pkl_pembimbing')
+      .select('id')
+      .eq('guru_id', user.id)
+      .eq('tahun_ajaran_id', tahunAktif.id)
+      .limit(1);
+    var punyaBinaanPkl = !!(pklPembimbingResult.data && pklPembimbingResult.data.length);
+
+    if (punyaBinaanPkl) {
+      document.getElementById('labelPkl').style.display = '';
+      var menuPkl = document.getElementById('menuPkl');
+      var itemPkl = document.createElement('a');
+      itemPkl.href = '#';
+      itemPkl.className = 'menu-item';
+      itemPkl.innerHTML = '<i data-lucide="briefcase-business" class="menu-icon"></i><span class="menu-item__title">Nilai PKL</span>';
+      itemPkl.addEventListener('click', function (e) {
+        e.preventDefault();
+        setActiveMenuItem(itemPkl);
+        renderNilaiPkl();
+      });
+      menuPkl.appendChild(itemPkl);
+    }
+
+    // 5e. Cek apakah guru ini ditugaskan sebagai PENGUJI PKL — TERPISAH
+    //    dari Pembimbing PKL (boleh guru yang sama, boleh berbeda).
+    //    Admin menunjuk lewat menu Admin → "PKL" → "Penguji PKL". Guru
+    //    penguji HANYA mengisi Nilai Penguji (tidak mengisi data DUDI).
+    var pklPengujiResult = await supabaseClient
+      .from('pkl_penguji')
+      .select('id')
+      .eq('guru_id', user.id)
+      .eq('tahun_ajaran_id', tahunAktif.id)
+      .limit(1);
+    var punyaUjianPkl = !!(pklPengujiResult.data && pklPengujiResult.data.length);
+
+    if (punyaUjianPkl) {
+      document.getElementById('labelPkl').style.display = '';
+      var menuPklPenguji = document.getElementById('menuPkl');
+      var itemPklPenguji = document.createElement('a');
+      itemPklPenguji.href = '#';
+      itemPklPenguji.className = 'menu-item';
+      itemPklPenguji.innerHTML = '<i data-lucide="clipboard-check" class="menu-icon"></i><span class="menu-item__title">Nilai PKL (Penguji)</span>';
+      itemPklPenguji.addEventListener('click', function (e) {
+        e.preventDefault();
+        setActiveMenuItem(itemPklPenguji);
+        renderNilaiPklPenguji();
+      });
+      menuPklPenguji.appendChild(itemPklPenguji);
     }
 
     // Ikon menu di atas ditambahkan setelah render awal (data async),
@@ -2822,6 +2879,1115 @@
           : '<div class="import-summary">' + jobs.length + ' data peserta berhasil disimpan.</div>';
       });
     }
+
+    // ================= PEMBIMBING PKL: Nilai PKL (4 langkah) =================
+    // Modul tersendiri, TIDAK lewat menu Input Nilai biasa. Dipecah jadi 4
+    // langkah (tab) di dalam satu menu "Nilai PKL" supaya guru pembimbing
+    // tidak perlu menggulir satu halaman panjang:
+    //   1. Input Identitas   — data DUDI (nama/alamat DUDI, nama instruktur,
+    //      waktu PKL). Kalau Admin sudah mengisi data ini lewat menu Admin →
+    //      "PKL" → "Pembimbing PKL", field-nya otomatis sudah terisi di sini.
+    //   2. Input Nilai DUDI  — Nilai TP 1-4 sumber 'dudi' + deskripsi tiap TP
+    //      (tampil di format cetak). Nilai Penguji (sumber 'penguji') diisi
+    //      TERPISAH oleh guru Penguji PKL, di sini hanya baca saja.
+    //   3. Catatan & Presensi — catatan PKL + rekap Sakit/Ijin/Tanpa
+    //      Keterangan selama PKL (tampil di format cetak).
+    //   4. Cetak Nilai PKL — daftar semua siswa binaan (Nama + tombol Cetak
+    //      di sampingnya, konsepnya sama seperti menu "Cetak Rapor").
+    // Tiap langkah punya tombol Unduh Template Excel & Import dari Excel
+    // sendiri (isi kolomnya beda-beda sesuai field langkah itu), supaya bisa
+    // diisi massal. Nilai Akhir tiap sumber = rata-rata TP1-4 sumber itu.
+    // Nilai Akhir PKL keseluruhan = rata-rata Nilai Akhir DUDI & Penguji.
+    // Nilai ini TIDAK ditulis ke tabel nilai / TIDAK muncul di Cetak Rapor
+    // biasa — dicetak lewat langkah 4 di menu ini.
+    async function renderNilaiPkl() {
+      content.innerHTML = renderPlaceholder('Memuat...', 'Mengambil daftar siswa binaan PKL.');
+
+      var pembimbingRes = await supabaseClient
+        .from('pkl_pembimbing')
+        .select('id, siswa_id, kelas_id, nama_dudi, alamat_dudi, nama_pembimbing_dudi, tanggal_mulai, tanggal_selesai, sakit, ijin, tanpa_keterangan, deskripsi_tp1, deskripsi_tp2, deskripsi_tp3, deskripsi_tp4, catatan, siswa:siswa_id(id, nis, nisn, nama), kelas:kelas_id(id, nama, program_keahlian, konsentrasi_keahlian)')
+        .eq('guru_id', user.id)
+        .eq('tahun_ajaran_id', tahunAktif.id);
+      var binaanList = (pembimbingRes.data || []).filter(function (r) { return r.siswa && r.kelas; });
+      binaanList.sort(function (a, b) {
+        if (a.kelas.nama === b.kelas.nama) return a.siswa.nama.localeCompare(b.siswa.nama);
+        return a.kelas.nama.localeCompare(b.kelas.nama);
+      });
+
+      if (!binaanList.length) {
+        content.innerHTML = renderPlaceholder('Nilai PKL', 'Belum ada siswa yang ditetapkan sebagai binaan PKL Anda. Hubungi admin untuk penugasan lewat menu "PKL".');
+        return;
+      }
+
+      var siswaIds = binaanList.map(function (r) { return r.siswa_id; });
+      var nilaiRes = await supabaseClient
+        .from('nilai_pkl')
+        .select('siswa_id, sumber, tp1, tp2, tp3, tp4, nilai_akhir')
+        .eq('tahun_ajaran_id', tahunAktif.id)
+        .in('siswa_id', siswaIds);
+      var nilaiMap = {}; // siswa_id -> { dudi: row, penguji: row }
+      (nilaiRes.data || []).forEach(function (r) {
+        if (!nilaiMap[r.siswa_id]) nilaiMap[r.siswa_id] = {};
+        nilaiMap[r.siswa_id][r.sumber] = r;
+      });
+
+      var pengujiRes = await supabaseClient
+        .from('pkl_penguji')
+        .select('siswa_id, guru:guru_id(nama)')
+        .eq('tahun_ajaran_id', tahunAktif.id)
+        .in('siswa_id', siswaIds);
+      var pengujiGuruMap = {}; // siswa_id -> nama guru penguji
+      (pengujiRes.data || []).forEach(function (r) { if (r.guru) pengujiGuruMap[r.siswa_id] = r.guru.nama; });
+
+      function fmtN(n) { return (n === null || n === undefined || n === '') ? '—' : Number(n).toFixed(2); }
+      function rataTp(tp1, tp2, tp3, tp4) {
+        var vals = [tp1, tp2, tp3, tp4].filter(function (v) { return v !== null && v !== undefined && v !== ''; }).map(Number);
+        if (!vals.length) return null;
+        return vals.reduce(function (a, b) { return a + b; }, 0) / vals.length;
+      }
+      function rataTaPkl(a, b) {
+        if (a === null || a === undefined || b === null || b === undefined) return null;
+        return (Number(a) + Number(b)) / 2;
+      }
+      function cariBinaan(siswaId) { return binaanList.find(function (x) { return x.siswa_id === siswaId; }); }
+      function angkaAtauNull(v) {
+        if (v === '' || v === null || v === undefined) return null;
+        var n = Number(v);
+        return isNaN(n) ? null : n;
+      }
+
+      // ---- Rubrik Deskripsi Capaian per TP PKL (dari file "Rubrik Penilaian
+      // PKL Peserta Didik") — dipakai untuk menyusun otomatis Deskripsi TP
+      // 1-4 di Langkah 2 berdasarkan rata-rata Nilai DUDI & Nilai Penguji. ----
+      var RUBRIK_PKL_TP = {
+        1: [
+          { min: 90, max: 100, predikat: 'Sangat Baik', deskripsi: 'Peserta didik secara konsisten menunjukkan sikap disiplin, komunikatif, inisiatif, kerja sama tim, dan tanggung jawab tinggi tanpa perlu diingatkan, serta mampu menjadi contoh bagi rekan kerja lain di tempat PKL.' },
+          { min: 80, max: 89, predikat: 'Baik', deskripsi: 'Peserta didik menunjukkan disiplin, komunikasi, dan kerja sama yang baik dengan sesekali arahan ringan dari pembimbing lapangan.' },
+          { min: 70, max: 79, predikat: 'Cukup', deskripsi: 'Peserta didik menunjukkan soft skills dasar (disiplin, sopan santun, kerja sama) namun masih memerlukan pengingat atau bimbingan secara berkala.' },
+          { min: 60, max: 69, predikat: 'Kurang', deskripsi: 'Peserta didik menunjukkan soft skills yang belum stabil, sering perlu ditegur terkait kedisiplinan, komunikasi, atau sikap kerja.' },
+          { min: 0, max: 59, predikat: 'Sangat Kurang', deskripsi: 'Peserta didik belum mampu menerapkan soft skills dasar dunia kerja; sikap dan perilaku sering menyimpang dari yang diharapkan tempat PKL.' }
+        ],
+        2: [
+          { min: 90, max: 100, predikat: 'Sangat Baik', deskripsi: 'Peserta didik memahami dan menerapkan norma perusahaan, SOP kerja, serta prinsip K3LH secara konsisten dan mandiri, termasuk mengingatkan rekan kerja lain jika diperlukan.' },
+          { min: 80, max: 89, predikat: 'Baik', deskripsi: 'Peserta didik menerapkan norma, SOP, dan K3LH dengan baik, hanya sesekali memerlukan koreksi kecil.' },
+          { min: 70, max: 79, predikat: 'Cukup', deskripsi: 'Peserta didik memahami norma, SOP, dan K3LH namun penerapannya belum konsisten dan masih perlu pengawasan.' },
+          { min: 60, max: 69, predikat: 'Kurang', deskripsi: 'Peserta didik sering melanggar SOP atau kurang memperhatikan aspek K3LH meski sudah diberi arahan.' },
+          { min: 0, max: 59, predikat: 'Sangat Kurang', deskripsi: 'Peserta didik belum memahami atau mengabaikan norma, SOP, dan K3LH sehingga berisiko terhadap keselamatan kerja.' }
+        ],
+        3: [
+          { min: 90, max: 100, predikat: 'Sangat Baik', deskripsi: 'Peserta didik mampu menerapkan kompetensi teknis secara mandiri, tepat, dan efisien, bahkan mampu menyelesaikan tugas teknis baru yang belum diajarkan di sekolah dengan cepat beradaptasi.' },
+          { min: 80, max: 89, predikat: 'Baik', deskripsi: 'Peserta didik mampu menerapkan kompetensi teknis dengan hasil kerja yang baik dan sesuai standar, dengan bimbingan minimal.' },
+          { min: 70, max: 79, predikat: 'Cukup', deskripsi: 'Peserta didik mampu menerapkan kompetensi teknis dasar namun hasil kerja belum selalu sesuai standar dan masih memerlukan bimbingan.' },
+          { min: 60, max: 69, predikat: 'Kurang', deskripsi: 'Peserta didik mengalami kesulitan menerapkan kompetensi teknis; hasil kerja sering perlu diperbaiki oleh pembimbing lapangan.' },
+          { min: 0, max: 59, predikat: 'Sangat Kurang', deskripsi: 'Peserta didik belum mampu menerapkan kompetensi teknis yang relevan meski sudah dibimbing berulang kali.' }
+        ],
+        4: [
+          { min: 90, max: 100, predikat: 'Sangat Baik', deskripsi: 'Peserta didik memahami secara menyeluruh alur bisnis (proses, produk/jasa, hubungan antarbagian, dan posisi perusahaan di industrinya) serta mampu menjelaskannya secara runtut dan kritis.' },
+          { min: 80, max: 89, predikat: 'Baik', deskripsi: 'Peserta didik memahami sebagian besar alur bisnis dan mampu menjelaskan proses kerja utama di tempat PKL dengan cukup jelas.' },
+          { min: 70, max: 79, predikat: 'Cukup', deskripsi: 'Peserta didik memahami alur bisnis secara umum namun penjelasannya masih terbatas pada bagian tempat ia bertugas saja.' },
+          { min: 60, max: 69, predikat: 'Kurang', deskripsi: 'Pemahaman peserta didik terhadap alur bisnis perusahaan masih sangat terbatas dan kurang mampu menjelaskan keterkaitan antarproses.' },
+          { min: 0, max: 59, predikat: 'Sangat Kurang', deskripsi: 'Peserta didik belum memahami alur bisnis dunia kerja tempat PKL sama sekali.' }
+        ]
+      };
+      // Cari deskripsi rubrik untuk TP tertentu berdasarkan nilai (0-100,
+      // dibulatkan dulu ke bilangan bulat supaya batas rentang konsisten).
+      function deskripsiRubrikTp(tpKe, nilai) {
+        if (nilai === null || nilai === undefined || nilai === '' || isNaN(Number(nilai))) return '';
+        var list = RUBRIK_PKL_TP[tpKe];
+        if (!list) return '';
+        var bulat = Math.round(Number(nilai));
+        var cocok = list.find(function (r) { return bulat >= r.min && bulat <= r.max; });
+        return cocok ? cocok.deskripsi : '';
+      }
+
+      var BULAN_INDONESIA_PKL = {
+        januari: 1, jan: 1, februari: 2, feb: 2, maret: 3, mar: 3, april: 4, apr: 4,
+        mei: 5, juni: 6, jun: 6, juli: 7, jul: 7, agustus: 8, agu: 8, ags: 8,
+        september: 9, sep: 9, sept: 9, oktober: 10, okt: 10, november: 11, nov: 11,
+        desember: 12, des: 12
+      };
+      // Terima tanggal dari Excel dalam beberapa bentuk: objek Date (dari sel
+      // bertipe tanggal), "YYYY-MM-DD", "DD/MM/YYYY" atau "DD-MM-YYYY", dan
+      // format Indonesia seperti "13 Juni 2026" (boleh diawali nama hari,
+      // mis. "Sabtu, 13 Juni 2026").
+      function tanggalExcel(v) {
+        if (v === '' || v === null || v === undefined) return '';
+        if (v instanceof Date) {
+          var tz = v.getTimezoneOffset() * 60000;
+          return new Date(v.getTime() - tz).toISOString().slice(0, 10);
+        }
+        var s = String(v).trim();
+        if (!s) return '';
+        if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s; // sudah ISO
+        var mNum = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+        if (mNum) return mNum[3] + '-' + ('0' + mNum[2]).slice(-2) + '-' + ('0' + mNum[1]).slice(-2);
+        var bersih = s.replace(/^[A-Za-z]+,\s*/, '').trim();
+        var mIndo = bersih.match(/^(\d{1,2})\s+([A-Za-z]+)\.?\s+(\d{4})$/);
+        if (mIndo) {
+          var bulanIndo = BULAN_INDONESIA_PKL[mIndo[2].toLowerCase()];
+          if (bulanIndo) return mIndo[3] + '-' + ('0' + bulanIndo).slice(-2) + '-' + ('0' + mIndo[1]).slice(-2);
+        }
+        return s;
+      }
+
+
+      // ---- Kerangka 4 langkah (tab) — dipanggil ulang tiap pindah langkah ----
+      var LANGKAH_PKL = [
+        { key: 'identitas', label: '1. Input Identitas', icon: 'id-card' },
+        { key: 'nilai-dudi', label: '2. Input Nilai DUDI', icon: 'star' },
+        { key: 'catatan-presensi', label: '3. Catatan & Presensi', icon: 'calendar-check' },
+        { key: 'cetak', label: '4. Cetak Nilai PKL', icon: 'printer' }
+      ];
+
+      function renderKerangka(langkahAktif) {
+        var tabsHtml = LANGKAH_PKL.map(function (l) {
+          return '<button type="button" class="pkl-step-btn' + (l.key === langkahAktif ? ' pkl-step-btn--active' : '') + '" data-langkah="' + l.key + '">' +
+            '<i data-lucide="' + l.icon + '" style="width:14px;height:14px;"></i> ' + l.label + '</button>';
+        }).join('');
+
+        content.innerHTML =
+          '<div class="panel-head"><div><div class="panel-head__title">Nilai PKL</div>' +
+          '<div class="panel-head__desc">Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + ' · ' + binaanList.length + ' siswa binaan Anda. Lengkapi berurutan langkah 1–3, lalu cetak hasilnya di langkah 4.</div></div></div>' +
+          '<div class="pkl-steps no-print">' + tabsHtml + '</div>' +
+          '<div id="pklStepBody"></div>';
+        lucide.createIcons();
+
+        document.querySelectorAll('.pkl-step-btn').forEach(function (btn) {
+          btn.addEventListener('click', function () { pindahLangkah(this.getAttribute('data-langkah')); });
+        });
+      }
+
+      function pindahLangkah(key) {
+        renderKerangka(key);
+        if (key === 'identitas') renderLangkahIdentitas();
+        else if (key === 'nilai-dudi') renderLangkahNilaiDudi();
+        else if (key === 'catatan-presensi') renderLangkahCatatanPresensi();
+        else renderLangkahCetak();
+      }
+
+      // =========================================================
+      // LANGKAH 1 — Input Identitas (data DUDI)
+      // Kalau Admin sudah mengisi lewat menu Admin → "PKL" → "Pembimbing
+      // PKL", field di sini otomatis sudah terisi (tinggal dicek/dilengkapi).
+      // =========================================================
+      function renderLangkahIdentitas() {
+        var body = document.getElementById('pklStepBody');
+        var KOLOM = ['No', 'NIS', 'Nama', 'Nama DUDI / Tempat PKL', 'Nama Instruktur (DUDI)', 'Alamat DUDI', 'Tanggal Mulai (YYYY-MM-DD)', 'Tanggal Selesai (YYYY-MM-DD)'];
+
+        function kartu(b) {
+          return '<div class="pkl-card" id="pklIdCard-' + b.siswa_id + '">' +
+            '<div class="panel-head"><div><div class="panel-head__title">' + escapeHtml(b.siswa.nama) + '</div>' +
+            '<div class="panel-head__desc">NIS ' + escapeHtml(b.siswa.nis || '—') + ' · NISN ' + escapeHtml(b.siswa.nisn || '—') + ' · ' + escapeHtml(b.kelas.nama) + '</div></div></div>' +
+            '<div class="add-form" style="flex-wrap:wrap;">' +
+            '<div class="field"><label>Nama DUDI / Tempat PKL</label><input type="text" class="pklid-nama" data-siswa="' + b.siswa_id + '" value="' + escapeHtml(b.nama_dudi || '') + '"></div>' +
+            '<div class="field"><label>Nama Instruktur (DUDI)</label><input type="text" class="pklid-pembimbing" data-siswa="' + b.siswa_id + '" value="' + escapeHtml(b.nama_pembimbing_dudi || '') + '"></div>' +
+            '<div class="field" style="flex:1 1 100%;"><label>Alamat DUDI</label><input type="text" class="pklid-alamat" data-siswa="' + b.siswa_id + '" value="' + escapeHtml(b.alamat_dudi || '') + '"></div>' +
+            '<div class="field"><label>Waktu PKL — Tanggal Mulai</label><input type="date" class="pklid-mulai" data-siswa="' + b.siswa_id + '" value="' + (b.tanggal_mulai || '') + '"></div>' +
+            '<div class="field"><label>Waktu PKL — Tanggal Selesai</label><input type="date" class="pklid-selesai" data-siswa="' + b.siswa_id + '" value="' + (b.tanggal_selesai || '') + '"></div>' +
+            '</div></div>';
+        }
+
+        body.innerHTML =
+          '<div class="panel-note" style="margin-top:0;margin-bottom:14px;">Isi identitas DUDI/tempat PKL tiap siswa binaan Anda. Kalau Admin sudah memasukkan data ini, field di bawah sudah otomatis terisi — cukup dicek dan dilengkapi kalau masih ada yang kosong. Kolom tanggal boleh diisi format "13 Juni 2026" atau "13-06-2026".</div>' +
+          '<div class="toolbar">' +
+          '<button class="btn-small" id="btnTemplatePklId">⬇ Unduh Template Excel</button>' +
+          '<button class="btn-small" id="btnImportPklId">⬆ Import dari Excel</button>' +
+          '<input type="file" id="fileImportPklId" accept=".xlsx,.xls" style="display:none;">' +
+          '<button class="btn-small btn-small--primary" id="btnSimpanPklId" style="margin-left:auto;">Simpan Identitas</button>' +
+          '</div>' +
+          '<div id="importSummaryPklId"></div><div id="pklIdMsg"></div>' +
+          binaanList.map(kartu).join('');
+        lucide.createIcons();
+
+        function baris(b) {
+          return {
+            'No': binaanList.indexOf(b) + 1, 'NIS': b.siswa.nis || '', 'Nama': b.siswa.nama,
+            'Nama DUDI / Tempat PKL': body.querySelector('.pklid-nama[data-siswa="' + b.siswa_id + '"]').value,
+            'Nama Instruktur (DUDI)': body.querySelector('.pklid-pembimbing[data-siswa="' + b.siswa_id + '"]').value,
+            'Alamat DUDI': body.querySelector('.pklid-alamat[data-siswa="' + b.siswa_id + '"]').value,
+            'Tanggal Mulai (YYYY-MM-DD)': body.querySelector('.pklid-mulai[data-siswa="' + b.siswa_id + '"]').value,
+            'Tanggal Selesai (YYYY-MM-DD)': body.querySelector('.pklid-selesai[data-siswa="' + b.siswa_id + '"]').value
+          };
+        }
+
+        document.getElementById('btnTemplatePklId').addEventListener('click', function () {
+          var ws = XLSX.utils.json_to_sheet(binaanList.map(baris), { header: KOLOM });
+          var wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, ws, 'Identitas PKL');
+          XLSX.writeFile(wb, 'template_identitas_pkl_' + tahunAktif.nama.replace(/[^a-z0-9]/gi, '_') + '.xlsx');
+        });
+
+        document.getElementById('btnImportPklId').addEventListener('click', function () {
+          document.getElementById('fileImportPklId').click();
+        });
+
+        document.getElementById('fileImportPklId').addEventListener('change', function (e) {
+          var file = e.target.files[0];
+          if (!file) return;
+          var reader = new FileReader();
+          reader.onload = function (evt) {
+            var wb = XLSX.read(new Uint8Array(evt.target.result), { type: 'array', cellDates: true });
+            var rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
+            var siswaByNis = {};
+            binaanList.forEach(function (b) { if (b.siswa.nis) siswaByNis[String(b.siswa.nis).trim()] = b; });
+
+            var terisi = 0, dilewati = 0, pesan = [];
+            rows.forEach(function (row, i) {
+              var nis = String(row['NIS'] || '').trim();
+              var b = nis ? siswaByNis[nis] : null;
+              if (!b) { dilewati++; pesan.push('Baris ' + (i + 2) + ': dilewati (NIS ' + (nis || '?') + ' bukan siswa binaan PKL Anda).'); return; }
+              var sId = b.siswa_id;
+              body.querySelector('.pklid-nama[data-siswa="' + sId + '"]').value = String(row['Nama DUDI / Tempat PKL'] || '').trim();
+              body.querySelector('.pklid-pembimbing[data-siswa="' + sId + '"]').value = String(row['Nama Instruktur (DUDI)'] || '').trim();
+              body.querySelector('.pklid-alamat[data-siswa="' + sId + '"]').value = String(row['Alamat DUDI'] || '').trim();
+              body.querySelector('.pklid-mulai[data-siswa="' + sId + '"]').value = tanggalExcel(row['Tanggal Mulai (YYYY-MM-DD)']);
+              body.querySelector('.pklid-selesai[data-siswa="' + sId + '"]').value = tanggalExcel(row['Tanggal Selesai (YYYY-MM-DD)']);
+              terisi++;
+            });
+
+            document.getElementById('importSummaryPklId').innerHTML =
+              '<div class="import-summary"><strong>Hasil import:</strong> ' + terisi + ' baris dimuat ke form, ' + dilewati + ' baris dilewati. ' +
+              'Data BELUM tersimpan — periksa dulu, lalu klik "Simpan Identitas".' +
+              (pesan.length ? '\n\n' + escapeHtml(pesan.join('\n')) : '') + '</div>';
+            document.getElementById('fileImportPklId').value = '';
+          };
+          reader.readAsArrayBuffer(file);
+        });
+
+        document.getElementById('btnSimpanPklId').addEventListener('click', async function () {
+          var btn = this;
+          btn.disabled = true; btn.textContent = 'Menyimpan...';
+
+          var jobs = [];
+          binaanList.forEach(function (b) {
+            var sId = b.siswa_id;
+            var namaDudi = body.querySelector('.pklid-nama[data-siswa="' + sId + '"]').value.trim() || null;
+            var pembimbingDudi = body.querySelector('.pklid-pembimbing[data-siswa="' + sId + '"]').value.trim() || null;
+            var alamatDudi = body.querySelector('.pklid-alamat[data-siswa="' + sId + '"]').value.trim() || null;
+            var mulai = body.querySelector('.pklid-mulai[data-siswa="' + sId + '"]').value || null;
+            var selesai = body.querySelector('.pklid-selesai[data-siswa="' + sId + '"]').value || null;
+
+            jobs.push(supabaseClient.from('pkl_pembimbing').update({
+              nama_dudi: namaDudi, nama_pembimbing_dudi: pembimbingDudi, alamat_dudi: alamatDudi,
+              tanggal_mulai: mulai, tanggal_selesai: selesai
+            }).eq('id', b.id).then(function (r) {
+              if (!r.error) { b.nama_dudi = namaDudi; b.nama_pembimbing_dudi = pembimbingDudi; b.alamat_dudi = alamatDudi; b.tanggal_mulai = mulai; b.tanggal_selesai = selesai; }
+              return r;
+            }));
+          });
+
+          var hasil = await Promise.all(jobs);
+          var gagal = hasil.filter(function (r) { return r.error; });
+          btn.disabled = false; btn.textContent = 'Simpan Identitas';
+          document.getElementById('pklIdMsg').innerHTML = gagal.length
+            ? '<div class="import-summary">Tersimpan, tapi ' + gagal.length + ' baris gagal disimpan (' + gagal[0].error.message + ').</div>'
+            : '<div class="import-summary">Identitas PKL berhasil disimpan.</div>';
+        });
+      }
+
+      // =========================================================
+      // LANGKAH 2 — Input Nilai DUDI (TP 1-4 + deskripsi tiap TP)
+      // Nilai Penguji hanya ditampilkan baca saja sebagai referensi.
+      // =========================================================
+      function renderLangkahNilaiDudi() {
+        var body = document.getElementById('pklStepBody');
+        var KOLOM = ['No', 'NIS', 'Nama', 'TP1 - DUDI', 'TP2 - DUDI', 'TP3 - DUDI', 'TP4 - DUDI', 'Deskripsi TP1', 'Deskripsi TP2', 'Deskripsi TP3', 'Deskripsi TP4'];
+
+        function inputTp(siswaId, tpKe, current) {
+          var v = (current === null || current === undefined) ? '' : current;
+          return '<input type="number" min="0" max="100" step="0.01" class="pkl-tp-du" data-siswa="' + siswaId + '" data-tp="' + tpKe + '" value="' + v + '">';
+        }
+        function deskripsiTp(b, n) {
+          var val = b['deskripsi_tp' + n] || '';
+          return '<textarea class="pkl-deskripsi-tp" data-siswa="' + b.siswa_id + '" data-tp="' + n + '" rows="2" placeholder="Deskripsi TP ' + n + ' (otomatis dari rubrik, tampil di format cetak)">' + escapeHtml(val) + '</textarea>';
+        }
+
+        function kartu(b) {
+          var pasangan = nilaiMap[b.siswa_id] || {};
+          var du = pasangan.dudi || {};
+          var pg = pasangan.penguji || {};
+          var namaPenguji = pengujiGuruMap[b.siswa_id];
+          return '<div class="pkl-card" id="pklNdCard-' + b.siswa_id + '">' +
+            '<div class="panel-head"><div><div class="panel-head__title">' + escapeHtml(b.siswa.nama) + '</div>' +
+            '<div class="panel-head__desc">NIS ' + escapeHtml(b.siswa.nis || '—') + ' · ' + escapeHtml(b.kelas.nama) + (namaPenguji ? ' · Penguji: ' + escapeHtml(namaPenguji) : ' · Penguji: belum ditunjuk Admin') + '</div></div></div>' +
+            '<div class="table-wrap"><table class="data-table"><thead><tr><th style="width:16%;">Tujuan Pembelajaran</th><th class="tc-center">Nilai DUDI</th><th class="tc-center">Nilai Penguji</th><th class="tc-center">Rata-rata</th><th>Deskripsi (otomatis dari rubrik, untuk format cetak)</th></tr></thead><tbody>' +
+            [1, 2, 3, 4].map(function (n) {
+              return '<tr><td>TP ' + n + '</td>' +
+                '<td class="tc-center">' + inputTp(b.siswa_id, n, du['tp' + n]) + '</td>' +
+                '<td class="tc-center">' + fmtN(pg['tp' + n]) + '</td>' +
+                '<td class="tc-center"><strong id="pklRata-' + b.siswa_id + '-' + n + '">' + fmtN(rataTaPkl(du['tp' + n], pg['tp' + n])) + '</strong></td>' +
+                '<td>' + deskripsiTp(b, n) + '</td></tr>';
+            }).join('') +
+            '<tr><td><strong>Nilai Akhir</strong></td>' +
+            '<td class="tc-center"><strong id="pklAkhirDu-' + b.siswa_id + '">' + fmtN(du.nilai_akhir) + '</strong></td>' +
+            '<td class="tc-center"><strong id="pklAkhirPg-' + b.siswa_id + '">' + fmtN(pg.nilai_akhir) + '</strong></td><td></td><td></td></tr>' +
+            '</tbody></table></div>' +
+            '<div class="panel-note">Nilai Penguji diisi guru Penguji PKL yang ditunjuk Admin (baca saja di sini). Kolom "Rata-rata" &amp; Deskripsi tiap TP dihitung dari rata-rata Nilai DUDI &amp; Nilai Penguji TP tsb, lalu dicocokkan ke rubrik. Nilai Akhir PKL (rata-rata DUDI &amp; Penguji): <strong id="pklAkhirTotal-' + b.siswa_id + '">' + fmtN(rataTaPkl(du.nilai_akhir, pg.nilai_akhir)) + '</strong> — nilai ini tidak muncul di Cetak Rapor biasa.</div>' +
+            '</div>';
+        }
+
+        body.innerHTML =
+          '<div class="panel-note" style="margin-top:0;margin-bottom:14px;">Isi Nilai DUDI (TP 1-4) tiap siswa binaan Anda. Deskripsi tiap TP otomatis disusun dari rata-rata Nilai DUDI &amp; Nilai Penguji berdasarkan rubrik penilaian PKL — boleh disunting manual (teks yang sudah disunting manual tidak akan tertimpa otomatis, kecuali Anda klik "Susun Ulang Deskripsi").</div>' +
+          '<div class="toolbar">' +
+          '<button class="btn-small" id="btnTemplatePklNd">⬇ Unduh Template Excel</button>' +
+          '<button class="btn-small" id="btnImportPklNd">⬆ Import dari Excel</button>' +
+          '<input type="file" id="fileImportPklNd" accept=".xlsx,.xls" style="display:none;">' +
+          '<button class="btn-small" id="btnSusunDeskripsiPkl">↺ Susun Ulang Deskripsi (Semua Siswa)</button>' +
+          '<button class="btn-small btn-small--primary" id="btnSimpanPklNd" style="margin-left:auto;">Simpan Nilai DUDI</button>' +
+          '</div>' +
+          '<div id="importSummaryPklNd"></div><div id="pklNdMsg"></div>' +
+          binaanList.map(kartu).join('');
+        lucide.createIcons();
+
+        function tpInputs(sId) { return body.querySelectorAll('.pkl-tp-du[data-siswa="' + sId + '"]'); }
+        function tpInputByN(sId, n) { return body.querySelector('.pkl-tp-du[data-siswa="' + sId + '"][data-tp="' + n + '"]'); }
+        function deskripsiInputByN(sId, n) { return body.querySelector('.pkl-deskripsi-tp[data-siswa="' + sId + '"][data-tp="' + n + '"]'); }
+
+        // Rata-rata Nilai DUDI (nilai yang sedang tampil di input, belum
+        // tentu tersimpan) & Nilai Penguji (baca saja) untuk satu TP.
+        function rataTpGabungan(sId, n) {
+          var duVal = angkaAtauNull(tpInputByN(sId, n) ? tpInputByN(sId, n).value : null);
+          var pasangan = nilaiMap[sId] || {};
+          var pgVal = pasangan.penguji ? angkaAtauNull(pasangan.penguji['tp' + n]) : null;
+          return rataTaPkl(duVal, pgVal);
+        }
+        function otomatisDeskripsiTp(sId, n) {
+          return deskripsiRubrikTp(n, rataTpGabungan(sId, n));
+        }
+
+        // ---- Tandai deskripsi yang masih "otomatis" (belum disunting
+        // manual), lalu isi yang masih kosong dengan hasil rubrik saat ini —
+        // pola sama seperti Capaian Pembelajaran di menu Input Nilai biasa. ----
+        binaanList.forEach(function (b) {
+          [1, 2, 3, 4].forEach(function (n) {
+            var ta = deskripsiInputByN(b.siswa_id, n);
+            if (!ta) return;
+            var otomatis = otomatisDeskripsiTp(b.siswa_id, n);
+            ta.dataset.auto = (ta.value.trim() === '' || ta.value.trim() === otomatis.trim()) ? '1' : '0';
+            if (ta.value.trim() === '' && otomatis) ta.value = otomatis;
+          });
+        });
+
+        function hitungUlang(sId) {
+          var inputs = tpInputs(sId);
+          var vals = Array.prototype.map.call(inputs, function (i) { return i.value; });
+          var akhir = rataTp(vals[0], vals[1], vals[2], vals[3]);
+          document.getElementById('pklAkhirDu-' + sId).textContent = fmtN(akhir);
+          var pgEl = document.getElementById('pklAkhirPg-' + sId);
+          var pgVal = pgEl && pgEl.textContent !== '—' ? Number(pgEl.textContent) : null;
+          document.getElementById('pklAkhirTotal-' + sId).textContent = fmtN(rataTaPkl(akhir, pgVal));
+
+          [1, 2, 3, 4].forEach(function (n) {
+            var elRata = document.getElementById('pklRata-' + sId + '-' + n);
+            var rata = rataTpGabungan(sId, n);
+            if (elRata) elRata.textContent = fmtN(rata);
+            var ta = deskripsiInputByN(sId, n);
+            if (ta && ta.dataset.auto === '1') ta.value = deskripsiRubrikTp(n, rata);
+          });
+        }
+
+        body.querySelectorAll('.pkl-tp-du').forEach(function (inp) {
+          inp.addEventListener('input', function () { hitungUlang(this.getAttribute('data-siswa')); });
+        });
+
+        // Guru mengetik manual di deskripsi -> teks ini tidak lagi ditimpa otomatis.
+        body.querySelectorAll('.pkl-deskripsi-tp').forEach(function (ta) {
+          ta.addEventListener('input', function () { this.dataset.auto = '0'; });
+        });
+
+        document.getElementById('btnSusunDeskripsiPkl').addEventListener('click', function () {
+          var konfirmasi = confirm(
+            'Susun ulang Deskripsi TP 1-4 untuk semua siswa binaan berdasarkan rata-rata Nilai DUDI & Nilai Penguji saat ini?\n\n' +
+            'Teks yang sudah disunting manual akan DITIMPA. TP yang rata-ratanya belum bisa dihitung (DUDI atau Penguji belum diisi) akan dikosongkan.'
+          );
+          if (!konfirmasi) return;
+
+          var diisi = 0, total = 0;
+          binaanList.forEach(function (b) {
+            [1, 2, 3, 4].forEach(function (n) {
+              var ta = deskripsiInputByN(b.siswa_id, n);
+              if (!ta) return;
+              total++;
+              var teks = otomatisDeskripsiTp(b.siswa_id, n);
+              ta.value = teks;
+              ta.dataset.auto = '1';
+              if (teks) diisi++;
+            });
+          });
+
+          document.getElementById('pklNdMsg').innerHTML =
+            '<div class="import-summary">Deskripsi disusun ulang otomatis (' + diisi + ' dari ' + total + ' kolom TP terisi — sisanya menunggu Nilai DUDI dan/atau Nilai Penguji diisi). Klik "Simpan Nilai DUDI" untuk menyimpannya.</div>';
+        });
+
+        document.getElementById('btnTemplatePklNd').addEventListener('click', function () {
+          var rows = binaanList.map(function (b, i) {
+            var row = { 'No': i + 1, 'NIS': b.siswa.nis || '', 'Nama': b.siswa.nama };
+            [1, 2, 3, 4].forEach(function (n) {
+              var el = tpInputByN(b.siswa_id, n);
+              row['TP' + n + ' - DUDI'] = el && el.value !== '' ? Number(el.value) : '';
+              var elD = body.querySelector('.pkl-deskripsi-tp[data-siswa="' + b.siswa_id + '"][data-tp="' + n + '"]');
+              row['Deskripsi TP' + n] = elD ? elD.value : '';
+            });
+            return row;
+          });
+          var ws = XLSX.utils.json_to_sheet(rows, { header: KOLOM });
+          var wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, ws, 'Nilai DUDI');
+          XLSX.writeFile(wb, 'template_nilai_dudi_pkl_' + tahunAktif.nama.replace(/[^a-z0-9]/gi, '_') + '.xlsx');
+        });
+
+        document.getElementById('btnImportPklNd').addEventListener('click', function () {
+          document.getElementById('fileImportPklNd').click();
+        });
+
+        document.getElementById('fileImportPklNd').addEventListener('change', function (e) {
+          var file = e.target.files[0];
+          if (!file) return;
+          var reader = new FileReader();
+          reader.onload = function (evt) {
+            var wb = XLSX.read(new Uint8Array(evt.target.result), { type: 'array', cellDates: true });
+            var rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
+            var siswaByNis = {};
+            binaanList.forEach(function (b) { if (b.siswa.nis) siswaByNis[String(b.siswa.nis).trim()] = b; });
+
+            var terisi = 0, dilewati = 0, pesan = [];
+            rows.forEach(function (row, i) {
+              var nis = String(row['NIS'] || '').trim();
+              var b = nis ? siswaByNis[nis] : null;
+              if (!b) { dilewati++; pesan.push('Baris ' + (i + 2) + ': dilewati (NIS ' + (nis || '?') + ' bukan siswa binaan PKL Anda).'); return; }
+              var sId = b.siswa_id;
+              [1, 2, 3, 4].forEach(function (n) {
+                var el = tpInputByN(sId, n);
+                var v = angkaAtauNull(row['TP' + n + ' - DUDI']);
+                if (el) el.value = v === null ? '' : v;
+                var elD = body.querySelector('.pkl-deskripsi-tp[data-siswa="' + sId + '"][data-tp="' + n + '"]');
+                if (elD) elD.value = String(row['Deskripsi TP' + n] || '').trim();
+              });
+              hitungUlang(sId);
+              terisi++;
+            });
+
+            document.getElementById('importSummaryPklNd').innerHTML =
+              '<div class="import-summary"><strong>Hasil import:</strong> ' + terisi + ' baris dimuat ke form, ' + dilewati + ' baris dilewati. ' +
+              'Data BELUM tersimpan — periksa dulu, lalu klik "Simpan Nilai DUDI".' +
+              (pesan.length ? '\n\n' + escapeHtml(pesan.join('\n')) : '') + '</div>';
+            document.getElementById('fileImportPklNd').value = '';
+          };
+          reader.readAsArrayBuffer(file);
+        });
+
+        document.getElementById('btnSimpanPklNd').addEventListener('click', async function () {
+          var btn = this;
+          btn.disabled = true; btn.textContent = 'Menyimpan...';
+
+          var jobs = [];
+          binaanList.forEach(function (b) {
+            var sId = b.siswa_id;
+            var deskripsi = [1, 2, 3, 4].map(function (n) {
+              var el = body.querySelector('.pkl-deskripsi-tp[data-siswa="' + sId + '"][data-tp="' + n + '"]');
+              return el ? (el.value.trim() || null) : null;
+            });
+            jobs.push(supabaseClient.from('pkl_pembimbing').update({
+              deskripsi_tp1: deskripsi[0], deskripsi_tp2: deskripsi[1], deskripsi_tp3: deskripsi[2], deskripsi_tp4: deskripsi[3]
+            }).eq('id', b.id).then(function (r) {
+              if (!r.error) { b.deskripsi_tp1 = deskripsi[0]; b.deskripsi_tp2 = deskripsi[1]; b.deskripsi_tp3 = deskripsi[2]; b.deskripsi_tp4 = deskripsi[3]; }
+              return r;
+            }));
+
+            var tpVals = Array.prototype.map.call(tpInputs(sId), function (i) { return i.value === '' ? null : Number(i.value); });
+            var sudahPunyaData = !!(nilaiMap[sId] && nilaiMap[sId].dudi);
+            var semuaKosong = tpVals.every(function (v) { return v === null; });
+            if (!(semuaKosong && !sudahPunyaData)) {
+              var nilaiAkhirBaru = rataTp(tpVals[0], tpVals[1], tpVals[2], tpVals[3]);
+              jobs.push(supabaseClient.from('nilai_pkl').upsert({
+                siswa_id: sId, kelas_id: b.kelas_id, tahun_ajaran_id: tahunAktif.id, sumber: 'dudi',
+                tp1: tpVals[0], tp2: tpVals[1], tp3: tpVals[2], tp4: tpVals[3],
+                nilai_akhir: nilaiAkhirBaru, guru_id: user.id, updated_at: new Date().toISOString()
+              }, { onConflict: 'siswa_id,sumber,tahun_ajaran_id' }).then(function (r) {
+                if (!r.error) {
+                  if (!nilaiMap[sId]) nilaiMap[sId] = {};
+                  nilaiMap[sId].dudi = { tp1: tpVals[0], tp2: tpVals[1], tp3: tpVals[2], tp4: tpVals[3], nilai_akhir: nilaiAkhirBaru };
+                }
+                return r;
+              }));
+            }
+          });
+
+          var hasil = await Promise.all(jobs);
+          var gagal = hasil.filter(function (r) { return r.error; });
+          btn.disabled = false; btn.textContent = 'Simpan Nilai DUDI';
+          document.getElementById('pklNdMsg').innerHTML = gagal.length
+            ? '<div class="import-summary">Tersimpan, tapi ' + gagal.length + ' baris gagal disimpan (' + gagal[0].error.message + ').</div>'
+            : '<div class="import-summary">Nilai DUDI berhasil disimpan.</div>';
+        });
+      }
+
+      // =========================================================
+      // LANGKAH 3 — Catatan & Presensi (tampil di format cetak)
+      // =========================================================
+      function renderLangkahCatatanPresensi() {
+        var body = document.getElementById('pklStepBody');
+        var KOLOM = ['No', 'NIS', 'Nama', 'Catatan', 'Sakit (Hari)', 'Ijin (Hari)', 'Tanpa Keterangan (Hari)'];
+
+        function kartu(b) {
+          return '<div class="pkl-card" id="pklCpCard-' + b.siswa_id + '">' +
+            '<div class="panel-head"><div><div class="panel-head__title">' + escapeHtml(b.siswa.nama) + '</div>' +
+            '<div class="panel-head__desc">NIS ' + escapeHtml(b.siswa.nis || '—') + ' · ' + escapeHtml(b.kelas.nama) + '</div></div></div>' +
+            '<div class="field"><label>Catatan (tampil di format cetak)</label><textarea class="pkl-catatan" data-siswa="' + b.siswa_id + '" rows="2">' + escapeHtml(b.catatan || '') + '</textarea></div>' +
+            '<div class="add-form" style="flex-wrap:wrap;margin-top:8px;">' +
+            '<div class="field"><label>Sakit (hari)</label><input type="number" min="0" class="pkl-kehadiran" data-siswa="' + b.siswa_id + '" data-jenis="sakit" value="' + (b.sakit || 0) + '"></div>' +
+            '<div class="field"><label>Ijin (hari)</label><input type="number" min="0" class="pkl-kehadiran" data-siswa="' + b.siswa_id + '" data-jenis="ijin" value="' + (b.ijin || 0) + '"></div>' +
+            '<div class="field"><label>Tanpa Keterangan (hari)</label><input type="number" min="0" class="pkl-kehadiran" data-siswa="' + b.siswa_id + '" data-jenis="tanpa_keterangan" value="' + (b.tanpa_keterangan || 0) + '"></div>' +
+            '</div></div>';
+        }
+
+        body.innerHTML =
+          '<div class="panel-note" style="margin-top:0;margin-bottom:14px;">Isi catatan PKL dan rekap presensi (Sakit/Ijin/Tanpa Keterangan) selama PKL untuk tiap siswa binaan Anda.</div>' +
+          '<div class="toolbar">' +
+          '<button class="btn-small" id="btnTemplatePklCp">⬇ Unduh Template Excel</button>' +
+          '<button class="btn-small" id="btnImportPklCp">⬆ Import dari Excel</button>' +
+          '<input type="file" id="fileImportPklCp" accept=".xlsx,.xls" style="display:none;">' +
+          '<button class="btn-small btn-small--primary" id="btnSimpanPklCp" style="margin-left:auto;">Simpan Catatan &amp; Presensi</button>' +
+          '</div>' +
+          '<div id="importSummaryPklCp"></div><div id="pklCpMsg"></div>' +
+          binaanList.map(kartu).join('');
+        lucide.createIcons();
+
+        function kehadiranEl(sId, jenis) { return body.querySelector('.pkl-kehadiran[data-siswa="' + sId + '"][data-jenis="' + jenis + '"]'); }
+        function catatanEl(sId) { return body.querySelector('.pkl-catatan[data-siswa="' + sId + '"]'); }
+
+        document.getElementById('btnTemplatePklCp').addEventListener('click', function () {
+          var rows = binaanList.map(function (b, i) {
+            return {
+              'No': i + 1, 'NIS': b.siswa.nis || '', 'Nama': b.siswa.nama,
+              'Catatan': catatanEl(b.siswa_id).value,
+              'Sakit (Hari)': Number(kehadiranEl(b.siswa_id, 'sakit').value) || 0,
+              'Ijin (Hari)': Number(kehadiranEl(b.siswa_id, 'ijin').value) || 0,
+              'Tanpa Keterangan (Hari)': Number(kehadiranEl(b.siswa_id, 'tanpa_keterangan').value) || 0
+            };
+          });
+          var ws = XLSX.utils.json_to_sheet(rows, { header: KOLOM });
+          var wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, ws, 'Catatan & Presensi');
+          XLSX.writeFile(wb, 'template_catatan_presensi_pkl_' + tahunAktif.nama.replace(/[^a-z0-9]/gi, '_') + '.xlsx');
+        });
+
+        document.getElementById('btnImportPklCp').addEventListener('click', function () {
+          document.getElementById('fileImportPklCp').click();
+        });
+
+        document.getElementById('fileImportPklCp').addEventListener('change', function (e) {
+          var file = e.target.files[0];
+          if (!file) return;
+          var reader = new FileReader();
+          reader.onload = function (evt) {
+            var wb = XLSX.read(new Uint8Array(evt.target.result), { type: 'array', cellDates: true });
+            var rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
+            var siswaByNis = {};
+            binaanList.forEach(function (b) { if (b.siswa.nis) siswaByNis[String(b.siswa.nis).trim()] = b; });
+
+            var terisi = 0, dilewati = 0, pesan = [];
+            rows.forEach(function (row, i) {
+              var nis = String(row['NIS'] || '').trim();
+              var b = nis ? siswaByNis[nis] : null;
+              if (!b) { dilewati++; pesan.push('Baris ' + (i + 2) + ': dilewati (NIS ' + (nis || '?') + ' bukan siswa binaan PKL Anda).'); return; }
+              var sId = b.siswa_id;
+              catatanEl(sId).value = String(row['Catatan'] || '').trim();
+              ['sakit', 'ijin', 'tanpa_keterangan'].forEach(function (jenis) {
+                var kolom = jenis === 'sakit' ? 'Sakit (Hari)' : jenis === 'ijin' ? 'Ijin (Hari)' : 'Tanpa Keterangan (Hari)';
+                var n = parseInt(row[kolom], 10);
+                kehadiranEl(sId, jenis).value = isNaN(n) || n < 0 ? 0 : n;
+              });
+              terisi++;
+            });
+
+            document.getElementById('importSummaryPklCp').innerHTML =
+              '<div class="import-summary"><strong>Hasil import:</strong> ' + terisi + ' baris dimuat ke form, ' + dilewati + ' baris dilewati. ' +
+              'Data BELUM tersimpan — periksa dulu, lalu klik "Simpan Catatan &amp; Presensi".' +
+              (pesan.length ? '\n\n' + escapeHtml(pesan.join('\n')) : '') + '</div>';
+            document.getElementById('fileImportPklCp').value = '';
+          };
+          reader.readAsArrayBuffer(file);
+        });
+
+        document.getElementById('btnSimpanPklCp').addEventListener('click', async function () {
+          var btn = this;
+          btn.disabled = true; btn.textContent = 'Menyimpan...';
+
+          var jobs = [];
+          binaanList.forEach(function (b) {
+            var sId = b.siswa_id;
+            function kehadiranVal(jenis) {
+              var n = parseInt(kehadiranEl(sId, jenis).value, 10);
+              return isNaN(n) || n < 0 ? 0 : n;
+            }
+            var catatan = catatanEl(sId).value.trim() || null;
+            var sakit = kehadiranVal('sakit'), ijin = kehadiranVal('ijin'), tanpaKet = kehadiranVal('tanpa_keterangan');
+
+            jobs.push(supabaseClient.from('pkl_pembimbing').update({
+              catatan: catatan, sakit: sakit, ijin: ijin, tanpa_keterangan: tanpaKet
+            }).eq('id', b.id).then(function (r) {
+              if (!r.error) { b.catatan = catatan; b.sakit = sakit; b.ijin = ijin; b.tanpa_keterangan = tanpaKet; }
+              return r;
+            }));
+          });
+
+          var hasil = await Promise.all(jobs);
+          var gagal = hasil.filter(function (r) { return r.error; });
+          btn.disabled = false; btn.textContent = 'Simpan Catatan & Presensi';
+          document.getElementById('pklCpMsg').innerHTML = gagal.length
+            ? '<div class="import-summary">Tersimpan, tapi ' + gagal.length + ' baris gagal disimpan (' + gagal[0].error.message + ').</div>'
+            : '<div class="import-summary">Catatan &amp; presensi berhasil disimpan.</div>';
+        });
+      }
+
+      // =========================================================
+      // LANGKAH 4 — Cetak Nilai PKL (konsep sama seperti Cetak Rapor:
+      // daftar siswa, nama + tombol Cetak di sampingnya, plus Preview,
+      // Cetak Terpilih & Cetak Semua). Data yang dicetak diambil dari
+      // identitas/nilai/catatan yang SUDAH TERSIMPAN (langkah 1-3).
+      // =========================================================
+      function renderLangkahCetak() {
+        var body = document.getElementById('pklStepBody');
+
+        function baris(b, i) {
+          return '<tr>' +
+            '<td class="tc-center"><input type="checkbox" class="pkl-cetak-check" value="' + b.siswa_id + '"></td>' +
+            '<td class="tc-center">' + (i + 1) + '</td>' +
+            '<td>' + escapeHtml(b.siswa.nis || '—') + '</td>' +
+            '<td>' + escapeHtml(b.siswa.nama) + '</td>' +
+            '<td>' + escapeHtml(b.nama_dudi || '—') + '</td>' +
+            '<td class="tc-center">' +
+            '<button class="btn-small btn-pkl-preview" data-siswa="' + b.siswa_id + '"><i data-lucide="eye" style="width:14px;height:14px;"></i> Preview</button> ' +
+            '<button class="btn-small btn-small--primary btn-pkl-cetak-satu" data-siswa="' + b.siswa_id + '"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak</button>' +
+            '</td></tr>';
+        }
+
+        body.innerHTML =
+          '<div class="panel-note no-print" style="margin-top:0;margin-bottom:14px;">Nama siswa dan tombol Cetak di sampingnya — sama seperti menu Cetak Rapor. Pastikan data di langkah 1–3 sudah disimpan sebelum mencetak.</div>' +
+          '<div class="no-print" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">' +
+          '<button class="btn-small" id="btnPklCetakTerpilih"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak Terpilih</button>' +
+          '<button class="btn-small btn-small--primary" id="btnPklCetakSemua"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak Semua</button>' +
+          '</div>' +
+          '<div class="table-wrap no-print"><table class="data-table"><thead><tr>' +
+          '<th class="tc-center"><input type="checkbox" id="checkSemuaPklCetak"></th>' +
+          '<th class="rc-th-no">No</th><th>NIS</th><th>Nama Siswa</th><th>Tempat PKL</th><th class="tc-center">Aksi</th>' +
+          '</tr></thead><tbody>' + binaanList.map(baris).join('') + '</tbody></table></div>' +
+          '<div id="cetakPklArea"></div>';
+        lucide.createIcons();
+
+        document.getElementById('checkSemuaPklCetak').addEventListener('change', function () {
+          var checked = this.checked;
+          body.querySelectorAll('.pkl-cetak-check').forEach(function (c) { c.checked = checked; });
+        });
+        body.querySelectorAll('.btn-pkl-preview').forEach(function (btn) {
+          btn.addEventListener('click', function () { tampilkanPreviewPkl(this.getAttribute('data-siswa')); });
+        });
+        body.querySelectorAll('.btn-pkl-cetak-satu').forEach(function (btn) {
+          btn.addEventListener('click', function () { cetakFormatPkl([this.getAttribute('data-siswa')], this); });
+        });
+        document.getElementById('btnPklCetakTerpilih').addEventListener('click', function () {
+          var ids = Array.prototype.slice.call(body.querySelectorAll('.pkl-cetak-check:checked')).map(function (c) { return c.value; });
+          if (!ids.length) { alert('Centang minimal satu siswa terlebih dahulu.'); return; }
+          cetakFormatPkl(ids, this);
+        });
+        document.getElementById('btnPklCetakSemua').addEventListener('click', function () {
+          cetakFormatPkl(binaanList.map(function (b) { return b.siswa_id; }), this);
+        });
+
+        async function tampilkanPreviewPkl(siswaId) {
+          var b = cariBinaan(siswaId);
+          var area = document.getElementById('cetakPklArea');
+          area.innerHTML = '<div class="panel-note no-print">Memuat data cetak PKL ' + escapeHtml(b.siswa.nama) + '...</div>';
+          var html = await buatFormatPkl(siswaId);
+          area.innerHTML =
+            '<div class="no-print" style="display:flex;gap:8px;margin:14px 0;align-items:center;flex-wrap:wrap;">' +
+            '<button class="btn-small" id="btnKembaliDaftarPkl"><i data-lucide="arrow-left" style="width:14px;height:14px;"></i> Kembali ke Daftar</button>' +
+            '<button class="btn-small btn-small--primary" id="btnCetakDariPreviewPkl"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak</button>' +
+            '</div>' + html;
+          lucide.createIcons();
+          document.getElementById('btnKembaliDaftarPkl').addEventListener('click', function () { renderLangkahCetak(); });
+          document.getElementById('btnCetakDariPreviewPkl').addEventListener('click', function () { cetakFormatPkl([siswaId], this); });
+        }
+
+        // Empat Tujuan Pembelajaran PKL baku (sama untuk semua siswa,
+        // mengikuti format resmi "Daftar Nilai Peserta Didik Mata
+        // Pelajaran PKL"), bukan bank TP yang disusun guru sendiri.
+        var TEKS_TP_PKL = [
+          'Menerapkan soft skills yang dibutuhkan dalam dunia kerja (tempat PKL)',
+          'Menerapkan norma, POS dan K3LH yang ada pada dunia kerja (tempat PKL)',
+          'Menerapkan kompetensi teknis yang sudah dipelajari di sekolah dan/atau baru dipelajari pada dunia kerja (tempat PKL)',
+          'Memahami alur bisnis dunia kerja tempat PKL'
+        ];
+
+        function baris2(l1, v1, l2, v2) {
+          return '<tr><td class="ident-label">' + escapeHtml(l1) + '</td><td class="ident-colon">:</td><td class="ident-value">' + escapeHtml(v1 || '-') + '</td>' +
+            (l2 ? '<td class="ident-label" style="padding-left:24px;">' + escapeHtml(l2) + '</td><td class="ident-colon">:</td><td class="ident-value">' + escapeHtml(v2 || '-') + '</td>' : '<td colspan="3"></td>') +
+            '</tr>';
+        }
+        function baris1(label, value) {
+          return '<tr><td class="ident-label">' + escapeHtml(label) + '</td><td class="ident-colon">:</td><td class="ident-value" colspan="4">' + escapeHtml(value || '-') + '</td></tr>';
+        }
+
+        // Menyusun HTML 1 lembar format cetak PKL untuk 1 siswa, dari data
+        // yang sudah tersimpan (identitas, nilai DUDI, nilai Penguji, catatan
+        // & presensi — langkah 1-3 di menu ini, ditambah Nilai Penguji &
+        // Profil Sekolah).
+        async function buatFormatPkl(siswaId) {
+          var b = cariBinaan(siswaId);
+          var pasangan = nilaiMap[siswaId] || {};
+          var du = pasangan.dudi || {};
+          var pg = pasangan.penguji || {};
+          var namaPenguji = pengujiGuruMap[siswaId] || '—';
+          var akhirTotal = rataTaPkl(du.nilai_akhir, pg.nilai_akhir);
+
+          var profilRes = await supabaseClient.from('profil_sekolah').select('*').maybeSingle();
+          var profilSekolah = profilRes.data || {};
+          var NAMA_SEKOLAH = profilSekolah.nama_sekolah || 'SMK Widya Mandala Tambak';
+          var NAMA_KEPALA_SEKOLAH = profilSekolah.kepala_sekolah || '—';
+          var NAMA_KOTA_TTD = profilSekolah.kota_ttd || 'Tambak';
+          var TANGGAL_CETAK = formatTanggalIndonesia(profilSekolah.tanggal_rapor);
+
+          function skorGabunganTp(n) {
+            var vals = [du['tp' + n], pg['tp' + n]].filter(function (v) { return v !== null && v !== undefined; });
+            if (!vals.length) return null;
+            return vals.reduce(function (a, v) { return a + Number(v); }, 0) / vals.length;
+          }
+
+          var tglMulaiFmt = formatTanggalIndonesia(b.tanggal_mulai);
+          var tglSelesaiFmt = formatTanggalIndonesia(b.tanggal_selesai);
+          var tanggalPklGabungan = (tglMulaiFmt || tglSelesaiFmt) ? ((tglMulaiFmt || '…........') + ' s.d. ' + (tglSelesaiFmt || '…........')) : null;
+
+          return '<div class="rapor-cetak rapor-cetak--identitas" id="cetakPkl-' + siswaId + '">' +
+            '<div class="rapor-cetak__bar" style="line-height:1.6;">DAFTAR NILAI PESERTA DIDIK MATA PELAJARAN PKL<br>' + escapeHtml(NAMA_SEKOLAH) + '<br>TAHUN AJARAN ' + escapeHtml(tahunAktif.nama) + '</div>' +
+
+            '<table class="ident-table" style="margin-top:10px;"><tbody>' +
+            baris2('Nama Peserta Didik', b.siswa.nama, 'Kelas', b.kelas.nama) +
+            baris2('NISN', b.siswa.nisn, 'Program Keahlian', b.kelas.program_keahlian) +
+            baris2('Tempat PKL', b.nama_dudi, 'Konsentrasi Keahlian', b.kelas.konsentrasi_keahlian) +
+            baris1('Tanggal PKL', tanggalPklGabungan) +
+            baris1('Nama Instruktur', b.nama_pembimbing_dudi) +
+            baris2('Nama Pembimbing', nama, 'Nama Penguji', namaPenguji) +
+            '</tbody></table>' +
+
+            '<table class="rapor-cetak__pkl"><thead><tr><th class="rc-th-pkl-tp">Tujuan Pembelajaran</th><th class="rc-th-pkl-skor tc-center">Skor</th><th>Deskripsi</th></tr></thead><tbody>' +
+            [1, 2, 3, 4].map(function (n) {
+              return '<tr><td>' + n + '. ' + escapeHtml(TEKS_TP_PKL[n - 1]) + '</td>' +
+                '<td class="tc-center">' + fmtN(skorGabunganTp(n)) + '</td>' +
+                '<td>' + escapeHtml(b['deskripsi_tp' + n] || '') + '</td></tr>';
+            }).join('') +
+            '<tr><td><strong>NILAI AKHIR</strong></td><td class="tc-center"><strong>' + fmtN(akhirTotal) + '</strong></td><td></td></tr>' +
+            '</tbody></table>' +
+
+            '<div class="rapor-cetak__bar rapor-cetak__bar--sub">CATATAN</div>' +
+            '<div class="rapor-cetak__box">' + (b.catatan ? escapeHtml(b.catatan) : '—') + '</div>' +
+
+            '<div class="rapor-cetak__bar rapor-cetak__bar--sub">KEHADIRAN</div>' +
+            '<table class="rapor-cetak__kehadiran" style="width:260px;"><tbody>' +
+            '<tr><td class="rc-label">Sakit</td><td class="rc-colon">:</td><td class="tc-center">' + (b.sakit || 0) + '</td><td>Hari</td></tr>' +
+            '<tr><td class="rc-label">Ijin</td><td class="rc-colon">:</td><td class="tc-center">' + (b.ijin || 0) + '</td><td>Hari</td></tr>' +
+            '<tr><td class="rc-label">Tanpa Keterangan</td><td class="rc-colon">:</td><td class="tc-center">' + (b.tanpa_keterangan || 0) + '</td><td>Hari</td></tr>' +
+            '</tbody></table>' +
+
+            '<div class="rapor-cetak__footer">' +
+            '<div class="ident-footer-row" style="justify-content:space-between;">' +
+            '<div class="ident-footer-ttd"><div>Guru Pembimbing</div><div class="rapor-cetak__ttd-space"></div><div><strong>' + escapeHtml(nama || '-') + '</strong></div></div>' +
+            '<div class="ident-footer-ttd"><div>Guru Penguji</div><div class="rapor-cetak__ttd-space"></div><div><strong>' + escapeHtml(namaPenguji || '-') + '</strong></div></div>' +
+            '<div class="ident-footer-ttd"><div class="rapor-cetak__footer-date">' + escapeHtml(NAMA_KOTA_TTD) + ', ' + (TANGGAL_CETAK || '…........') + '</div><div>Kepala Sekolah</div><div class="rapor-cetak__ttd-space"></div><div><strong>' + escapeHtml(NAMA_KEPALA_SEKOLAH) + '</strong></div></div>' +
+            '</div>' +
+            '</div>' +
+            '</div>';
+        }
+
+        // Mencetak 1 siswa (dari tombol "Cetak" per baris/preview) atau
+        // beberapa siswa sekaligus ("Cetak Terpilih"/"Cetak Semua") — tiap
+        // siswa mulai di halaman barunya sendiri, sama seperti Cetak Rapor.
+        async function cetakFormatPkl(siswaIds, triggerBtn) {
+          var teksAsliBtn = triggerBtn ? triggerBtn.innerHTML : null;
+          if (triggerBtn) { triggerBtn.disabled = true; triggerBtn.innerHTML = 'Menyiapkan...'; }
+          var judulAsli = document.title;
+          try {
+            var potongan = await Promise.all(siswaIds.map(function (id) { return buatFormatPkl(id); }));
+            var area = document.getElementById('cetakPklArea');
+            if (!area) { area = document.createElement('div'); area.id = 'cetakPklArea'; body.appendChild(area); }
+            area.innerHTML = potongan.join(''); // tiap siswa mulai halaman baru lewat aturan ".rapor-cetak + .rapor-cetak { page-break-before: always; }"
+
+            var judulSiswa = siswaIds.length === 1 ? (cariBinaan(siswaIds[0]).siswa.nama + ' - ' + cariBinaan(siswaIds[0]).kelas.nama) : (siswaIds.length + ' siswa');
+            document.title = 'PKL - ' + judulSiswa;
+            await new Promise(function (resolve) { setTimeout(resolve, 150); });
+            window.print();
+          } catch (err) {
+            alert('Gagal menyiapkan cetak: ' + (err && err.message ? err.message : err));
+          } finally {
+            document.title = judulAsli;
+            if (triggerBtn) { triggerBtn.disabled = false; triggerBtn.innerHTML = teksAsliBtn; lucide.createIcons(); }
+          }
+        }
+      }
+
+      // Mulai dari langkah 1 (Input Identitas).
+      renderKerangka('identitas');
+      renderLangkahIdentitas();
+    }
+
+    // ================= PENGUJI PKL: Nilai PKL (Penguji) =================
+    // Modul untuk guru yang ditunjuk Admin sebagai PENGUJI PKL — TERPISAH
+    // dari Pembimbing PKL (bisa guru yang sama, bisa berbeda). Guru penguji
+    // HANYA mengisi Nilai TP 1-4 sumber 'penguji' (nilai uji kompetensi
+    // PKL); data DUDI (nama/alamat DUDI, waktu PKL) tetap milik & diisi
+    // guru Pembimbing PKL, di sini hanya ditampilkan baca saja sebagai
+    // referensi/identitas siswa.
+    async function renderNilaiPklPenguji() {
+      content.innerHTML = renderPlaceholder('Memuat...', 'Mengambil daftar siswa yang Anda uji untuk PKL.');
+
+      var pengujiRes = await supabaseClient
+        .from('pkl_penguji')
+        .select('id, siswa_id, kelas_id, siswa:siswa_id(id, nis, nisn, nama), kelas:kelas_id(id, nama)')
+        .eq('guru_id', user.id)
+        .eq('tahun_ajaran_id', tahunAktif.id);
+      var ujiList = (pengujiRes.data || []).filter(function (r) { return r.siswa && r.kelas; });
+      ujiList.sort(function (a, b) {
+        if (a.kelas.nama === b.kelas.nama) return a.siswa.nama.localeCompare(b.siswa.nama);
+        return a.kelas.nama.localeCompare(b.kelas.nama);
+      });
+
+      if (!ujiList.length) {
+        content.innerHTML = renderPlaceholder('Nilai PKL (Penguji)', 'Belum ada siswa yang ditetapkan untuk Anda uji PKL. Hubungi admin untuk penugasan lewat menu "PKL" → "Penguji PKL".');
+        return;
+      }
+
+      var siswaIds = ujiList.map(function (r) { return r.siswa_id; });
+
+      // Data DUDI (baca saja) diisi guru Pembimbing PKL, dipakai di sini
+      // hanya sebagai referensi identitas tempat PKL siswa.
+      var pembimbingRes = await supabaseClient
+        .from('pkl_pembimbing')
+        .select('siswa_id, nama_dudi, tanggal_mulai, tanggal_selesai, guru:guru_id(nama)')
+        .eq('tahun_ajaran_id', tahunAktif.id)
+        .in('siswa_id', siswaIds);
+      var pembimbingMap = {};
+      (pembimbingRes.data || []).forEach(function (r) { pembimbingMap[r.siswa_id] = r; });
+
+      var nilaiRes = await supabaseClient
+        .from('nilai_pkl')
+        .select('siswa_id, sumber, tp1, tp2, tp3, tp4, nilai_akhir')
+        .eq('tahun_ajaran_id', tahunAktif.id)
+        .in('siswa_id', siswaIds);
+      var nilaiMap = {}; // siswa_id -> { dudi: row, penguji: row }
+      (nilaiRes.data || []).forEach(function (r) {
+        if (!nilaiMap[r.siswa_id]) nilaiMap[r.siswa_id] = {};
+        nilaiMap[r.siswa_id][r.sumber] = r;
+      });
+
+      function fmtN(n) { return (n === null || n === undefined || n === '') ? '—' : Number(n).toFixed(2); }
+      function rataTp(tp1, tp2, tp3, tp4) {
+        var vals = [tp1, tp2, tp3, tp4].filter(function (v) { return v !== null && v !== undefined && v !== ''; }).map(Number);
+        if (!vals.length) return null;
+        return vals.reduce(function (a, b) { return a + b; }, 0) / vals.length;
+      }
+      function rataTaPkl(a, b) {
+        if (a === null || a === undefined || b === null || b === undefined) return null;
+        return (Number(a) + Number(b)) / 2;
+      }
+      function angkaAtauNull(v) {
+        if (v === '' || v === null || v === undefined) return null;
+        var n = Number(v);
+        return isNaN(n) ? null : n;
+      }
+      function inputTpHtml(siswaId, tpKe, current) {
+        var v = (current === null || current === undefined) ? '' : current;
+        return '<input type="number" min="0" max="100" step="0.01" class="pklu-tp-input" data-siswa="' + siswaId + '" data-tp="' + tpKe + '" value="' + v + '">';
+      }
+
+      function kartuSiswaUji(r) {
+        var pb = pembimbingMap[r.siswa_id] || {};
+        var pasangan = nilaiMap[r.siswa_id] || {};
+        var du = pasangan.dudi || {};
+        var pg = pasangan.penguji || {};
+        function fmtLama() {
+          if (!pb.tanggal_mulai && !pb.tanggal_selesai) return '—';
+          return (pb.tanggal_mulai || '…') + ' s.d. ' + (pb.tanggal_selesai || '…');
+        }
+        return '<div style="margin-bottom:16px;border:1px solid var(--border);border-radius:var(--radius);padding:16px;" id="pkluCard-' + r.siswa_id + '">' +
+          '<div class="panel-head"><div><div class="panel-head__title">' + escapeHtml(r.siswa.nama) + '</div>' +
+          '<div class="panel-head__desc">NIS ' + escapeHtml(r.siswa.nis || '—') + ' · NISN ' + escapeHtml(r.siswa.nisn || '—') + ' · ' + escapeHtml(r.kelas.nama) + '</div></div></div>' +
+
+          '<div class="panel-note">Tempat PKL: <strong>' + escapeHtml(pb.nama_dudi || '—') + '</strong> · Waktu PKL: ' + escapeHtml(fmtLama()) + ' · Guru Pembimbing: ' + escapeHtml(pb.guru ? pb.guru.nama : '—') + ' (data DUDI diisi guru pembimbing, baca saja di sini)</div>' +
+
+          '<div class="table-wrap"><table class="data-table"><thead><tr><th style="width:26%;">Tujuan Pembelajaran</th><th class="tc-center">Nilai DUDI</th><th class="tc-center">Nilai Penguji</th></tr></thead><tbody>' +
+          [1, 2, 3, 4].map(function (n) {
+            return '<tr><td>TP ' + n + '</td>' +
+              '<td class="tc-center">' + fmtN(du['tp' + n]) + '</td>' +
+              '<td class="tc-center">' + inputTpHtml(r.siswa_id, n, pg['tp' + n]) + '</td></tr>';
+          }).join('') +
+          '<tr><td><strong>Nilai Akhir</strong></td>' +
+          '<td class="tc-center"><strong>' + fmtN(du.nilai_akhir) + '</strong></td>' +
+          '<td class="tc-center"><strong id="pkluAkhir-' + r.siswa_id + '">' + fmtN(pg.nilai_akhir) + '</strong></td></tr>' +
+          '</tbody></table></div>' +
+          '<div class="panel-note">Nilai Akhir PKL (rata-rata DUDI &amp; Penguji): <strong id="pkluAkhirTotal-' + r.siswa_id + '">' + fmtN(rataTaPkl(du.nilai_akhir, pg.nilai_akhir)) + '</strong> — nilai ini tidak muncul di Cetak Rapor biasa.</div>' +
+          '</div>';
+      }
+
+      content.innerHTML =
+        '<div class="panel-head"><div><div class="panel-head__title">Nilai PKL (Penguji)</div>' +
+        '<div class="panel-head__desc">Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + '. Isi Nilai Penguji (TP 1-4) untuk tiap siswa yang ditunjuk Admin kepada Anda. Data DUDI &amp; Nilai DUDI diisi guru Pembimbing PKL siswa tsb (ditampilkan baca saja). Nilai PKL tidak muncul di Cetak Rapor biasa.</div></div>' +
+        '<button class="btn-small btn-small--primary" id="btnSimpanPklPenguji">Simpan Semua Nilai Penguji</button></div>' +
+        '<div class="toolbar">' +
+        '<button class="btn-small" id="btnExportPklPenguji">⬇ Unduh Data (Excel)</button>' +
+        '<button class="btn-small" id="btnTemplatePklPenguji">⬇ Unduh Template Excel</button>' +
+        '<button class="btn-small" id="btnImportPklPenguji">⬆ Import dari Excel</button>' +
+        '<input type="file" id="fileImportPklPenguji" accept=".xlsx,.xls" style="display:none;">' +
+        '</div>' +
+        '<div class="panel-note">Kolom Excel: <strong>NIS</strong>, <strong>Nama</strong>, <strong>Kelas</strong>, <strong>Tempat PKL (DUDI)</strong> (baca saja/referensi), lalu <strong>Nilai TP1-TP4 (Penguji)</strong>. Siswa dicocokkan lewat NIS dulu, kalau kosong baru lewat Nama. Import hanya mengisi form di layar — periksa dulu, lalu klik "Simpan Semua Nilai Penguji".</div>' +
+        '<div id="importSummaryPklPenguji"></div>' +
+        '<div id="pkluNilaiMsg"></div>' +
+        ujiList.map(kartuSiswaUji).join('');
+      lucide.createIcons();
+
+      function perbaruiAkhirPenguji(sId) {
+        var inputs = document.querySelectorAll('.pklu-tp-input[data-siswa="' + sId + '"]');
+        var vals = Array.prototype.map.call(inputs, function (i) { return i.value; });
+        var akhir = rataTp(vals[0], vals[1], vals[2], vals[3]);
+        var elAkhir = document.getElementById('pkluAkhir-' + sId);
+        if (elAkhir) elAkhir.textContent = fmtN(akhir);
+        var du = (nilaiMap[sId] || {}).dudi || {};
+        var elTotal = document.getElementById('pkluAkhirTotal-' + sId);
+        if (elTotal) elTotal.textContent = fmtN(rataTaPkl(du.nilai_akhir, akhir));
+      }
+
+      document.querySelectorAll('.pklu-tp-input').forEach(function (inp) {
+        inp.addEventListener('input', function () {
+          perbaruiAkhirPenguji(this.getAttribute('data-siswa'));
+        });
+      });
+
+      // =======================================================
+      //  Excel: Unduh Data / Unduh Template / Import
+      // =======================================================
+      var PKLU_EXCEL_COLUMNS = ['NIS', 'Nama', 'Kelas', 'Tempat PKL (DUDI)', 'Nilai TP1 (Penguji)', 'Nilai TP2 (Penguji)', 'Nilai TP3 (Penguji)', 'Nilai TP4 (Penguji)', 'Nilai Akhir Penguji (Otomatis)'];
+
+      function barisExcelPenguji(r, kosongkan) {
+        var pb = pembimbingMap[r.siswa_id] || {};
+        var inputs = document.querySelectorAll('.pklu-tp-input[data-siswa="' + r.siswa_id + '"]');
+        var vals = Array.prototype.map.call(inputs, function (i) { return i.value; });
+        var akhir = rataTp(vals[0], vals[1], vals[2], vals[3]);
+        return {
+          'NIS': r.siswa.nis || '',
+          'Nama': r.siswa.nama,
+          'Kelas': r.kelas.nama,
+          'Tempat PKL (DUDI)': pb.nama_dudi || '',
+          'Nilai TP1 (Penguji)': kosongkan ? '' : (vals[0] === '' ? '' : Number(vals[0])),
+          'Nilai TP2 (Penguji)': kosongkan ? '' : (vals[1] === '' ? '' : Number(vals[1])),
+          'Nilai TP3 (Penguji)': kosongkan ? '' : (vals[2] === '' ? '' : Number(vals[2])),
+          'Nilai TP4 (Penguji)': kosongkan ? '' : (vals[3] === '' ? '' : Number(vals[3])),
+          'Nilai Akhir Penguji (Otomatis)': kosongkan ? '' : (akhir === null ? '' : akhir)
+        };
+      }
+
+      document.getElementById('btnExportPklPenguji').addEventListener('click', function () {
+        var rows = ujiList.map(function (r) { return barisExcelPenguji(r, false); });
+        var ws = XLSX.utils.json_to_sheet(rows, { header: PKLU_EXCEL_COLUMNS });
+        var wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Nilai Penguji PKL');
+        XLSX.writeFile(wb, 'nilai_pkl_penguji_' + tahunAktif.nama.replace(/[^a-z0-9]/gi, '_') + '.xlsx');
+      });
+
+      document.getElementById('btnTemplatePklPenguji').addEventListener('click', function () {
+        var rows = ujiList.map(function (r) { return barisExcelPenguji(r, true); });
+        var ws = XLSX.utils.json_to_sheet(rows, { header: PKLU_EXCEL_COLUMNS });
+        var wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Template Nilai Penguji PKL');
+        XLSX.writeFile(wb, 'template_import_nilai_pkl_penguji.xlsx');
+      });
+
+      document.getElementById('btnImportPklPenguji').addEventListener('click', function () {
+        document.getElementById('fileImportPklPenguji').click();
+      });
+
+      // Import hanya MENGISI form di layar (tidak langsung menyimpan),
+      // supaya guru penguji bisa memeriksa hasilnya dulu sebelum klik Simpan.
+      document.getElementById('fileImportPklPenguji').addEventListener('change', function (e) {
+        var file = e.target.files[0];
+        if (!file) return;
+
+        var reader = new FileReader();
+        reader.onload = function (evt) {
+          var data = new Uint8Array(evt.target.result);
+          var wb = XLSX.read(data, { type: 'array', cellDates: true });
+          var sheet = wb.Sheets[wb.SheetNames[0]];
+          var rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+          var siswaByNis = {}, siswaByNama = {};
+          ujiList.forEach(function (r) {
+            if (r.siswa.nis) siswaByNis[String(r.siswa.nis).trim()] = r;
+            siswaByNama[String(r.siswa.nama).trim().toLowerCase()] = r;
+          });
+
+          var kolomTp = ['Nilai TP1 (Penguji)', 'Nilai TP2 (Penguji)', 'Nilai TP3 (Penguji)', 'Nilai TP4 (Penguji)'];
+          var terisi = 0, dilewati = 0;
+          var pesan = [];
+
+          rows.forEach(function (row, i) {
+            var nis = String(row['NIS'] || '').trim();
+            var nama = String(row['Nama'] || '').trim();
+            var r = nis ? siswaByNis[nis] : null;
+            if (!r && nama) r = siswaByNama[nama.toLowerCase()];
+            if (!r) { dilewati++; pesan.push('Baris ' + (i + 2) + ': dilewati (siswa tidak ditemukan di daftar penugasan Anda' + (nis ? ', NIS ' + nis : '') + ').'); return; }
+
+            kolomTp.forEach(function (kolom, idx) {
+              var el = document.querySelector('.pklu-tp-input[data-siswa="' + r.siswa_id + '"][data-tp="' + (idx + 1) + '"]');
+              if (!el) return;
+              var v = angkaAtauNull(row[kolom]);
+              el.value = v === null ? '' : v;
+            });
+
+            perbaruiAkhirPenguji(r.siswa_id);
+            terisi++;
+          });
+
+          document.getElementById('importSummaryPklPenguji').innerHTML =
+            '<div class="import-summary"><strong>Hasil import:</strong> ' + terisi + ' baris siswa dimuat ke form, ' + dilewati + ' baris dilewati. ' +
+            'Data BELUM tersimpan — periksa dulu, lalu klik "Simpan Semua Nilai Penguji".' +
+            (pesan.length ? '\n\n' + escapeHtml(pesan.join('\n')) : '') + '</div>';
+
+          document.getElementById('fileImportPklPenguji').value = '';
+        };
+        reader.readAsArrayBuffer(file);
+      });
+
+      document.getElementById('btnSimpanPklPenguji').addEventListener('click', async function () {
+        var btn = this;
+        btn.disabled = true;
+        btn.textContent = 'Menyimpan...';
+
+        var jobs = [];
+        ujiList.forEach(function (r) {
+          var sId = r.siswa_id;
+          var inputs = document.querySelectorAll('.pklu-tp-input[data-siswa="' + sId + '"]');
+          var tpVals = Array.prototype.map.call(inputs, function (i) { return i.value === '' ? null : Number(i.value); });
+          var sudahPunyaData = !!(nilaiMap[sId] && nilaiMap[sId].penguji);
+          var semuaKosong = tpVals.every(function (v) { return v === null; });
+          if (semuaKosong && !sudahPunyaData) return; // belum pernah diisi, lewati
+
+          jobs.push(supabaseClient.from('nilai_pkl').upsert({
+            siswa_id: sId, kelas_id: r.kelas_id, tahun_ajaran_id: tahunAktif.id, sumber: 'penguji',
+            tp1: tpVals[0], tp2: tpVals[1], tp3: tpVals[2], tp4: tpVals[3],
+            nilai_akhir: rataTp(tpVals[0], tpVals[1], tpVals[2], tpVals[3]),
+            guru_id: user.id, updated_at: new Date().toISOString()
+          }, { onConflict: 'siswa_id,sumber,tahun_ajaran_id' }));
+        });
+
+        var hasil = await Promise.all(jobs);
+        var gagal = hasil.filter(function (r) { return r.error; });
+
+        btn.disabled = false;
+        btn.textContent = 'Simpan Semua Nilai Penguji';
+        document.getElementById('pkluNilaiMsg').innerHTML = gagal.length
+          ? '<div class="import-summary">Tersimpan, tapi ' + gagal.length + ' baris gagal disimpan (' + gagal[0].error.message + ').</div>'
+          : '<div class="import-summary">Nilai Penguji PKL berhasil disimpan.</div>';
+      });
+    }
+
 
     // ================= WALI KELAS: Rekap Ekstrakurikuler (baca saja) =================
     // Menampilkan, untuk tiap siswa di kelas yang diampu wali kelas,
