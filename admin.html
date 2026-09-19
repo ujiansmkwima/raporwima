@@ -4345,7 +4345,10 @@
       '<div class="panel-head__desc">Nilai PKL diisi guru pembimbing (Nilai DUDI) &amp; guru penguji (Nilai Penguji) lewat dashboard Guru, dan TIDAK muncul di Cetak Rapor biasa (ada format cetak PKL tersendiri). Rekap di bawah untuk pemantauan Admin.</div></div>' +
       '<span class="panel-head__toggle-icon">☰</span></div>' +
       '<div class="collapsible-body' + clsRekap + '" id="bodyPklRekap">' +
-      '<div class="toolbar"><button class="btn-small" id="btnExportRekapPkl">⬇ Unduh Rekap (Excel)</button></div>' +
+      '<div class="add-form">' +
+      '<div class="field"><label>Tampilkan Kelas</label><select id="pklRekapKelas"><option value="">Semua Kelas</option></select></div>' +
+      '<button type="button" class="btn-small" id="btnExportRekapPkl">⬇ Unduh Rekap (Excel)</button>' +
+      '</div>' +
       '<div id="pklRekapArea"><div class="panel-note">Memuat rekap...</div></div>' +
       '</div>';
 
@@ -4752,6 +4755,101 @@
     });
 
     // ---------- C. Rekap Nilai PKL ----------
+    // Semua data dimuat sekali ke rekapPklCache (terurut Kelas -> Nama),
+    // lalu ditampilkan lewat gambarRekapPkl() sesuai pilihan "Tampilkan
+    // Kelas". Pilihan "Semua Kelas" menampilkan data terkelompok per
+    // kelas (ada baris judul tiap kelas, nomor urut mulai 1 lagi di tiap
+    // kelas). Tombol Unduh Rekap mengikuti pilihan kelas yang sedang tampil.
+    var rekapPklCache = [];
+
+    function fmtNilaiPkl(n) { return (n === null || n === undefined) ? '—' : Number(n).toFixed(2); }
+    function nilaiAkhirPkl(pasangan) {
+      if (!pasangan) return null;
+      var a = pasangan.dudi, b = pasangan.penguji;
+      if (a === null || a === undefined || b === null || b === undefined) return null;
+      return (Number(a) + Number(b)) / 2;
+    }
+    function fmtTglPkl(iso) {
+      if (!iso) return '';
+      var p = String(iso).split('-');
+      if (p.length !== 3) return iso;
+      return p[2] + '-' + p[1] + '-' + p[0];
+    }
+    function fmtLamaPkl(r) {
+      if (!r.mulai && !r.selesai) return '—';
+      return fmtTglPkl(r.mulai || '…') + ' s.d. ' + fmtTglPkl(r.selesai || '…');
+    }
+
+    // Isi ulang pilihan kelas dari data yang SUDAH masuk (hanya kelas yang
+    // punya siswa PKL), sambil mempertahankan pilihan yang sedang aktif.
+    function segarkanFilterKelasPkl() {
+      var sel = document.getElementById('pklRekapKelas');
+      var dipilih = sel.value;
+      var hitung = {}, urut = [];
+      rekapPklCache.forEach(function (r) {
+        if (!hitung[r.kelas]) { hitung[r.kelas] = 0; urut.push(r.kelas); }
+        hitung[r.kelas]++;
+      });
+      sel.innerHTML = '<option value="">Semua Kelas (' + rekapPklCache.length + ' siswa)</option>' +
+        urut.map(function (k) { return '<option value="' + escapeHtml(k) + '">' + escapeHtml(k) + ' (' + hitung[k] + ' siswa)</option>'; }).join('');
+      sel.value = hitung[dipilih] ? dipilih : '';
+    }
+
+    // Tampilkan tabel sesuai pilihan kelas; mengembalikan data untuk unduhan Excel.
+    function gambarRekapPkl() {
+      var rekapArea = document.getElementById('pklRekapArea');
+      var pilih = document.getElementById('pklRekapKelas').value;
+      var tampil = pilih ? rekapPklCache.filter(function (r) { return r.kelas === pilih; }) : rekapPklCache;
+
+      if (!tampil.length) {
+        rekapArea.innerHTML = '<div class="panel-note">Belum ada siswa yang ditugaskan pembimbing PKL di tahun ajaran ini.</div>';
+        return [];
+      }
+
+      var jumlahPerKelas = {};
+      tampil.forEach(function (r) { jumlahPerKelas[r.kelas] = (jumlahPerKelas[r.kelas] || 0) + 1; });
+
+      var dataExport = [];
+      var rowsHtml = '';
+      var kelasSebelumnya = null, no = 0;
+      tampil.forEach(function (r) {
+        if (r.kelas !== kelasSebelumnya) {
+          kelasSebelumnya = r.kelas;
+          no = 0;
+          if (!pilih) {
+            rowsHtml += '<tr><td colspan="11" style="background:var(--surface-tint-strong);font-weight:600;">' +
+              escapeHtml(r.kelas) + ' &middot; ' + jumlahPerKelas[r.kelas] + ' siswa</td></tr>';
+          }
+        }
+        no++;
+        dataExport.push({
+          'No': no, 'Nama Siswa': r.nama, 'NIS': r.nis, 'Kelas': r.kelas,
+          'Guru Pembimbing': r.pembimbing, 'Guru Penguji': r.penguji, 'Tempat DUDI': r.dudi,
+          'Tanggal Mulai': r.mulai, 'Tanggal Selesai': r.selesai,
+          'Nilai DUDI': fmtNilaiPkl(r.nilaiDudi), 'Nilai Penguji': fmtNilaiPkl(r.nilaiPenguji),
+          'Nilai Akhir PKL': fmtNilaiPkl(r.akhir)
+        });
+        rowsHtml += '<tr><td>' + no + '</td><td>' + escapeHtml(r.nis || '—') + '</td><td>' + escapeHtml(r.nama) + '</td>' +
+          '<td>' + escapeHtml(r.kelas) + '</td><td>' + escapeHtml(r.pembimbing) + '</td>' +
+          '<td>' + escapeHtml(r.penguji || '—') + '</td>' +
+          '<td>' + escapeHtml(r.dudi || '—') + '</td>' +
+          '<td>' + escapeHtml(fmtLamaPkl(r)) + '</td>' +
+          '<td class="tc-center">' + fmtNilaiPkl(r.nilaiDudi) + '</td>' +
+          '<td class="tc-center">' + fmtNilaiPkl(r.nilaiPenguji) + '</td>' +
+          '<td class="tc-center"><strong>' + fmtNilaiPkl(r.akhir) + '</strong></td></tr>';
+      });
+
+      rekapArea.innerHTML =
+        '<div class="panel-note">Menampilkan ' + tampil.length + ' siswa — ' +
+        (pilih ? 'kelas ' + escapeHtml(pilih) : 'semua kelas, dikelompokkan per kelas') + '.</div>' +
+        '<div class="table-wrap"><table class="data-table"><thead><tr>' +
+        '<th>No</th><th>NIS</th><th>Nama Siswa</th><th>Kelas</th><th>Guru Pembimbing</th><th>Guru Penguji</th><th>Tempat DUDI</th><th>Lama Waktu PKL</th>' +
+        '<th>Nilai DUDI</th><th>Nilai Penguji</th><th>Nilai Akhir PKL</th></tr></thead>' +
+        '<tbody>' + rowsHtml + '</tbody></table></div>';
+
+      return dataExport;
+    }
+
     async function muatRekapPkl() {
       var rekapArea = document.getElementById('pklRekapArea');
 
@@ -4761,11 +4859,13 @@
         .eq('tahun_ajaran_id', tahunAktif.id);
       var pembimbingRows = (pembimbingRes.data || []).filter(function (r) { return r.siswa && r.kelas && r.guru; });
       pembimbingRows.sort(function (a, b) {
-        if (a.kelas.nama === b.kelas.nama) return a.siswa.nama.localeCompare(b.siswa.nama);
-        return a.kelas.nama.localeCompare(b.kelas.nama);
+        var k = a.kelas.nama.localeCompare(b.kelas.nama, 'id', { numeric: true });
+        return k !== 0 ? k : a.siswa.nama.localeCompare(b.siswa.nama);
       });
 
       if (!pembimbingRows.length) {
+        rekapPklCache = [];
+        segarkanFilterKelasPkl();
         rekapArea.innerHTML = '<div class="panel-note">Belum ada siswa yang ditugaskan pembimbing PKL di tahun ajaran ini.</div>';
         return [];
       }
@@ -4790,59 +4890,32 @@
         nilaiMap[r.siswa_id][r.sumber] = r.nilai_akhir;
       });
 
-      function fmtNilai(n) { return (n === null || n === undefined) ? '—' : Number(n).toFixed(2); }
-      function nilaiAkhirPkl(pasangan) {
-        if (!pasangan) return null;
-        var a = pasangan.dudi, b = pasangan.penguji;
-        if (a === null || a === undefined || b === null || b === undefined) return null;
-        return (Number(a) + Number(b)) / 2;
-      }
-      function fmtTgl(iso) {
-        if (!iso) return '';
-        var p = String(iso).split('-');
-        if (p.length !== 3) return iso;
-        return p[2] + '-' + p[1] + '-' + p[0];
-      }
-      function fmtLama(r) {
-        if (!r.tanggal_mulai && !r.tanggal_selesai) return '—';
-        return fmtTgl(r.tanggal_mulai || '…') + ' s.d. ' + fmtTgl(r.tanggal_selesai || '…');
-      }
-
-      var dataExport = [];
-      var rowsHtml = pembimbingRows.map(function (r, i) {
+      rekapPklCache = pembimbingRows.map(function (r) {
         var pasangan = nilaiMap[r.siswa_id] || {};
-        var akhir = nilaiAkhirPkl(pasangan);
-        var namaPenguji = pengujiMap[r.siswa_id] || '';
-        dataExport.push({
-          'No': i + 1, 'Nama Siswa': r.siswa.nama, 'NIS': r.siswa.nis || '', 'Kelas': r.kelas.nama,
-          'Guru Pembimbing': r.guru.nama, 'Guru Penguji': namaPenguji, 'Tempat DUDI': r.nama_dudi || '',
-          'Tanggal Mulai': r.tanggal_mulai || '', 'Tanggal Selesai': r.tanggal_selesai || '',
-          'Nilai DUDI': fmtNilai(pasangan.dudi), 'Nilai Penguji': fmtNilai(pasangan.penguji),
-          'Nilai Akhir PKL': fmtNilai(akhir)
-        });
-        return '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(r.siswa.nis || '—') + '</td><td>' + escapeHtml(r.siswa.nama) + '</td>' +
-          '<td>' + escapeHtml(r.kelas.nama) + '</td><td>' + escapeHtml(r.guru.nama) + '</td>' +
-          '<td>' + escapeHtml(namaPenguji || '—') + '</td>' +
-          '<td>' + escapeHtml(r.nama_dudi || '—') + '</td>' +
-          '<td>' + escapeHtml(fmtLama(r)) + '</td>' +
-          '<td class="tc-center">' + fmtNilai(pasangan.dudi) + '</td>' +
-          '<td class="tc-center">' + fmtNilai(pasangan.penguji) + '</td>' +
-          '<td class="tc-center"><strong>' + fmtNilai(akhir) + '</strong></td></tr>';
-      }).join('');
+        return {
+          kelas: r.kelas.nama, nis: r.siswa.nis || '', nama: r.siswa.nama,
+          pembimbing: r.guru.nama, penguji: pengujiMap[r.siswa_id] || '',
+          dudi: r.nama_dudi || '', mulai: r.tanggal_mulai || '', selesai: r.tanggal_selesai || '',
+          nilaiDudi: pasangan.dudi, nilaiPenguji: pasangan.penguji, akhir: nilaiAkhirPkl(pasangan)
+        };
+      });
 
-      rekapArea.innerHTML = '<div class="table-wrap"><table class="data-table"><thead><tr>' +
-        '<th>No</th><th>NIS</th><th>Nama Siswa</th><th>Kelas</th><th>Guru Pembimbing</th><th>Guru Penguji</th><th>Tempat DUDI</th><th>Lama Waktu PKL</th>' +
-        '<th>Nilai DUDI</th><th>Nilai Penguji</th><th>Nilai Akhir PKL</th></tr></thead>' +
-        '<tbody>' + rowsHtml + '</tbody></table></div>';
-
-      return dataExport;
+      segarkanFilterKelasPkl();
+      return gambarRekapPkl();
     }
 
     var dataExportRekapPkl = await muatRekapPkl();
 
+    document.getElementById('pklRekapKelas').addEventListener('change', function () {
+      dataExportRekapPkl = gambarRekapPkl();
+    });
+
     document.getElementById('btnExportRekapPkl').addEventListener('click', function () {
       if (!dataExportRekapPkl || !dataExportRekapPkl.length) { alert('Belum ada data untuk diunduh.'); return; }
-      tulisExcelPkl(dataExportRekapPkl, Object.keys(dataExportRekapPkl[0]), 'Rekap PKL', 'rekap_nilai_pkl.xlsx');
+      var pilih = document.getElementById('pklRekapKelas').value;
+      var namaSheet = pilih ? ('Rekap ' + pilih).replace(/[\\\/?*\[\]:]/g, '-').slice(0, 31) : 'Rekap PKL';
+      var namaFile = pilih ? 'rekap_nilai_pkl_' + pilih.replace(/[^a-z0-9]/gi, '_') + '.xlsx' : 'rekap_nilai_pkl.xlsx';
+      tulisExcelPkl(dataExportRekapPkl, Object.keys(dataExportRekapPkl[0]), namaSheet, namaFile);
     });
   }
 

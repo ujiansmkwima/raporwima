@@ -2772,6 +2772,85 @@
       });
     }
 
+    // ================= Helper Excel massal (Ekstrakurikuler & Kokurikuler) =================
+    // Dipakai fitur "Unduh Template Excel" + "Import dari Excel" di menu Nilai
+    // Ekstrakurikuler (Pembina) dan Nilai Kokurikuler (PJ). Alurnya sama dengan
+    // Input Nilai: import HANYA mengisi form di layar, tidak langsung menyimpan,
+    // supaya bisa diperiksa dulu sebelum klik "Simpan Semua Nilai". Kolom Excel
+    // yang dikosongkan TIDAK menimpa isian yang sudah ada.
+    function teksExcel(v) { return (v === null || v === undefined) ? '' : String(v).trim(); }
+
+    function namaFileAman(t) { return String(t || '').replace(/[^a-z0-9]/gi, '_'); }
+
+    function normHeaderExcel(s) { return teksExcel(s).toLowerCase().replace(/\s+/g, ' '); }
+
+    // Ambil isi kolom berdasarkan nama header, tidak peka huruf besar/kecil & spasi.
+    function ambilKolomExcel(row, namaKolom) {
+      var target = normHeaderExcel(namaKolom);
+      for (var k in row) {
+        if (Object.prototype.hasOwnProperty.call(row, k) && normHeaderExcel(k) === target) return row[k];
+      }
+      return '';
+    }
+
+    // Pencocok siswa: utamakan NIS (nol di depan yang hilang karena Excel
+    // mengubah NIS jadi angka tetap dikenali). Kalau NIS kosong, cocokkan lewat
+    // nama lengkap, tapi hanya bila namanya unik.
+    function bangunPencocokSiswaExcel(siswaList) {
+      var perNis = {}, perNisTanpaNol = {}, perNama = {}, namaGanda = {};
+      function kunciNama(n) { return teksExcel(n).toLowerCase().replace(/\s+/g, ' '); }
+      siswaList.forEach(function (s) {
+        var n = teksExcel(s.nis);
+        if (n) { perNis[n] = s; perNisTanpaNol[n.replace(/^0+/, '')] = s; }
+        var nm = kunciNama(s.nama);
+        if (perNama[nm]) namaGanda[nm] = true; else perNama[nm] = s;
+      });
+      return function (nisExcel, namaExcel) {
+        var nis = teksExcel(nisExcel);
+        if (nis) {
+          var s1 = perNis[nis] || perNisTanpaNol[nis.replace(/^0+/, '')];
+          return s1 ? { siswa: s1 } : { siswa: null, alasan: 'NIS ' + nis + ' tidak terdaftar di daftar siswa ini' };
+        }
+        var nm = kunciNama(namaExcel);
+        if (!nm) return { siswa: null, alasan: 'NIS dan Nama sama-sama kosong' };
+        if (namaGanda[nm]) return { siswa: null, alasan: 'NIS kosong dan nama "' + teksExcel(namaExcel) + '" ada lebih dari satu siswa' };
+        return perNama[nm] ? { siswa: perNama[nm] } : { siswa: null, alasan: 'NIS kosong dan nama "' + teksExcel(namaExcel) + '" tidak ditemukan' };
+      };
+    }
+
+    // Baca sheet PERTAMA dari file Excel -> array objek (header = baris 1).
+    function bacaFileExcelPertama(file, callback) {
+      var reader = new FileReader();
+      reader.onerror = function () { callback(new Error('File tidak bisa dibaca.')); };
+      reader.onload = function (evt) {
+        try {
+          var wb = XLSX.read(new Uint8Array(evt.target.result), { type: 'array' });
+          var sheet = wb.Sheets[wb.SheetNames[0]];
+          callback(null, XLSX.utils.sheet_to_json(sheet, { defval: '' }));
+        } catch (err) { callback(err); }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    // Tulis template: sheet pertama = data (header di baris 1), sheet kedua = Petunjuk.
+    function tulisTemplateExcel(opts) {
+      var ws = XLSX.utils.json_to_sheet(opts.rows, { header: opts.headers });
+      ws['!cols'] = opts.lebar.map(function (w) { return { wch: w }; });
+      var aoa = [['Petunjuk Pengisian']].concat(opts.petunjuk.map(function (t, i) { return [(i + 1) + '. ' + t]; }));
+      var wsInfo = XLSX.utils.aoa_to_sheet(aoa);
+      wsInfo['!cols'] = [{ wch: 115 }];
+      var wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, opts.namaSheet);
+      XLSX.utils.book_append_sheet(wb, wsInfo, 'Petunjuk');
+      XLSX.writeFile(wb, opts.namaFile);
+    }
+
+    function ringkasPesanImport(pesan, batas) {
+      batas = batas || 30;
+      if (pesan.length <= batas) return pesan.join('\n');
+      return pesan.slice(0, batas).join('\n') + '\n... dan ' + (pesan.length - batas) + ' pesan lain.';
+    }
+
     // ================= PEMBINA EKSTRAKURIKULER: Nilai Ekstrakurikuler =================
     // Peserta ekstrakurikuler tidak terikat satu kelas — bisa lintas kelas —
     // jadi daftar siswa diambil dari tabel ekstrakurikuler_siswa langsung
@@ -2840,9 +2919,109 @@
         '<div class="panel-head"><div><div class="panel-head__title">Nilai Ekstrakurikuler — ' + escapeHtml(ekskul.nama) + '</div>' +
         '<div class="panel-head__desc">Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + '. Isi Predikat dan Deskripsi untuk tiap peserta.</div></div>' +
         '<button class="btn-small btn-small--primary" id="btnSimpanEkskul">Simpan Semua Nilai</button></div>' +
+        '<div class="toolbar">' +
+        '<button class="btn-small" id="btnTemplateEkskul">⬇ Unduh Template Excel</button>' +
+        '<button class="btn-small" id="btnImportEkskul">⬆ Import dari Excel</button>' +
+        '<input type="file" id="fileImportEkskul" accept=".xlsx,.xls" style="display:none;">' +
+        '</div>' +
+        '<div id="importSummaryEkskul"></div>' +
         '<div id="ekskulNilaiMsg"></div>' +
         '<div class="table-wrap"><table class="data-table"><thead><tr><th>No</th><th>NIS</th><th>Nama</th><th>Kelas</th><th>Predikat</th><th>Deskripsi</th></tr></thead>' +
         '<tbody>' + rowsHtml + '</tbody></table></div>';
+
+      // ---------- Unduh Template & Import Excel (isi massal) ----------
+      // Template sudah berisi seluruh peserta ekskul ini (NIS, Nama, Kelas)
+      // beserta isian yang sedang tampil di layar, tinggal diisi kolom
+      // Predikat & Deskripsi lalu di-import lagi.
+      document.getElementById('btnTemplateEkskul').addEventListener('click', function () {
+        var rows = siswaList.map(function (s, i) {
+          var sel = content.querySelector('.ekskul-predikat[data-siswa="' + s.id + '"]');
+          var ta = content.querySelector('.ekskul-deskripsi[data-siswa="' + s.id + '"]');
+          return {
+            'No': i + 1, 'NIS': s.nis || '', 'Nama': s.nama, 'Kelas': kelasNamaMap[s.id] || '',
+            'Predikat': sel ? sel.value : '', 'Deskripsi': ta ? ta.value : ''
+          };
+        });
+        tulisTemplateExcel({
+          rows: rows,
+          headers: ['No', 'NIS', 'Nama', 'Kelas', 'Predikat', 'Deskripsi'],
+          lebar: [5, 16, 34, 12, 14, 70],
+          namaSheet: 'Template Ekskul',
+          namaFile: 'template_nilai_ekskul_' + namaFileAman(ekskul.nama) + '.xlsx',
+          petunjuk: [
+            'Jangan ubah nama kolom (baris pertama) dan jangan ubah isi kolom NIS. NIS dipakai untuk mencocokkan siswa; No, Nama, dan Kelas hanya sebagai keterangan.',
+            'Kolom Predikat diisi salah satu: ' + OPSI_PREDIKAT.join(' / ') + ' (huruf besar/kecil bebas).',
+            'Kolom Deskripsi diisi capaian siswa pada kegiatan ' + ekskul.nama + '.',
+            'Kolom yang dikosongkan tidak akan menimpa isian yang sudah ada di sistem.',
+            'Hanya siswa yang terdaftar sebagai peserta ' + ekskul.nama + ' yang bisa diisi. Baris siswa lain akan dilewati.',
+            'Setelah import, data baru tampil di layar tetapi BELUM tersimpan — periksa dulu, lalu klik "Simpan Semua Nilai".'
+          ]
+        });
+      });
+
+      document.getElementById('btnImportEkskul').addEventListener('click', function () {
+        document.getElementById('fileImportEkskul').click();
+      });
+
+      // Import hanya MENGISI form di layar (tidak langsung menyimpan).
+      document.getElementById('fileImportEkskul').addEventListener('change', function (e) {
+        var inputEl = e.target;
+        var file = inputEl.files[0];
+        if (!file) return;
+        var boxRingkasan = document.getElementById('importSummaryEkskul');
+
+        bacaFileExcelPertama(file, function (err, rows) {
+          inputEl.value = ''; // supaya file yang sama bisa dipilih ulang & tidak dianggap "perubahan belum disimpan"
+          if (err) {
+            boxRingkasan.innerHTML = '<div class="import-summary"><strong>Import gagal:</strong> ' + escapeHtml(err.message || 'file Excel tidak valid') + '</div>';
+            return;
+          }
+
+          var cocokkan = bangunPencocokSiswaExcel(siswaList);
+          var dilewati = 0, kosong = 0;
+          var pesan = [];
+          var sudahDiisi = {};
+
+          rows.forEach(function (row, i) {
+            var noBaris = i + 2; // baris 1 = header
+            var nis = ambilKolomExcel(row, 'NIS');
+            var nama = ambilKolomExcel(row, 'Nama');
+            if (!teksExcel(nis) && !teksExcel(nama)) return; // baris kosong, abaikan
+
+            var hasil = cocokkan(nis, nama);
+            if (!hasil.siswa) { dilewati++; pesan.push('Baris ' + noBaris + ': dilewati (' + hasil.alasan + ').'); return; }
+            var siswa = hasil.siswa;
+
+            var predikatMentah = teksExcel(ambilKolomExcel(row, 'Predikat'));
+            var vDeskripsi = teksExcel(ambilKolomExcel(row, 'Deskripsi'));
+
+            var predikatCocok = '';
+            if (predikatMentah) {
+              var kunci = predikatMentah.toLowerCase().replace(/\s+/g, ' ');
+              OPSI_PREDIKAT.forEach(function (p) { if (p.toLowerCase() === kunci) predikatCocok = p; });
+              if (!predikatCocok) {
+                pesan.push('Baris ' + noBaris + ' (' + siswa.nama + '): Predikat "' + predikatMentah + '" tidak dikenali (pilihan: ' + OPSI_PREDIKAT.join(', ') + ') — kolom Predikat baris ini tidak diisi.');
+              }
+            }
+
+            if (!predikatCocok && !vDeskripsi) { kosong++; return; }
+
+            if (sudahDiisi[siswa.id]) pesan.push('Baris ' + noBaris + ' (' + siswa.nama + '): siswa ini muncul lebih dari sekali di file — dipakai isian baris terakhir.');
+            sudahDiisi[siswa.id] = true;
+
+            var sel = content.querySelector('.ekskul-predikat[data-siswa="' + siswa.id + '"]');
+            var ta = content.querySelector('.ekskul-deskripsi[data-siswa="' + siswa.id + '"]');
+            if (sel && predikatCocok) sel.value = predikatCocok;
+            if (ta && vDeskripsi) ta.value = vDeskripsi;
+          });
+
+          boxRingkasan.innerHTML =
+            '<div class="import-summary"><strong>Hasil import:</strong> ' + Object.keys(sudahDiisi).length + ' siswa dimuat ke form, ' +
+            dilewati + ' baris dilewati' + (kosong ? ', ' + kosong + ' baris tanpa isian (tidak mengubah apa-apa)' : '') + '. ' +
+            'Data BELUM tersimpan — periksa dulu, lalu klik "Simpan Semua Nilai".' +
+            (pesan.length ? '\n\n' + escapeHtml(ringkasPesanImport(pesan)) : '') + '</div>';
+        });
+      });
 
       document.getElementById('btnSimpanEkskul').addEventListener('click', async function () {
         var btn = this;
@@ -4085,9 +4264,95 @@
         '<div class="panel-head"><div><div class="panel-head__title">Nilai Kokurikuler — ' + escapeHtml(pj.nama_kegiatan) + '</div>' +
         '<div class="panel-head__desc">Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + ' &middot; ' + escapeHtml(labelKelas) + '. Isi Deskripsi capaian kokurikuler tiap siswa.</div></div>' +
         '<button class="btn-small btn-small--primary" id="btnSimpanKoku">Simpan Semua Nilai</button></div>' +
+        '<div class="toolbar">' +
+        '<button class="btn-small" id="btnTemplateKoku">⬇ Unduh Template Excel</button>' +
+        '<button class="btn-small" id="btnImportKoku">⬆ Import dari Excel</button>' +
+        '<input type="file" id="fileImportKoku" accept=".xlsx,.xls" style="display:none;">' +
+        '</div>' +
+        '<div id="importSummaryKoku"></div>' +
         '<div id="kokuNilaiMsg"></div>' +
         '<div class="table-wrap"><table class="data-table"><thead><tr><th>No</th><th>NIS</th><th>Nama</th>' + (showKelasCol ? '<th>Kelas</th>' : '') + '<th>Deskripsi</th></tr></thead>' +
         '<tbody>' + rowsHtml + '</tbody></table></div>';
+
+      // ---------- Unduh Template & Import Excel (isi massal) ----------
+      // Template berisi seluruh siswa dalam lingkup PJ ini (NIS, Nama, Kelas)
+      // beserta Deskripsi yang sedang tampil di layar. Cukup isi kolom
+      // Deskripsi lalu di-import lagi.
+      document.getElementById('btnTemplateKoku').addEventListener('click', function () {
+        var rows = siswaList.map(function (s, i) {
+          var ta = content.querySelector('tr[data-siswa="' + s.id + '"] .koku-deskripsi');
+          return {
+            'No': i + 1, 'NIS': s.nis || '', 'Nama': s.nama,
+            'Kelas': s.kelasNama || (pj.kelas ? pj.kelas.nama : ''),
+            'Deskripsi': ta ? ta.value : ''
+          };
+        });
+        tulisTemplateExcel({
+          rows: rows,
+          headers: ['No', 'NIS', 'Nama', 'Kelas', 'Deskripsi'],
+          lebar: [5, 16, 34, 12, 80],
+          namaSheet: 'Template Kokurikuler',
+          namaFile: 'template_nilai_kokurikuler_' + namaFileAman(pj.nama_kegiatan) + '_' + namaFileAman(labelKelas) + '.xlsx',
+          petunjuk: [
+            'Jangan ubah nama kolom (baris pertama) dan jangan ubah isi kolom NIS. NIS dipakai untuk mencocokkan siswa; No, Nama, dan Kelas hanya sebagai keterangan.',
+            'Kolom Deskripsi diisi capaian kokurikuler siswa pada kegiatan ' + pj.nama_kegiatan + '.',
+            'Kolom Deskripsi yang dikosongkan tidak akan menimpa isian yang sudah ada di sistem.',
+            'Hanya siswa dalam lingkup ' + labelKelas + ' yang bisa diisi. Baris siswa lain akan dilewati.',
+            'Setelah import, data baru tampil di layar tetapi BELUM tersimpan — periksa dulu, lalu klik "Simpan Semua Nilai".'
+          ]
+        });
+      });
+
+      document.getElementById('btnImportKoku').addEventListener('click', function () {
+        document.getElementById('fileImportKoku').click();
+      });
+
+      // Import hanya MENGISI form di layar (tidak langsung menyimpan).
+      document.getElementById('fileImportKoku').addEventListener('change', function (e) {
+        var inputEl = e.target;
+        var file = inputEl.files[0];
+        if (!file) return;
+        var boxRingkasan = document.getElementById('importSummaryKoku');
+
+        bacaFileExcelPertama(file, function (err, rows) {
+          inputEl.value = ''; // supaya file yang sama bisa dipilih ulang & tidak dianggap "perubahan belum disimpan"
+          if (err) {
+            boxRingkasan.innerHTML = '<div class="import-summary"><strong>Import gagal:</strong> ' + escapeHtml(err.message || 'file Excel tidak valid') + '</div>';
+            return;
+          }
+
+          var cocokkan = bangunPencocokSiswaExcel(siswaList);
+          var dilewati = 0, kosong = 0;
+          var pesan = [];
+          var sudahDiisi = {};
+
+          rows.forEach(function (row, i) {
+            var noBaris = i + 2; // baris 1 = header
+            var nis = ambilKolomExcel(row, 'NIS');
+            var nama = ambilKolomExcel(row, 'Nama');
+            if (!teksExcel(nis) && !teksExcel(nama)) return; // baris kosong, abaikan
+
+            var hasil = cocokkan(nis, nama);
+            if (!hasil.siswa) { dilewati++; pesan.push('Baris ' + noBaris + ': dilewati (' + hasil.alasan + ').'); return; }
+            var siswa = hasil.siswa;
+
+            var vDeskripsi = teksExcel(ambilKolomExcel(row, 'Deskripsi'));
+            if (!vDeskripsi) { kosong++; return; }
+
+            if (sudahDiisi[siswa.id]) pesan.push('Baris ' + noBaris + ' (' + siswa.nama + '): siswa ini muncul lebih dari sekali di file — dipakai isian baris terakhir.');
+            sudahDiisi[siswa.id] = true;
+
+            var ta = content.querySelector('tr[data-siswa="' + siswa.id + '"] .koku-deskripsi');
+            if (ta) ta.value = vDeskripsi;
+          });
+
+          boxRingkasan.innerHTML =
+            '<div class="import-summary"><strong>Hasil import:</strong> ' + Object.keys(sudahDiisi).length + ' siswa dimuat ke form, ' +
+            dilewati + ' baris dilewati' + (kosong ? ', ' + kosong + ' baris tanpa Deskripsi (tidak mengubah apa-apa)' : '') + '. ' +
+            'Data BELUM tersimpan — periksa dulu, lalu klik "Simpan Semua Nilai".' +
+            (pesan.length ? '\n\n' + escapeHtml(ringkasPesanImport(pesan)) : '') + '</div>';
+        });
+      });
 
       document.getElementById('btnSimpanKoku').addEventListener('click', async function () {
         var btn = this;
