@@ -5069,8 +5069,20 @@
         // di style.css yang berlaku — jangan suntikkan apa-apa.
         if (!tinggiMaxPx) return;
 
+        // PENYANGGA 4mm: sama seperti pada ".rapor-cetak--identitas" di
+        // style.css (lihat komentar di sana). Tanpa penyangga ini,
+        // min-height page1/page2 pas PERSIS 1 halaman kertas, dan
+        // pembulatan mm->px sekecil apapun bisa membuat kotak "tumpah"
+        // secuil ke halaman berikutnya — lalu nomor halaman (elemen
+        // position:absolute; bottom:0 di dalamnya) ikut menempel ke
+        // dasar potongan TERAKHIR itu, yaitu di halaman baru yang nyaris
+        // kosong, bukan di dasar halaman yang benar. Bug ini yang
+        // membuat nomor halaman "lompat" ke halaman berikutnya dan
+        // memunculkan 1 halaman tambahan yang nyaris kosong tiap kali
+        // page1 (tabel Nilai) muat pas 1 halaman.
+        var PENYANGGA_MM = 4;
         var tinggiIdentitasMm = tinggiMaxPx / PX_PER_MM;
-        var tinggiHalamanPertamaMm = 297 - TOP_MARGIN_MM - BOTTOM_MARGIN_MM - tinggiIdentitasMm - GAP_MM;
+        var tinggiHalamanPertamaMm = 297 - TOP_MARGIN_MM - BOTTOM_MARGIN_MM - tinggiIdentitasMm - GAP_MM - PENYANGGA_MM;
 
         var styleEl = document.getElementById('cetakIdentitasDinamis');
         if (!styleEl) {

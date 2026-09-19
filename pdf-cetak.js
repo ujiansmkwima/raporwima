@@ -211,8 +211,23 @@
         await tunggu(60); // beri waktu layout/gambar
 
         var frame = kartu.querySelector('.rapor-cetak__print-frame');
-        var headerEl = frame ? frame.querySelector('thead .rapor-cetak__biodata') : null;
-        var bodyEl = frame ? frame.querySelector('tbody > tr > td') : kartu;
+        var headerEl = frame ? frame.querySelector(':scope > thead .rapor-cetak__biodata') : null;
+        // PENTING: ":scope >" di sini WAJIB, bukan hiasan. Tanpa ":scope",
+        // "tbody > tr > td" dicari ke SELURUH keturunan frame, dan tabel
+        // Nilai (.rapor-cetak__nilai) di dalam page1 JUGA punya struktur
+        // <tbody><tr><td> — begitu juga tabel Identitas Siswa
+        // (.rapor-cetak__biodata) di dalam <thead>. querySelector cuma
+        // mengembalikan match PERTAMA dalam urutan dokumen, yaitu sel
+        // <td> label "Nama" di tabel Identitas (karena <thead> mendahului
+        // <tbody> milik print-frame sendiri) — bukan <td> pembungkus
+        // seluruh isi rapor yang dimaksud. Akibatnya bodyEl jadi sel
+        // sekecil label "Nama" itu sendiri, lalu di-stretch penuh selebar
+        // halaman PDF (mmPerPx dihitung dari lebar sel itu) — inilah
+        // yang membuat hasil "Unduh PDF" hancur/rusak (cuma tulisan
+        // "Nama" raksasa 1 halaman). ":scope >" membatasi pencarian ke
+        // ANAK LANGSUNG frame saja, jadi selalu kena <tbody> milik
+        // print-frame sendiri.
+        var bodyEl = frame ? frame.querySelector(':scope > tbody > tr > td') : kartu;
         if (!bodyEl) bodyEl = kartu;
 
         var opsi = { scale: SKALA, backgroundColor: '#ffffff', useCORS: true, logging: false };
