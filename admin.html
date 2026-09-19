@@ -10,6 +10,7 @@
 <script src="https://unpkg.com/lucide@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="unsaved-guard.js?v=1"></script>
 <script src="supabase-client.js"></script>
 </head>
 <body>
@@ -44,7 +45,6 @@
 
     <div class="sidebar__footer">
       <div style="margin-bottom:8px; opacity:0.8;">SMK Widya Mandala Tambak · Banyumas</div>
-      <a href="#" id="logoutBtn"><i data-lucide="log-out" style="width:13px;height:13px;"></i> Keluar</a>
       <div style="margin-top:8px;font-size:10px;opacity:0.45;">developed by hhh</div>
     </div>
   </aside>
@@ -56,9 +56,10 @@
         <div class="topbar__meta" id="topbarMeta">Memuat tahun ajaran aktif...</div>
       </div>
       <div class="user-chip">
-        <div>
-          <div class="user-chip__name" style="text-align:right;" id="userName">Memuat...</div>
+        <div class="user-chip__text">
+          <div class="user-chip__name" id="userName">Memuat...</div>
           <div class="user-chip__role">Admin</div>
+          <a href="#" id="logoutBtn" class="user-chip__logout"><i data-lucide="log-out" style="width:13px;height:13px;"></i> Keluar</a>
         </div>
         <div class="user-chip__avatar" id="userAvatar">•</div>
       </div>
@@ -1421,7 +1422,7 @@
 
     var tingkatTabsHtml = tingkatTersedia.map(function (t) {
       var aktif = t === mtTingkatAktif;
-      return '<button type="button" class="btn-small' + (aktif ? ' btn-small--primary' : '') + '" data-tingkat="' + t + '">Tingkat ' + t + '</button>';
+      return '<button type="button" class="btn-small' + (aktif ? ' btn-small--primary' : '') + '" data-tingkat="' + t + '" data-guard-nav="#content">Tingkat ' + t + '</button>';
     }).join(' ');
 
     content.insertAdjacentHTML('beforeend',
@@ -1529,6 +1530,8 @@
       var inputs = document.querySelectorAll('.mtUrutanInput');
       if (!ids.length) {
         inputs.forEach(function (inp) { inp.value = ''; });
+        // Ini memuat data ke field, bukan suntingan pengguna.
+        if (window.UnsavedGuard) UnsavedGuard.markSaved('.mtUrutanInput');
         renderMtPreview([]);
         return;
       }
@@ -1552,6 +1555,8 @@
           inp.value = '';
         }
       });
+      // Ini memuat data tersimpan ke field, bukan suntingan pengguna.
+      if (window.UnsavedGuard) UnsavedGuard.markSaved('.mtUrutanInput');
       renderMtPreview(rows);
     }
 
@@ -3736,7 +3741,7 @@
       '<hr class="panel-divider">' +
       '<div class="add-form">' +
       '<div class="field"><label>Atau centang manual per kelas</label><select id="pesKelas"><option value="">— Pilih Kelas —</option>' + opsi(kelasList) + '</select></div>' +
-      '<button type="button" class="btn-small" id="btnTampilkanPeserta">Tampilkan Siswa</button>' +
+      '<button type="button" class="btn-small" id="btnTampilkanPeserta" data-guard-nav="#pesertaArea">Tampilkan Siswa</button>' +
       '</div>' +
       '<div id="pesertaArea"></div>' +
       '</div>' +
@@ -4324,7 +4329,7 @@
       '<div class="add-form">' +
       '<div class="field"><label>Guru Pembimbing</label><select id="pklGuru">' + opsi(guruList) + '</select></div>' +
       '<div class="field"><label>Kelas</label><select id="pklKelas"><option value="">— Pilih Kelas —</option>' + opsi(kelasList) + '</select></div>' +
-      '<button type="button" class="btn-small" id="btnTampilkanPkl">Tampilkan Siswa</button>' +
+      '<button type="button" class="btn-small" id="btnTampilkanPkl" data-guard-nav="#pklPembimbingArea">Tampilkan Siswa</button>' +
       '</div>' +
       '<div id="pklPembimbingArea"></div>' +
       '</div>' +
@@ -4336,7 +4341,7 @@
       '<div class="add-form">' +
       '<div class="field"><label>Guru Penguji</label><select id="pklGuruPenguji">' + opsi(guruList) + '</select></div>' +
       '<div class="field"><label>Kelas</label><select id="pklKelasPenguji"><option value="">— Pilih Kelas —</option>' + opsi(kelasList) + '</select></div>' +
-      '<button type="button" class="btn-small" id="btnTampilkanPklPenguji">Tampilkan Siswa</button>' +
+      '<button type="button" class="btn-small" id="btnTampilkanPklPenguji" data-guard-nav="#pklPengujiArea">Tampilkan Siswa</button>' +
       '</div>' +
       '<div id="pklPengujiArea"></div>' +
       '</div>' +

@@ -10,6 +10,7 @@
 <script src="https://unpkg.com/lucide@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="unsaved-guard.js?v=1"></script>
 <script src="supabase-client.js"></script>
 </head>
 <body>
@@ -31,12 +32,11 @@
       <a href="#" class="menu-item" id="menuDashboardGuru"><i data-lucide="layout-dashboard" class="menu-icon"></i><span class="menu-item__title">Dashboard Saya</span></a>
     </nav>
 
-    <div class="sidebar__section-label">Tujuan Pembelajaran</div>
-    <nav class="menu-list" id="menuTujuan">
+    <div class="sidebar__section-label">Intrakurikuler</div>
+    <nav class="menu-list" id="menuTujuan" style="margin-bottom:0;">
       <div class="menu-empty">Memuat penugasan...</div>
     </nav>
 
-    <div class="sidebar__section-label">Input Nilai</div>
     <nav class="menu-list" id="menuMengajar">
       <div class="menu-empty">Memuat penugasan...</div>
     </nav>
@@ -47,7 +47,7 @@
     <div class="sidebar__section-label" id="labelKokurikuler" style="display:none;">Kokurikuler</div>
     <nav class="menu-list" id="menuKokurikuler"></nav>
 
-    <div class="sidebar__section-label" id="labelPkl" style="display:none;">PKL</div>
+    <div class="sidebar__section-label" id="labelPkl" style="display:none;">Praktik Kerja Lapangan</div>
     <nav class="menu-list" id="menuPkl"></nav>
 
     <div class="sidebar__section-label" id="labelWaliKelas" style="display:none;">Wali Kelas</div>
@@ -59,7 +59,6 @@
 
     <div class="sidebar__footer">
       <div style="margin-bottom:8px; opacity:0.8;">SMK Widya Mandala Tambak · Banyumas</div>
-      <a href="index.html" id="logoutBtn"><i data-lucide="log-out" style="width:13px;height:13px;"></i> Keluar</a>
       <div style="margin-top:8px;font-size:10px;opacity:0.45;">developed by hhh</div>
     </div>
   </aside>
@@ -71,9 +70,10 @@
         <div class="topbar__meta" id="topbarMeta">Memuat tahun ajaran aktif...</div>
       </div>
       <div class="user-chip">
-        <div>
-          <div class="user-chip__name" style="text-align:right;" id="userName">Memuat...</div>
+        <div class="user-chip__text">
+          <div class="user-chip__name" id="userName">Memuat...</div>
           <div class="user-chip__role" id="userRoleLabel">Guru</div>
+          <a href="index.html" id="logoutBtn" class="user-chip__logout"><i data-lucide="log-out" style="width:13px;height:13px;"></i> Keluar</a>
         </div>
         <div class="user-chip__avatar" id="userAvatar">•</div>
       </div>
@@ -101,102 +101,6 @@
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
-
-  // ================= Peringatan Perubahan Belum Disimpan =================
-  // Berlaku untuk SEMUA form input guru/wali kelas: Input Nilai, Pengaturan
-  // Bobot/KKM, Presensi, Ekskul, Kokurikuler, Catatan Wali Kelas, dsb.
-  // Begitu ada perubahan NILAI (bukan cuma diketik/diklik) di area konten
-  // lalu guru pindah menu di sidebar (atau klik Keluar) SEBELUM klik tombol
-  // "Simpan...", munculkan konfirmasi.
-  (function () {
-    var content = document.getElementById('content');
-
-    // Nilai "asli" tiap field diambil dari properti bawaan browser
-    // defaultValue/defaultChecked/defaultSelected — ini otomatis terisi
-    // sesuai atribut value/checked/selected di markup HTML saat field itu
-    // pertama kali dirender, dan TIDAK ikut berubah walau guru mengetik
-    // atau memilih opsi lain. Dengan membandingkan nilai SEKARANG terhadap
-    // nilai asli ini (bukan sekadar "pernah ada event input/change"),
-    // mengetik lalu menghapus lagi sampai kembali ke isi semula TIDAK
-    // dianggap sebagai perubahan yang perlu diperingatkan.
-    function nilaiAsalSelect(el) {
-      for (var i = 0; i < el.options.length; i++) {
-        if (el.options[i].defaultSelected) return el.options[i].value;
-      }
-      // Kalau tidak ada satu pun <option> yang ditandai "selected" di
-      // markup, browser otomatis memilih opsi pertama sebagai bawaan.
-      return el.options.length ? el.options[0].value : '';
-    }
-
-    function fieldBerubah(el) {
-      if (el.tagName === 'SELECT') return el.value !== nilaiAsalSelect(el);
-      if (el.type === 'checkbox' || el.type === 'radio') return el.checked !== el.defaultChecked;
-      return el.value !== el.defaultValue;
-    }
-
-    // Cek langsung ke semua field yang sedang tampil di halaman: ada yang
-    // nilainya berbeda dari nilai asalnya atau tidak. Dihitung ulang setiap
-    // kali dibutuhkan (bukan disimpan sebagai status terpisah), supaya
-    // selalu mencerminkan kondisi form yang sebenarnya saat itu.
-    function adaPerubahanBelumSimpan() {
-      var fields = content.querySelectorAll('input, textarea, select');
-      for (var i = 0; i < fields.length; i++) {
-        if (fieldBerubah(fields[i])) return true;
-      }
-      return false;
-    }
-
-    // Begitu nilai berhasil disimpan, nilai yang baru saja disimpan itu
-    // dijadikan "nilai asal" yang baru — supaya field yang tidak diubah
-    // lagi setelahnya tidak dianggap sebagai perubahan baru.
-    function tetapkanNilaiSaatIniSebagaiAsal() {
-      var fields = content.querySelectorAll('input, textarea, select');
-      fields.forEach(function (el) {
-        if (el.tagName === 'SELECT') {
-          Array.prototype.forEach.call(el.options, function (o) { o.defaultSelected = (o.value === el.value); });
-        } else if (el.type === 'checkbox' || el.type === 'radio') {
-          el.defaultChecked = el.checked;
-        } else {
-          el.defaultValue = el.value;
-        }
-      });
-    }
-
-    // Semua tombol simpan di aplikasi ini id-nya diawali "btnSimpan"
-    // (btnSimpanNilai, btnSimpanPengaturan, btnSimpanPresensi,
-    // btnSimpanEkskul, btnSimpanKoku, btnSimpanCatatanWali). Begitu
-    // diklik, beri jeda sebentar untuk proses simpan ke server, lalu
-    // tetapkan nilai saat ini sebagai nilai asal yang baru.
-    content.addEventListener('click', function (e) {
-      var tombolSimpan = e.target.closest('[id^="btnSimpan"]');
-      if (tombolSimpan) setTimeout(tetapkanNilaiSaatIniSebagaiAsal, 500);
-    });
-
-    // Cegat klik pindah menu di sidebar (dan tombol Keluar) di fase
-    // "capture", supaya jalan LEBIH DULU sebelum handler klik menu yang
-    // asli — kalau guru batal, handler asli tidak akan pernah terpanggil.
-    document.querySelector('.sidebar').addEventListener('click', function (e) {
-      if (!adaPerubahanBelumSimpan()) return;
-      var el = e.target.closest('.menu-item, #logoutBtn');
-      if (!el) return;
-      var tetapPindah = confirm(
-        'Ada isian yang belum disimpan (nilai atau data lain di halaman ini).\n\n' +
-        'Kalau pindah menu sekarang, perubahan tersebut akan HILANG.\n\n' +
-        'Klik "OK" untuk tetap pindah menu TANPA menyimpan, atau "Batal" untuk kembali dan klik tombol Simpan terlebih dulu.'
-      );
-      if (!tetapPindah) {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-      }
-    }, true);
-
-    // Jaga-jaga juga saat tab ditutup/direfresh/pindah halaman lain.
-    window.addEventListener('beforeunload', function (e) {
-      if (!adaPerubahanBelumSimpan()) return;
-      e.preventDefault();
-      e.returnValue = '';
-    });
-  })();
 
   // ---------- Penyesuaian nama mapel Pendidikan Agama sesuai agama siswa ----------
   // Nama mapel di tabel mata_pelajaran tetap SATU baris generik
@@ -365,12 +269,12 @@
       var itemMengajar = document.createElement('a');
       itemMengajar.href = '#';
       itemMengajar.className = 'menu-item';
-      itemMengajar.innerHTML = '<i data-lucide="book-open" class="menu-icon"></i><span class="menu-item__title">Input Nilai</span>';
+      itemMengajar.innerHTML = '<i data-lucide="book-open" class="menu-icon"></i><span class="menu-item__title">Input Nilai Mapel</span>';
       itemMengajar.addEventListener('click', function (e) {
         e.preventDefault();
         setActiveMenuItem(itemMengajar);
         renderPilihMapelKelas({
-          title: 'Input Nilai',
+          title: 'Input Nilai Mapel',
           desc: 'Pilih mapel, lalu pilih kelas, untuk mengisi nilai tiap TP, Tengah Semester, dan Akhir Semester.',
           list: penugasan,
           onPilih: renderInputNilai
@@ -382,7 +286,7 @@
       var itemTujuan = document.createElement('a');
       itemTujuan.href = '#';
       itemTujuan.className = 'menu-item';
-      itemTujuan.innerHTML = '<i data-lucide="target" class="menu-icon"></i><span class="menu-item__title">Buat Tujuan Pembelajaran</span>';
+      itemTujuan.innerHTML = '<i data-lucide="target" class="menu-icon"></i><span class="menu-item__title">Tujuan Pembelajaran</span>';
       itemTujuan.addEventListener('click', function (e) {
         e.preventDefault();
         setActiveMenuItem(itemTujuan);
@@ -424,17 +328,6 @@
       });
       menuWali.appendChild(itemRekap);
 
-      var itemLeger = document.createElement('a');
-      itemLeger.href = '#';
-      itemLeger.className = 'menu-item';
-      itemLeger.innerHTML = '<i data-lucide="layers" class="menu-icon"></i><span class="menu-item__title">Rekap Leger (6 Semester)</span><span class="menu-item__sub">' + waliKelas.kelas.nama + '</span>';
-      itemLeger.addEventListener('click', function (e) {
-        e.preventDefault();
-        setActiveMenuItem(itemLeger);
-        renderLegerWaliKelas(waliKelas);
-      });
-      menuWali.appendChild(itemLeger);
-
       var itemPresensi = document.createElement('a');
       itemPresensi.href = '#';
       itemPresensi.className = 'menu-item';
@@ -445,6 +338,17 @@
         renderPresensi(waliKelas);
       });
       menuWali.appendChild(itemPresensi);
+
+      var itemLeger = document.createElement('a');
+      itemLeger.href = '#';
+      itemLeger.className = 'menu-item';
+      itemLeger.innerHTML = '<i data-lucide="layers" class="menu-icon"></i><span class="menu-item__title">Rekap Leger (6 Semester)</span><span class="menu-item__sub">' + waliKelas.kelas.nama + '</span>';
+      itemLeger.addEventListener('click', function (e) {
+        e.preventDefault();
+        setActiveMenuItem(itemLeger);
+        renderLegerWaliKelas(waliKelas);
+      });
+      menuWali.appendChild(itemLeger);
 
       // Catatan Wali Kelas — narasi bebas per siswa (tampil di kotak
       // "Catatan Wali Kelas" pada Cetak Rapor). Menu terpisah supaya
@@ -616,7 +520,7 @@
       var itemPkl = document.createElement('a');
       itemPkl.href = '#';
       itemPkl.className = 'menu-item';
-      itemPkl.innerHTML = '<i data-lucide="briefcase-business" class="menu-icon"></i><span class="menu-item__title">Nilai PKL</span>';
+      itemPkl.innerHTML = '<i data-lucide="briefcase-business" class="menu-icon"></i><span class="menu-item__title">Input Pembimbing</span>';
       itemPkl.addEventListener('click', function (e) {
         e.preventDefault();
         setActiveMenuItem(itemPkl);
@@ -643,7 +547,7 @@
       var itemPklPenguji = document.createElement('a');
       itemPklPenguji.href = '#';
       itemPklPenguji.className = 'menu-item';
-      itemPklPenguji.innerHTML = '<i data-lucide="clipboard-check" class="menu-icon"></i><span class="menu-item__title">Nilai PKL (Penguji)</span>';
+      itemPklPenguji.innerHTML = '<i data-lucide="clipboard-check" class="menu-icon"></i><span class="menu-item__title">Input Penguji</span>';
       itemPklPenguji.addEventListener('click', function (e) {
         e.preventDefault();
         setActiveMenuItem(itemPklPenguji);
@@ -882,7 +786,7 @@
         sectionTpBankHtml = taskSectionHtml({
           icon: 'target',
           title: 'Buat Tujuan Pembelajaran (TP)',
-          desc: 'Susun bank Tujuan Pembelajaran untuk tiap mapel yang kamu ampu. TP inilah yang jadi kolom nilai di menu Input Nilai, jadi harus dibuat & diaktifkan lebih dulu.',
+          desc: 'Susun bank Tujuan Pembelajaran untuk tiap mapel yang kamu ampu. TP inilah yang jadi kolom nilai di menu Input Nilai Mapel, jadi harus dibuat & diaktifkan lebih dulu.',
           bodyHtml: '<div class="table-wrap"><table class="data-table"><thead><tr><th>Mapel</th><th>Status TP</th><th></th></tr></thead>' +
             '<tbody>' + rowsTpBankHtml + '</tbody></table></div>'
         });
@@ -1511,7 +1415,7 @@
           }).join('<br>') + '</div>'
         : '<div class="panel-note" style="color:var(--danger);">Belum ada Tujuan Pembelajaran berstatus <strong>Aktif</strong> untuk Semester ' +
           (semesterKe || '—') + ' di mapel ini, jadi kolom nilai TP belum muncul dan Capaian Pembelajaran belum bisa disusun otomatis. ' +
-          'Susun/aktifkan dulu TP-nya di menu "Buat Tujuan Pembelajaran".</div>';
+          'Susun/aktifkan dulu TP-nya di menu "Tujuan Pembelajaran".</div>';
 
       var petunjukHtml =
         '<div class="panel-note">' +
@@ -1539,13 +1443,13 @@
         (isPAI ? ' Nama mapel di rapor otomatis menyesuaikan agama tiap siswa.' : '') +
         (p.mapel.agama_spesifik ? ' Daftar di bawah hanya menampilkan siswa beragama <strong>' + escapeHtml(p.mapel.agama_spesifik) + '</strong> (' + siswaList.length + ' dari ' + siswaListSemua.length + ' siswa kelas ' + escapeHtml(p.kelas.nama) + ') — siswa agama lain punya mapel agama sendiri.' : '') +
         '</div></div>' +
-        '<button class="btn-small btn-small--primary" id="btnSimpanNilai">Simpan Semua Nilai</button></div>' +
+        '<button class="btn-small btn-small--primary" id="btnSimpanNilai" data-guard-scope=".nilai-input, .capaian-input">Simpan Semua Nilai</button></div>' +
 
         bannerMigrasi +
 
         '<div class="panel-head" style="margin-top:8px;"><div><div class="panel-head__title">Pembobotan &amp; Capaian</div>' +
         '<div class="panel-head__desc">Pengaturan ini berlaku untuk mapel ' + escapeHtml(p.mapel.nama) + ' di kelas ' + escapeHtml(p.kelas.nama) + '.</div></div>' +
-        '<button class="btn-small" id="btnSimpanPengaturan">Simpan Pengaturan</button></div>' +
+        '<button class="btn-small" id="btnSimpanPengaturan" data-guard-scope="#cfgBobotTp, #cfgBobotPts, #cfgBobotPas, #cfgKkm, #cfgMode">Simpan Pengaturan</button></div>' +
         '<div class="add-form">' +
         '<div class="field"><label>Bobot Nilai TP</label><input type="number" min="0" step="0.1" id="cfgBobotTp" value="' + bobotAwal.tp + '"></div>' +
         '<div class="field"><label>Bobot Tengah Semester</label><input type="number" min="0" step="0.1" id="cfgBobotPts" value="' + bobotAwal.pts + '"></div>' +
@@ -3253,17 +3157,17 @@
         var body = document.getElementById('pklStepBody');
         var KOLOM = ['No', 'NIS', 'Nama', 'Nama DUDI / Tempat PKL', 'Nama Instruktur (DUDI)', 'Alamat DUDI', 'Tanggal Mulai (YYYY-MM-DD)', 'Tanggal Selesai (YYYY-MM-DD)'];
 
-        function kartu(b) {
-          return '<div class="pkl-card" id="pklIdCard-' + b.siswa_id + '">' +
-            '<div class="panel-head"><div><div class="panel-head__title">' + escapeHtml(b.siswa.nama) + '</div>' +
-            '<div class="panel-head__desc">NIS ' + escapeHtml(b.siswa.nis || '—') + ' · NISN ' + escapeHtml(b.siswa.nisn || '—') + ' · ' + escapeHtml(b.kelas.nama) + '</div></div></div>' +
-            '<div class="add-form" style="flex-wrap:wrap;">' +
-            '<div class="field"><label>Nama DUDI / Tempat PKL</label><input type="text" class="pklid-nama" data-siswa="' + b.siswa_id + '" value="' + escapeHtml(b.nama_dudi || '') + '"></div>' +
-            '<div class="field"><label>Nama Instruktur (DUDI)</label><input type="text" class="pklid-pembimbing" data-siswa="' + b.siswa_id + '" value="' + escapeHtml(b.nama_pembimbing_dudi || '') + '"></div>' +
-            '<div class="field" style="flex:1 1 100%;"><label>Alamat DUDI</label><input type="text" class="pklid-alamat" data-siswa="' + b.siswa_id + '" value="' + escapeHtml(b.alamat_dudi || '') + '"></div>' +
-            '<div class="field"><label>Waktu PKL — Tanggal Mulai</label><input type="date" class="pklid-mulai" data-siswa="' + b.siswa_id + '" value="' + (b.tanggal_mulai || '') + '"></div>' +
-            '<div class="field"><label>Waktu PKL — Tanggal Selesai</label><input type="date" class="pklid-selesai" data-siswa="' + b.siswa_id + '" value="' + (b.tanggal_selesai || '') + '"></div>' +
-            '</div></div>';
+        function barisTampil(b, i) {
+          return '<tr id="pklIdCard-' + b.siswa_id + '">' +
+            '<td class="tc-center">' + (i + 1) + '</td>' +
+            '<td>' + escapeHtml(b.siswa.nis || '—') + '</td>' +
+            '<td>' + escapeHtml(b.siswa.nama) + '<div style="font-size:11px;color:#888;">NISN ' + escapeHtml(b.siswa.nisn || '—') + ' · ' + escapeHtml(b.kelas.nama) + '</div></td>' +
+            '<td><input type="text" class="pklid-nama" data-siswa="' + b.siswa_id + '" value="' + escapeHtml(b.nama_dudi || '') + '" style="min-width:170px;"></td>' +
+            '<td><input type="text" class="pklid-pembimbing" data-siswa="' + b.siswa_id + '" value="' + escapeHtml(b.nama_pembimbing_dudi || '') + '" style="min-width:150px;"></td>' +
+            '<td><input type="text" class="pklid-alamat" data-siswa="' + b.siswa_id + '" value="' + escapeHtml(b.alamat_dudi || '') + '" style="min-width:200px;"></td>' +
+            '<td><input type="date" class="pklid-mulai" data-siswa="' + b.siswa_id + '" value="' + (b.tanggal_mulai || '') + '"></td>' +
+            '<td><input type="date" class="pklid-selesai" data-siswa="' + b.siswa_id + '" value="' + (b.tanggal_selesai || '') + '"></td>' +
+            '</tr>';
         }
 
         body.innerHTML =
@@ -3275,7 +3179,9 @@
           '<button class="btn-small btn-small--primary" id="btnSimpanPklId" style="margin-left:auto;">Simpan Identitas</button>' +
           '</div>' +
           '<div id="importSummaryPklId"></div><div id="pklIdMsg"></div>' +
-          binaanList.map(kartu).join('');
+          '<div class="table-wrap"><table class="data-table"><thead><tr>' +
+          '<th>No</th><th>NIS</th><th>Nama</th><th>Nama DUDI / Tempat PKL</th><th>Nama Instruktur (DUDI)</th><th>Alamat DUDI</th><th>Tgl Mulai</th><th>Tgl Selesai</th>' +
+          '</tr></thead><tbody>' + binaanList.map(barisTampil).join('') + '</tbody></table></div>';
         lucide.createIcons();
 
         function baris(b) {
@@ -3381,32 +3287,46 @@
           return '<textarea class="pkl-deskripsi-tp" data-siswa="' + b.siswa_id + '" data-tp="' + n + '" rows="2" placeholder="Deskripsi TP ' + n + ' (otomatis dari rubrik, tampil di format cetak)">' + escapeHtml(val) + '</textarea>';
         }
 
-        function kartu(b) {
+        function tpGroupCells(b, du, pg) {
+          return [1, 2, 3, 4].map(function (n) {
+            return '<td class="tc-center">' + inputTp(b.siswa_id, n, du['tp' + n]) + '</td>' +
+              '<td class="tc-center">' + fmtN(pg['tp' + n]) + '</td>' +
+              '<td class="tc-center"><strong id="pklRata-' + b.siswa_id + '-' + n + '">' + fmtN(rataTaPkl(du['tp' + n], pg['tp' + n])) + '</strong></td>';
+          }).join('');
+        }
+
+        function barisNilai(b, i) {
           var pasangan = nilaiMap[b.siswa_id] || {};
           var du = pasangan.dudi || {};
           var pg = pasangan.penguji || {};
           var namaPenguji = pengujiGuruMap[b.siswa_id];
-          return '<div class="pkl-card" id="pklNdCard-' + b.siswa_id + '">' +
-            '<div class="panel-head"><div><div class="panel-head__title">' + escapeHtml(b.siswa.nama) + '</div>' +
-            '<div class="panel-head__desc">NIS ' + escapeHtml(b.siswa.nis || '—') + ' · ' + escapeHtml(b.kelas.nama) + (namaPenguji ? ' · Penguji: ' + escapeHtml(namaPenguji) : ' · Penguji: belum ditunjuk Admin') + '</div></div></div>' +
-            '<div class="table-wrap"><table class="data-table"><thead><tr><th style="width:16%;">Tujuan Pembelajaran</th><th class="tc-center">Nilai DUDI</th><th class="tc-center">Nilai Penguji</th><th class="tc-center">Rata-rata</th><th>Deskripsi (otomatis dari rubrik, untuk format cetak)</th></tr></thead><tbody>' +
-            [1, 2, 3, 4].map(function (n) {
-              return '<tr><td>TP ' + n + '</td>' +
-                '<td class="tc-center">' + inputTp(b.siswa_id, n, du['tp' + n]) + '</td>' +
-                '<td class="tc-center">' + fmtN(pg['tp' + n]) + '</td>' +
-                '<td class="tc-center"><strong id="pklRata-' + b.siswa_id + '-' + n + '">' + fmtN(rataTaPkl(du['tp' + n], pg['tp' + n])) + '</strong></td>' +
-                '<td>' + deskripsiTp(b, n) + '</td></tr>';
-            }).join('') +
-            '<tr><td><strong>Nilai Akhir</strong></td>' +
+          return '<tr id="pklNdCard-' + b.siswa_id + '">' +
+            '<td class="tc-center">' + (i + 1) + '</td>' +
+            '<td>' + escapeHtml(b.siswa.nama) + '<div style="font-size:11px;color:#888;">' + escapeHtml(b.siswa.nis || '—') + ' · ' + escapeHtml(b.kelas.nama) + '<br>' + (namaPenguji ? 'Penguji: ' + escapeHtml(namaPenguji) : 'Penguji: belum ditunjuk') + '</div></td>' +
+            tpGroupCells(b, du, pg) +
             '<td class="tc-center"><strong id="pklAkhirDu-' + b.siswa_id + '">' + fmtN(du.nilai_akhir) + '</strong></td>' +
-            '<td class="tc-center"><strong id="pklAkhirPg-' + b.siswa_id + '">' + fmtN(pg.nilai_akhir) + '</strong></td><td></td><td></td></tr>' +
-            '</tbody></table></div>' +
-            '<div class="panel-note">Nilai Penguji diisi guru Penguji PKL yang ditunjuk Admin (baca saja di sini). Kolom "Rata-rata" &amp; Deskripsi tiap TP dihitung dari rata-rata Nilai DUDI &amp; Nilai Penguji TP tsb, lalu dicocokkan ke rubrik. Nilai Akhir PKL (rata-rata DUDI &amp; Penguji): <strong id="pklAkhirTotal-' + b.siswa_id + '">' + fmtN(rataTaPkl(du.nilai_akhir, pg.nilai_akhir)) + '</strong> — nilai ini tidak muncul di Cetak Rapor biasa.</div>' +
-            '</div>';
+            '<td class="tc-center"><strong id="pklAkhirPg-' + b.siswa_id + '">' + fmtN(pg.nilai_akhir) + '</strong></td>' +
+            '<td class="tc-center"><strong id="pklAkhirTotal-' + b.siswa_id + '">' + fmtN(rataTaPkl(du.nilai_akhir, pg.nilai_akhir)) + '</strong></td>' +
+            '</tr>';
         }
 
+        function barisDeskripsi(b, i) {
+          return '<tr>' +
+            '<td class="tc-center">' + (i + 1) + '</td>' +
+            '<td>' + escapeHtml(b.siswa.nama) + '</td>' +
+            [1, 2, 3, 4].map(function (n) { return '<td>' + deskripsiTp(b, n) + '</td>'; }).join('') +
+            '</tr>';
+        }
+
+        var tpHeadGroups = [1, 2, 3, 4].map(function (n) {
+          return '<th colspan="3">TP ' + n + '</th>';
+        }).join('');
+        var tpSubHeads = [1, 2, 3, 4].map(function () {
+          return '<th class="tc-center">DUDI</th><th class="tc-center">Penguji</th><th class="tc-center">Rata-rata</th>';
+        }).join('');
+
         body.innerHTML =
-          '<div class="panel-note" style="margin-top:0;margin-bottom:14px;">Isi Nilai DUDI (TP 1-4) tiap siswa binaan Anda. Deskripsi tiap TP otomatis disusun dari rata-rata Nilai DUDI &amp; Nilai Penguji berdasarkan rubrik penilaian PKL — boleh disunting manual (teks yang sudah disunting manual tidak akan tertimpa otomatis, kecuali Anda klik "Susun Ulang Deskripsi").</div>' +
+          '<div class="panel-note" style="margin-top:0;margin-bottom:14px;">Isi Nilai DUDI (TP 1-4) tiap siswa binaan Anda. Nilai Penguji &amp; Rata-rata ditampilkan baca saja (diisi guru Penguji PKL). Deskripsi tiap TP otomatis disusun dari rata-rata Nilai DUDI &amp; Nilai Penguji berdasarkan rubrik penilaian PKL — boleh disunting manual (teks yang sudah disunting manual tidak akan tertimpa otomatis, kecuali Anda klik "Susun Ulang Deskripsi").</div>' +
           '<div class="toolbar">' +
           '<button class="btn-small" id="btnTemplatePklNd">⬇ Unduh Template Excel</button>' +
           '<button class="btn-small" id="btnImportPklNd">⬆ Import dari Excel</button>' +
@@ -3415,7 +3335,13 @@
           '<button class="btn-small btn-small--primary" id="btnSimpanPklNd" style="margin-left:auto;">Simpan Nilai DUDI</button>' +
           '</div>' +
           '<div id="importSummaryPklNd"></div><div id="pklNdMsg"></div>' +
-          binaanList.map(kartu).join('');
+          '<div class="table-wrap"><table class="data-table"><thead>' +
+          '<tr><th rowspan="2">No</th><th rowspan="2">Nama Siswa</th>' + tpHeadGroups + '<th rowspan="2">Nilai Akhir DUDI</th><th rowspan="2">Nilai Akhir Penguji</th><th rowspan="2">Nilai Akhir Total</th></tr>' +
+          '<tr>' + tpSubHeads + '</tr>' +
+          '</thead><tbody>' + binaanList.map(barisNilai).join('') + '</tbody></table></div>' +
+          '<div class="panel-note">Deskripsi tiap TP (otomatis dari rubrik, tampil di format cetak):</div>' +
+          '<div class="table-wrap"><table class="data-table"><thead><tr><th>No</th><th>Nama Siswa</th><th>Deskripsi TP1</th><th>Deskripsi TP2</th><th>Deskripsi TP3</th><th>Deskripsi TP4</th></tr></thead><tbody>' +
+          binaanList.map(barisDeskripsi).join('') + '</tbody></table></div>';
         lucide.createIcons();
 
         function tpInputs(sId) { return body.querySelectorAll('.pkl-tp-du[data-siswa="' + sId + '"]'); }
@@ -3608,16 +3534,16 @@
         var body = document.getElementById('pklStepBody');
         var KOLOM = ['No', 'NIS', 'Nama', 'Catatan', 'Sakit (Hari)', 'Ijin (Hari)', 'Tanpa Keterangan (Hari)'];
 
-        function kartu(b) {
-          return '<div class="pkl-card" id="pklCpCard-' + b.siswa_id + '">' +
-            '<div class="panel-head"><div><div class="panel-head__title">' + escapeHtml(b.siswa.nama) + '</div>' +
-            '<div class="panel-head__desc">NIS ' + escapeHtml(b.siswa.nis || '—') + ' · ' + escapeHtml(b.kelas.nama) + '</div></div></div>' +
-            '<div class="field"><label>Catatan (tampil di format cetak)</label><textarea class="pkl-catatan" data-siswa="' + b.siswa_id + '" rows="2">' + escapeHtml(b.catatan || '') + '</textarea></div>' +
-            '<div class="add-form" style="flex-wrap:wrap;margin-top:8px;">' +
-            '<div class="field"><label>Sakit (hari)</label><input type="number" min="0" class="pkl-kehadiran" data-siswa="' + b.siswa_id + '" data-jenis="sakit" value="' + (b.sakit || 0) + '"></div>' +
-            '<div class="field"><label>Ijin (hari)</label><input type="number" min="0" class="pkl-kehadiran" data-siswa="' + b.siswa_id + '" data-jenis="ijin" value="' + (b.ijin || 0) + '"></div>' +
-            '<div class="field"><label>Tanpa Keterangan (hari)</label><input type="number" min="0" class="pkl-kehadiran" data-siswa="' + b.siswa_id + '" data-jenis="tanpa_keterangan" value="' + (b.tanpa_keterangan || 0) + '"></div>' +
-            '</div></div>';
+        function baris(b, i) {
+          return '<tr id="pklCpCard-' + b.siswa_id + '">' +
+            '<td class="tc-center">' + (i + 1) + '</td>' +
+            '<td>' + escapeHtml(b.siswa.nis || '—') + '</td>' +
+            '<td>' + escapeHtml(b.siswa.nama) + '<div style="font-size:11px;color:#888;">' + escapeHtml(b.kelas.nama) + '</div></td>' +
+            '<td><textarea class="pkl-catatan" data-siswa="' + b.siswa_id + '" rows="2" style="min-width:220px;">' + escapeHtml(b.catatan || '') + '</textarea></td>' +
+            '<td class="tc-center"><input type="number" min="0" class="pkl-kehadiran" data-siswa="' + b.siswa_id + '" data-jenis="sakit" value="' + (b.sakit || 0) + '" style="width:60px;"></td>' +
+            '<td class="tc-center"><input type="number" min="0" class="pkl-kehadiran" data-siswa="' + b.siswa_id + '" data-jenis="ijin" value="' + (b.ijin || 0) + '" style="width:60px;"></td>' +
+            '<td class="tc-center"><input type="number" min="0" class="pkl-kehadiran" data-siswa="' + b.siswa_id + '" data-jenis="tanpa_keterangan" value="' + (b.tanpa_keterangan || 0) + '" style="width:60px;"></td>' +
+            '</tr>';
         }
 
         body.innerHTML =
@@ -3629,7 +3555,9 @@
           '<button class="btn-small btn-small--primary" id="btnSimpanPklCp" style="margin-left:auto;">Simpan Catatan &amp; Presensi</button>' +
           '</div>' +
           '<div id="importSummaryPklCp"></div><div id="pklCpMsg"></div>' +
-          binaanList.map(kartu).join('');
+          '<div class="table-wrap"><table class="data-table"><thead><tr>' +
+          '<th>No</th><th>NIS</th><th>Nama</th><th>Catatan</th><th>Sakit (hari)</th><th>Ijin (hari)</th><th>Tanpa Keterangan (hari)</th>' +
+          '</tr></thead><tbody>' + binaanList.map(baris).join('') + '</tbody></table></div>';
         lucide.createIcons();
 
         function kehadiranEl(sId, jenis) { return body.querySelector('.pkl-kehadiran[data-siswa="' + sId + '"][data-jenis="' + jenis + '"]'); }
@@ -3817,7 +3745,6 @@
           var pasangan = nilaiMap[siswaId] || {};
           var du = pasangan.dudi || {};
           var pg = pasangan.penguji || {};
-          var namaPenguji = pengujiGuruMap[siswaId] || '—';
           var akhirTotal = rataTaPkl(du.nilai_akhir, pg.nilai_akhir);
 
           var profilRes = await supabaseClient.from('profil_sekolah').select('*').maybeSingle();
@@ -3838,7 +3765,7 @@
           var tanggalPklGabungan = (tglMulaiFmt || tglSelesaiFmt) ? ((tglMulaiFmt || '…........') + ' s.d. ' + (tglSelesaiFmt || '…........')) : null;
 
           return '<div class="rapor-cetak rapor-cetak--identitas" id="cetakPkl-' + siswaId + '">' +
-            '<div class="rapor-cetak__bar" style="line-height:1.6;">DAFTAR NILAI PESERTA DIDIK MATA PELAJARAN PKL<br>' + escapeHtml(NAMA_SEKOLAH) + '<br>TAHUN AJARAN ' + escapeHtml(tahunAktif.nama) + '</div>' +
+            '<div class="rapor-cetak__bar" style="line-height:1.6;">DAFTAR NILAI PESERTA DIDIK MATA PELAJARAN PKL<br>' + escapeHtml(NAMA_SEKOLAH.toUpperCase()) + '<br>TAHUN AJARAN ' + escapeHtml(tahunAktif.nama) + '</div>' +
 
             '<table class="ident-table" style="margin-top:10px;"><tbody>' +
             baris2('Nama Peserta Didik', b.siswa.nama, 'Kelas', b.kelas.nama) +
@@ -3846,7 +3773,7 @@
             baris2('Tempat PKL', b.nama_dudi, 'Konsentrasi Keahlian', b.kelas.konsentrasi_keahlian) +
             baris1('Tanggal PKL', tanggalPklGabungan) +
             baris1('Nama Instruktur', b.nama_pembimbing_dudi) +
-            baris2('Nama Pembimbing', nama, 'Nama Penguji', namaPenguji) +
+            baris1('Nama Pembimbing', nama) +
             '</tbody></table>' +
 
             '<table class="rapor-cetak__pkl"><thead><tr><th class="rc-th-pkl-tp">Tujuan Pembelajaran</th><th class="rc-th-pkl-skor tc-center">Skor</th><th>Deskripsi</th></tr></thead><tbody>' +
@@ -3871,7 +3798,6 @@
             '<div class="rapor-cetak__footer">' +
             '<div class="ident-footer-row" style="justify-content:space-between;">' +
             '<div class="ident-footer-ttd"><div>Guru Pembimbing</div><div class="rapor-cetak__ttd-space"></div><div><strong>' + escapeHtml(nama || '-') + '</strong></div></div>' +
-            '<div class="ident-footer-ttd"><div>Guru Penguji</div><div class="rapor-cetak__ttd-space"></div><div><strong>' + escapeHtml(namaPenguji || '-') + '</strong></div></div>' +
             '<div class="ident-footer-ttd"><div class="rapor-cetak__footer-date">' + escapeHtml(NAMA_KOTA_TTD) + ', ' + (TANGGAL_CETAK || '…........') + '</div><div>Kepala Sekolah</div><div class="rapor-cetak__ttd-space"></div><div><strong>' + escapeHtml(NAMA_KEPALA_SEKOLAH) + '</strong></div></div>' +
             '</div>' +
             '</div>' +
@@ -3921,7 +3847,7 @@
 
       var pengujiRes = await supabaseClient
         .from('pkl_penguji')
-        .select('id, siswa_id, kelas_id, siswa:siswa_id(id, nis, nisn, nama), kelas:kelas_id(id, nama)')
+        .select('id, siswa_id, kelas_id, siswa:siswa_id(id, nis, nisn, nama), kelas:kelas_id(id, nama, program_keahlian, konsentrasi_keahlian)')
         .eq('guru_id', user.id)
         .eq('tahun_ajaran_id', tahunAktif.id);
       var ujiList = (pengujiRes.data || []).filter(function (r) { return r.siswa && r.kelas; });
@@ -3941,7 +3867,7 @@
       // hanya sebagai referensi identitas tempat PKL siswa.
       var pembimbingRes = await supabaseClient
         .from('pkl_pembimbing')
-        .select('siswa_id, nama_dudi, tanggal_mulai, tanggal_selesai, guru:guru_id(nama)')
+        .select('siswa_id, nama_dudi, nama_pembimbing_dudi, tanggal_mulai, tanggal_selesai, catatan, sakit, ijin, tanpa_keterangan, deskripsi_tp1, deskripsi_tp2, deskripsi_tp3, deskripsi_tp4, guru:guru_id(nama)')
         .eq('tahun_ajaran_id', tahunAktif.id)
         .in('siswa_id', siswaIds);
       var pembimbingMap = {};
@@ -3978,7 +3904,7 @@
         return '<input type="number" min="0" max="100" step="0.01" class="pklu-tp-input" data-siswa="' + siswaId + '" data-tp="' + tpKe + '" value="' + v + '">';
       }
 
-      function kartuSiswaUji(r) {
+      function barisSiswaUji(r, i) {
         var pb = pembimbingMap[r.siswa_id] || {};
         var pasangan = nilaiMap[r.siswa_id] || {};
         var du = pasangan.dudi || {};
@@ -3987,25 +3913,30 @@
           if (!pb.tanggal_mulai && !pb.tanggal_selesai) return '—';
           return (pb.tanggal_mulai || '…') + ' s.d. ' + (pb.tanggal_selesai || '…');
         }
-        return '<div style="margin-bottom:16px;border:1px solid var(--border);border-radius:var(--radius);padding:16px;" id="pkluCard-' + r.siswa_id + '">' +
-          '<div class="panel-head"><div><div class="panel-head__title">' + escapeHtml(r.siswa.nama) + '</div>' +
-          '<div class="panel-head__desc">NIS ' + escapeHtml(r.siswa.nis || '—') + ' · NISN ' + escapeHtml(r.siswa.nisn || '—') + ' · ' + escapeHtml(r.kelas.nama) + '</div></div></div>' +
-
-          '<div class="panel-note">Tempat PKL: <strong>' + escapeHtml(pb.nama_dudi || '—') + '</strong> · Waktu PKL: ' + escapeHtml(fmtLama()) + ' · Guru Pembimbing: ' + escapeHtml(pb.guru ? pb.guru.nama : '—') + ' (data DUDI diisi guru pembimbing, baca saja di sini)</div>' +
-
-          '<div class="table-wrap"><table class="data-table"><thead><tr><th style="width:26%;">Tujuan Pembelajaran</th><th class="tc-center">Nilai DUDI</th><th class="tc-center">Nilai Penguji</th></tr></thead><tbody>' +
-          [1, 2, 3, 4].map(function (n) {
-            return '<tr><td>TP ' + n + '</td>' +
-              '<td class="tc-center">' + fmtN(du['tp' + n]) + '</td>' +
-              '<td class="tc-center">' + inputTpHtml(r.siswa_id, n, pg['tp' + n]) + '</td></tr>';
-          }).join('') +
-          '<tr><td><strong>Nilai Akhir</strong></td>' +
+        var tpCells = [1, 2, 3, 4].map(function (n) {
+          return '<td class="tc-center">' + fmtN(du['tp' + n]) + '</td>' +
+            '<td class="tc-center">' + inputTpHtml(r.siswa_id, n, pg['tp' + n]) + '</td>';
+        }).join('');
+        return '<tr id="pkluCard-' + r.siswa_id + '">' +
+          '<td class="tc-center">' + (i + 1) + '</td>' +
+          '<td>' + escapeHtml(r.siswa.nis || '—') + '</td>' +
+          '<td>' + escapeHtml(r.siswa.nama) + '<div style="font-size:11px;color:#888;">NISN ' + escapeHtml(r.siswa.nisn || '—') + ' · ' + escapeHtml(r.kelas.nama) + '</div></td>' +
+          '<td>' + escapeHtml(pb.nama_dudi || '—') + '</td>' +
+          '<td>' + escapeHtml(fmtLama()) + '</td>' +
+          '<td>' + escapeHtml(pb.guru ? pb.guru.nama : '—') + '</td>' +
+          tpCells +
           '<td class="tc-center"><strong>' + fmtN(du.nilai_akhir) + '</strong></td>' +
-          '<td class="tc-center"><strong id="pkluAkhir-' + r.siswa_id + '">' + fmtN(pg.nilai_akhir) + '</strong></td></tr>' +
-          '</tbody></table></div>' +
-          '<div class="panel-note">Nilai Akhir PKL (rata-rata DUDI &amp; Penguji): <strong id="pkluAkhirTotal-' + r.siswa_id + '">' + fmtN(rataTaPkl(du.nilai_akhir, pg.nilai_akhir)) + '</strong> — nilai ini tidak muncul di Cetak Rapor biasa.</div>' +
-          '</div>';
+          '<td class="tc-center"><strong id="pkluAkhir-' + r.siswa_id + '">' + fmtN(pg.nilai_akhir) + '</strong></td>' +
+          '<td class="tc-center"><strong id="pkluAkhirTotal-' + r.siswa_id + '">' + fmtN(rataTaPkl(du.nilai_akhir, pg.nilai_akhir)) + '</strong></td>' +
+          '</tr>';
       }
+
+      var pkluTpHeadGroups = [1, 2, 3, 4].map(function (n) {
+        return '<th colspan="2">TP ' + n + '</th>';
+      }).join('');
+      var pkluTpSubHeads = [1, 2, 3, 4].map(function () {
+        return '<th class="tc-center">DUDI</th><th class="tc-center">Penguji</th>';
+      }).join('');
 
       content.innerHTML =
         '<div class="panel-head"><div><div class="panel-head__title">Nilai PKL (Penguji)</div>' +
@@ -4020,8 +3951,177 @@
         '<div class="panel-note">Kolom Excel: <strong>NIS</strong>, <strong>Nama</strong>, <strong>Kelas</strong>, <strong>Tempat PKL (DUDI)</strong> (baca saja/referensi), lalu <strong>Nilai TP1-TP4 (Penguji)</strong>. Siswa dicocokkan lewat NIS dulu, kalau kosong baru lewat Nama. Import hanya mengisi form di layar — periksa dulu, lalu klik "Simpan Semua Nilai Penguji".</div>' +
         '<div id="importSummaryPklPenguji"></div>' +
         '<div id="pkluNilaiMsg"></div>' +
-        ujiList.map(kartuSiswaUji).join('');
+        '<div class="table-wrap"><table class="data-table"><thead>' +
+        '<tr><th rowspan="2">No</th><th rowspan="2">NIS</th><th rowspan="2">Nama Siswa</th><th rowspan="2">Tempat PKL</th><th rowspan="2">Waktu PKL</th><th rowspan="2">Pembimbing</th>' + pkluTpHeadGroups + '<th rowspan="2">Nilai Akhir DUDI</th><th rowspan="2">Nilai Akhir Penguji</th><th rowspan="2">Nilai Akhir Total</th></tr>' +
+        '<tr>' + pkluTpSubHeads + '</tr>' +
+        '</thead><tbody>' + ujiList.map(barisSiswaUji).join('') + '</tbody></table></div>' +
+        '<div class="panel-head no-print" style="margin-top:22px;"><div><div class="panel-head__title">Cetak Nilai PKL</div>' +
+        '<div class="panel-head__desc">Format cetak berisi identitas &amp; tanda tangan Guru Pembimbing dan Guru Penguji. Pastikan Nilai Penguji sudah disimpan sebelum mencetak.</div></div></div>' +
+        '<div class="no-print" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">' +
+        '<button class="btn-small" id="btnPkluCetakTerpilih"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak Terpilih</button>' +
+        '<button class="btn-small btn-small--primary" id="btnPkluCetakSemua"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak Semua</button>' +
+        '</div>' +
+        '<div class="table-wrap no-print"><table class="data-table"><thead><tr>' +
+        '<th class="tc-center"><input type="checkbox" id="checkSemuaPkluCetak"></th>' +
+        '<th class="rc-th-no">No</th><th>NIS</th><th>Nama Siswa</th><th>Tempat PKL</th><th class="tc-center">Aksi</th>' +
+        '</tr></thead><tbody>' + ujiList.map(function (r, i) {
+          var pb = pembimbingMap[r.siswa_id] || {};
+          return '<tr>' +
+            '<td class="tc-center"><input type="checkbox" class="pklu-cetak-check" value="' + r.siswa_id + '"></td>' +
+            '<td class="tc-center">' + (i + 1) + '</td>' +
+            '<td>' + escapeHtml(r.siswa.nis || '—') + '</td>' +
+            '<td>' + escapeHtml(r.siswa.nama) + '</td>' +
+            '<td>' + escapeHtml(pb.nama_dudi || '—') + '</td>' +
+            '<td class="tc-center">' +
+            '<button class="btn-small btn-pklu-preview" data-siswa="' + r.siswa_id + '"><i data-lucide="eye" style="width:14px;height:14px;"></i> Preview</button> ' +
+            '<button class="btn-small btn-small--primary btn-pklu-cetak-satu" data-siswa="' + r.siswa_id + '"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak</button>' +
+            '</td></tr>';
+        }).join('') + '</tbody></table></div>' +
+        '<div id="cetakPklPengujiArea"></div>';
       lucide.createIcons();
+
+      // =========================================================
+      // CETAK NILAI PKL (sisi Penguji) — format sama seperti yang
+      // dicetak guru Pembimbing (berisi identitas & tanda tangan
+      // Guru Pembimbing MAUPUN Guru Penguji), supaya guru Penguji
+      // juga bisa melihat/mencetak sendiri format lengkapnya.
+      // =========================================================
+      var TEKS_TP_PKL_UJI = [
+        'Menerapkan soft skills yang dibutuhkan dalam dunia kerja (tempat PKL)',
+        'Menerapkan norma, POS dan K3LH yang ada pada dunia kerja (tempat PKL)',
+        'Menerapkan kompetensi teknis yang sudah dipelajari di sekolah dan/atau baru dipelajari pada dunia kerja (tempat PKL)',
+        'Memahami alur bisnis dunia kerja tempat PKL'
+      ];
+      function barisIdent2Uji(l1, v1, l2, v2) {
+        return '<tr><td class="ident-label">' + escapeHtml(l1) + '</td><td class="ident-colon">:</td><td class="ident-value">' + escapeHtml(v1 || '-') + '</td>' +
+          (l2 ? '<td class="ident-label" style="padding-left:24px;">' + escapeHtml(l2) + '</td><td class="ident-colon">:</td><td class="ident-value">' + escapeHtml(v2 || '-') + '</td>' : '<td colspan="3"></td>') +
+          '</tr>';
+      }
+      function barisIdent1Uji(label, value) {
+        return '<tr><td class="ident-label">' + escapeHtml(label) + '</td><td class="ident-colon">:</td><td class="ident-value" colspan="4">' + escapeHtml(value || '-') + '</td></tr>';
+      }
+
+      async function buatFormatPklUji(siswaId) {
+        var r = ujiList.filter(function (x) { return x.siswa_id === siswaId; })[0];
+        var pb = pembimbingMap[siswaId] || {};
+        var pasangan = nilaiMap[siswaId] || {};
+        var du = pasangan.dudi || {};
+        var pg = pasangan.penguji || {};
+        var namaPembimbing = pb.guru ? pb.guru.nama : '—';
+        var namaPengujiSaatIni = nama; // guru yang sedang login (Penguji)
+        var akhirTotal = rataTaPkl(du.nilai_akhir, pg.nilai_akhir);
+
+        var profilRes = await supabaseClient.from('profil_sekolah').select('*').maybeSingle();
+        var profilSekolah = profilRes.data || {};
+        var NAMA_SEKOLAH = profilSekolah.nama_sekolah || 'SMK Widya Mandala Tambak';
+        var NAMA_KEPALA_SEKOLAH = profilSekolah.kepala_sekolah || '—';
+        var NAMA_KOTA_TTD = profilSekolah.kota_ttd || 'Tambak';
+        var TANGGAL_CETAK = formatTanggalIndonesia(profilSekolah.tanggal_rapor);
+
+        function skorGabunganTp(n) {
+          var vals = [du['tp' + n], pg['tp' + n]].filter(function (v) { return v !== null && v !== undefined; });
+          if (!vals.length) return null;
+          return vals.reduce(function (a, v) { return a + Number(v); }, 0) / vals.length;
+        }
+
+        var tglMulaiFmt = formatTanggalIndonesia(pb.tanggal_mulai);
+        var tglSelesaiFmt = formatTanggalIndonesia(pb.tanggal_selesai);
+        var tanggalPklGabungan = (tglMulaiFmt || tglSelesaiFmt) ? ((tglMulaiFmt || '…........') + ' s.d. ' + (tglSelesaiFmt || '…........')) : null;
+
+        return '<div class="rapor-cetak rapor-cetak--identitas" id="cetakPkluUji-' + siswaId + '">' +
+          '<div class="rapor-cetak__bar" style="line-height:1.6;">DAFTAR NILAI PESERTA DIDIK MATA PELAJARAN PKL<br>' + escapeHtml(NAMA_SEKOLAH.toUpperCase()) + '<br>TAHUN AJARAN ' + escapeHtml(tahunAktif.nama) + '</div>' +
+
+          '<table class="ident-table" style="margin-top:10px;"><tbody>' +
+          barisIdent2Uji('Nama Peserta Didik', r.siswa.nama, 'Kelas', r.kelas.nama) +
+          barisIdent2Uji('NISN', r.siswa.nisn, 'Program Keahlian', r.kelas.program_keahlian) +
+          barisIdent2Uji('Tempat PKL', pb.nama_dudi, 'Konsentrasi Keahlian', r.kelas.konsentrasi_keahlian) +
+          barisIdent1Uji('Tanggal PKL', tanggalPklGabungan) +
+          barisIdent1Uji('Nama Instruktur', pb.nama_pembimbing_dudi) +
+          barisIdent2Uji('Nama Pembimbing', namaPembimbing, 'Nama Penguji', namaPengujiSaatIni) +
+          '</tbody></table>' +
+
+          '<table class="rapor-cetak__pkl"><thead><tr><th class="rc-th-pkl-tp">Tujuan Pembelajaran</th><th class="rc-th-pkl-skor tc-center">Skor</th><th>Deskripsi</th></tr></thead><tbody>' +
+          [1, 2, 3, 4].map(function (n) {
+            return '<tr><td>' + n + '. ' + escapeHtml(TEKS_TP_PKL_UJI[n - 1]) + '</td>' +
+              '<td class="tc-center">' + fmtN(skorGabunganTp(n)) + '</td>' +
+              '<td>' + escapeHtml(pb['deskripsi_tp' + n] || '') + '</td></tr>';
+          }).join('') +
+          '<tr><td><strong>NILAI AKHIR</strong></td><td class="tc-center"><strong>' + fmtN(akhirTotal) + '</strong></td><td></td></tr>' +
+          '</tbody></table>' +
+
+          '<div class="rapor-cetak__bar rapor-cetak__bar--sub">CATATAN</div>' +
+          '<div class="rapor-cetak__box">' + (pb.catatan ? escapeHtml(pb.catatan) : '—') + '</div>' +
+
+          '<div class="rapor-cetak__bar rapor-cetak__bar--sub">KEHADIRAN</div>' +
+          '<table class="rapor-cetak__kehadiran" style="width:260px;"><tbody>' +
+          '<tr><td class="rc-label">Sakit</td><td class="rc-colon">:</td><td class="tc-center">' + (pb.sakit || 0) + '</td><td>Hari</td></tr>' +
+          '<tr><td class="rc-label">Ijin</td><td class="rc-colon">:</td><td class="tc-center">' + (pb.ijin || 0) + '</td><td>Hari</td></tr>' +
+          '<tr><td class="rc-label">Tanpa Keterangan</td><td class="rc-colon">:</td><td class="tc-center">' + (pb.tanpa_keterangan || 0) + '</td><td>Hari</td></tr>' +
+          '</tbody></table>' +
+
+          '<div class="rapor-cetak__footer">' +
+          '<div class="ident-footer-row" style="justify-content:space-between;">' +
+          '<div class="ident-footer-ttd"><div>Guru Pembimbing</div><div class="rapor-cetak__ttd-space"></div><div><strong>' + escapeHtml(namaPembimbing || '-') + '</strong></div></div>' +
+          '<div class="ident-footer-ttd"><div>Guru Penguji</div><div class="rapor-cetak__ttd-space"></div><div><strong>' + escapeHtml(namaPengujiSaatIni || '-') + '</strong></div></div>' +
+          '<div class="ident-footer-ttd"><div class="rapor-cetak__footer-date">' + escapeHtml(NAMA_KOTA_TTD) + ', ' + (TANGGAL_CETAK || '…........') + '</div><div>Kepala Sekolah</div><div class="rapor-cetak__ttd-space"></div><div><strong>' + escapeHtml(NAMA_KEPALA_SEKOLAH) + '</strong></div></div>' +
+          '</div>' +
+          '</div>' +
+          '</div>';
+      }
+
+      async function cetakFormatPklUji(siswaIds, triggerBtn) {
+        var teksAsliBtn = triggerBtn ? triggerBtn.innerHTML : null;
+        if (triggerBtn) { triggerBtn.disabled = true; triggerBtn.innerHTML = 'Menyiapkan...'; }
+        var judulAsli = document.title;
+        try {
+          var potongan = await Promise.all(siswaIds.map(function (id) { return buatFormatPklUji(id); }));
+          var area = document.getElementById('cetakPklPengujiArea');
+          area.innerHTML = potongan.join('');
+          var satuSiswa = siswaIds.length === 1 ? ujiList.filter(function (x) { return x.siswa_id === siswaIds[0]; })[0] : null;
+          document.title = 'PKL - ' + (satuSiswa ? (satuSiswa.siswa.nama + ' - ' + satuSiswa.kelas.nama) : (siswaIds.length + ' siswa'));
+          await new Promise(function (resolve) { setTimeout(resolve, 150); });
+          window.print();
+        } catch (err) {
+          alert('Gagal menyiapkan cetak: ' + (err && err.message ? err.message : err));
+        } finally {
+          document.title = judulAsli;
+          if (triggerBtn) { triggerBtn.disabled = false; triggerBtn.innerHTML = teksAsliBtn; lucide.createIcons(); }
+        }
+      }
+
+      async function tampilkanPreviewPklUji(siswaId) {
+        var r = ujiList.filter(function (x) { return x.siswa_id === siswaId; })[0];
+        var area = document.getElementById('cetakPklPengujiArea');
+        area.innerHTML = '<div class="panel-note no-print">Memuat data cetak PKL ' + escapeHtml(r.siswa.nama) + '...</div>';
+        var html = await buatFormatPklUji(siswaId);
+        area.innerHTML =
+          '<div class="no-print" style="display:flex;gap:8px;margin:14px 0;align-items:center;flex-wrap:wrap;">' +
+          '<button class="btn-small" id="btnKembaliCetakPkluDariPreview"><i data-lucide="arrow-left" style="width:14px;height:14px;"></i> Tutup Preview</button>' +
+          '<button class="btn-small btn-small--primary" id="btnCetakDariPreviewPkluItem"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak</button>' +
+          '</div>' + html;
+        lucide.createIcons();
+        document.getElementById('btnKembaliCetakPkluDariPreview').addEventListener('click', function () { area.innerHTML = ''; });
+        document.getElementById('btnCetakDariPreviewPkluItem').addEventListener('click', function () { cetakFormatPklUji([siswaId], this); });
+      }
+
+      document.querySelectorAll('.btn-pklu-preview').forEach(function (btn) {
+        btn.addEventListener('click', function () { tampilkanPreviewPklUji(this.getAttribute('data-siswa')); });
+      });
+      document.querySelectorAll('.btn-pklu-cetak-satu').forEach(function (btn) {
+        btn.addEventListener('click', function () { cetakFormatPklUji([this.getAttribute('data-siswa')], this); });
+      });
+      document.getElementById('checkSemuaPkluCetak').addEventListener('change', function () {
+        var checked = this.checked;
+        document.querySelectorAll('.pklu-cetak-check').forEach(function (c) { c.checked = checked; });
+      });
+      document.getElementById('btnPkluCetakTerpilih').addEventListener('click', function () {
+        var ids = Array.prototype.slice.call(document.querySelectorAll('.pklu-cetak-check:checked')).map(function (c) { return c.value; });
+        if (!ids.length) { alert('Centang minimal satu siswa terlebih dahulu.'); return; }
+        cetakFormatPklUji(ids, this);
+      });
+      document.getElementById('btnPkluCetakSemua').addEventListener('click', function () {
+        cetakFormatPklUji(ujiList.map(function (r) { return r.siswa_id; }), this);
+      });
 
       function perbaruiAkhirPenguji(sId) {
         var inputs = document.querySelectorAll('.pklu-tp-input[data-siswa="' + sId + '"]');
@@ -5270,7 +5370,7 @@
             '<td class="rc-label rc-label--kanan">Kelas</td><td class="rc-colon">:</td><td class="rc-value">' + escapeHtml(wk.kelas.nama) + '</td></tr>' +
             '<tr><td class="rc-label">NIS / NISN</td><td class="rc-colon">:</td><td class="rc-value">' + escapeHtml((siswa.nis || '—') + ' / ' + (siswa.nisn || '—')) + '</td>' +
             '<td class="rc-label rc-label--kanan">Fase</td><td class="rc-colon">:</td><td class="rc-value">' + escapeHtml(fase) + '</td></tr>' +
-            '<tr><td class="rc-label">Sekolah</td><td class="rc-colon">:</td><td class="rc-value">' + escapeHtml(NAMA_SEKOLAH) + '</td>' +
+            '<tr><td class="rc-label">Sekolah</td><td class="rc-colon">:</td><td class="rc-value">' + escapeHtml(NAMA_SEKOLAH.toUpperCase()) + '</td>' +
             '<td class="rc-label rc-label--kanan">Semester</td><td class="rc-colon">:</td><td class="rc-value">' + escapeHtml((semesterKeCetak || '—') + ' (' + tahunAktif.semester + ')') + '</td></tr>' +
             '<tr><td class="rc-label">Alamat</td><td class="rc-colon">:</td><td class="rc-value">' + escapeHtml(ALAMAT_SEKOLAH || '—') + '</td>' +
             '<td class="rc-label rc-label--kanan">Tahun Ajaran</td><td class="rc-colon">:</td><td class="rc-value">' + escapeHtml(tahunAktif.nama) + '</td></tr>' +
