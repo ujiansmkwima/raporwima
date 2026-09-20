@@ -10,6 +10,7 @@
 <script src="https://unpkg.com/lucide@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="xlsx-autofit.js"></script>
 <script src="unsaved-guard.js?v=1"></script>
 <script src="supabase-client.js"></script>
 </head>
@@ -944,7 +945,7 @@
         KELAS_EXCEL_COLUMNS.forEach(function (c) { obj[c.header] = k[c.key] === null || k[c.key] === undefined ? '' : k[c.key]; });
         return obj;
       });
-      var ws = XLSX.utils.json_to_sheet(rows, { header: KELAS_EXCEL_COLUMNS.map(function (c) { return c.header; }) });
+      var ws = autoFitKolom(XLSX.utils.json_to_sheet(rows, { header: KELAS_EXCEL_COLUMNS.map(function (c) { return c.header; }) }));
       var wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Data Kelas');
       XLSX.writeFile(wb, 'data_kelas.xlsx');
@@ -959,7 +960,7 @@
         'Program Keahlian': 'Agribisnis Ternak',
         'Konsentrasi Keahlian': 'Agribisnis Ternak Ruminansia'
       };
-      var ws = XLSX.utils.json_to_sheet([contoh], { header: headers });
+      var ws = autoFitKolom(XLSX.utils.json_to_sheet([contoh], { header: headers }));
       var wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Template Kelas');
       XLSX.writeFile(wb, 'template_import_kelas.xlsx');
@@ -2010,7 +2011,7 @@
         return obj;
       });
 
-      var ws = XLSX.utils.json_to_sheet(rows, { header: EXCEL_COLUMNS.map(function (c) { return c.header; }) });
+      var ws = autoFitKolom(XLSX.utils.json_to_sheet(rows, { header: EXCEL_COLUMNS.map(function (c) { return c.header; }) }));
       var wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Data Siswa');
       XLSX.writeFile(wb, 'data_siswa_' + tahunAktif.nama.replace(/\//g, '-') + '.xlsx');
@@ -2028,7 +2029,7 @@
       contoh['Jenis Kelamin'] = 'L';
       contoh['Agama'] = 'Islam';
 
-      var ws = XLSX.utils.json_to_sheet([contoh], { header: headers });
+      var ws = autoFitKolom(XLSX.utils.json_to_sheet([contoh], { header: headers }));
       var wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Template Siswa');
       XLSX.writeFile(wb, 'template_import_siswa.xlsx');
@@ -2542,7 +2543,7 @@
         }
         aoa.push(row);
       });
-      var ws = XLSX.utils.aoa_to_sheet(aoa);
+      var ws = autoFitKolom(XLSX.utils.aoa_to_sheet(aoa));
       var wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Leger Nilai');
       XLSX.writeFile(wb, 'leger_' + siswaObj.nama.replace(/[^a-z0-9]/gi, '_') + '.xlsx');
@@ -2963,7 +2964,7 @@
     }
 
     function tulisExcel(rows, headers, sheetName, namaFile) {
-      var ws = XLSX.utils.json_to_sheet(rows, { header: headers });
+      var ws = autoFitKolom(XLSX.utils.json_to_sheet(rows, { header: headers }));
       var wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, sheetName);
       XLSX.writeFile(wb, namaFile);
@@ -3396,7 +3397,7 @@
         GURU_EXPORT_COLUMNS.forEach(function (c) { obj[c.header] = g[c.key] === null || g[c.key] === undefined ? '' : g[c.key]; });
         return obj;
       });
-      var ws = XLSX.utils.json_to_sheet(rows, { header: GURU_EXPORT_COLUMNS.map(function (c) { return c.header; }) });
+      var ws = autoFitKolom(XLSX.utils.json_to_sheet(rows, { header: GURU_EXPORT_COLUMNS.map(function (c) { return c.header; }) }));
       var wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Data Guru');
       XLSX.writeFile(wb, 'data_guru.xlsx');
@@ -3406,7 +3407,7 @@
     document.getElementById('btnTemplateGuru').addEventListener('click', function () {
       var headers = ['Nama Guru', 'Email', 'Password', 'Role'];
       var contoh = { 'Nama Guru': 'Siti Aminah, S.Pd', 'Email': 'siti.aminah@sekolah.sch.id', 'Password': 'guru12345', 'Role': 'guru' };
-      var ws = XLSX.utils.json_to_sheet([contoh], { header: headers });
+      var ws = autoFitKolom(XLSX.utils.json_to_sheet([contoh], { header: headers }));
       var wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Template Guru');
       XLSX.writeFile(wb, 'template_import_guru.xlsx');
@@ -3848,7 +3849,7 @@
     // ---------- B. Peserta Ekstrakurikuler ----------
     // ---------- Peserta: export, template, import (Nama + Kelas) ----------
     function tulisExcelEkskul(rows, headers, sheetName, namaFile) {
-      var ws = XLSX.utils.json_to_sheet(rows, { header: headers });
+      var ws = autoFitKolom(XLSX.utils.json_to_sheet(rows, { header: headers }));
       var wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, sheetName);
       XLSX.writeFile(wb, namaFile);
@@ -4213,7 +4214,7 @@
     function opsi(list) { return list.map(function (x) { return '<option value="' + x.id + '">' + escapeHtml(x.nama) + '</option>'; }).join(''); }
 
     function tulisExcelPkl(rows, headers, sheetName, namaFile) {
-      var ws = XLSX.utils.json_to_sheet(rows, { header: headers });
+      var ws = autoFitKolom(XLSX.utils.json_to_sheet(rows, { header: headers }));
       var wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, sheetName);
       XLSX.writeFile(wb, namaFile);
@@ -4479,11 +4480,11 @@
           };
         });
         var headers = ['No', 'NIS', 'Nama', 'Guru Pembimbing', 'Guru Penguji', 'Tempat PKL (DUDI)', 'Tanggal Mulai', 'Tanggal Selesai'];
-        var ws = XLSX.utils.json_to_sheet(rows, { header: headers });
-        var wsGuru = XLSX.utils.json_to_sheet(
+        var ws = autoFitKolom(XLSX.utils.json_to_sheet(rows, { header: headers }));
+        var wsGuru = autoFitKolom(XLSX.utils.json_to_sheet(
           guruList.map(function (g) { return { 'Nama Guru (salin persis ke kolom Guru Pembimbing / Guru Penguji)': g.nama }; }),
           { header: ['Nama Guru (salin persis ke kolom Guru Pembimbing / Guru Penguji)'] }
-        );
+        ));
         var wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Pembimbing & Penguji PKL');
         XLSX.utils.book_append_sheet(wb, wsGuru, 'Daftar Guru');

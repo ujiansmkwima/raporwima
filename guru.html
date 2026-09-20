@@ -10,6 +10,7 @@
 <script src="https://unpkg.com/lucide@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="xlsx-autofit.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="pdf-cetak.js?v=1"></script>
@@ -1671,12 +1672,12 @@
         });
         rows.push({ 'Kolom': '', 'Kode TP': '', 'Deskripsi': '' });
         rows.push({ 'Kolom': 'Catatan', 'Kode TP': '', 'Deskripsi': 'Kolom "Nilai Rapor (Otomatis)" tidak perlu diisi — dihitung sendiri oleh sistem dari bobot yang berlaku.' });
-        return XLSX.utils.json_to_sheet(rows, { header: ['Kolom', 'Kode TP', 'Deskripsi'] });
+        return autoFitKolom(XLSX.utils.json_to_sheet(rows, { header: ['Kolom', 'Kode TP', 'Deskripsi'] }));
       }
 
       document.getElementById('btnExportNilai').addEventListener('click', function () {
         var rows = siswaList.map(function (s) { return barisExcelSiswa(s, false); });
-        var ws = XLSX.utils.json_to_sheet(rows, { header: NILAI_EXCEL_COLUMNS_UNDUH });
+        var ws = autoFitKolom(XLSX.utils.json_to_sheet(rows, { header: NILAI_EXCEL_COLUMNS_UNDUH }));
         var wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Nilai');
         XLSX.utils.book_append_sheet(wb, sheetKeteranganTp(), 'Keterangan TP');
@@ -1685,7 +1686,7 @@
 
       document.getElementById('btnTemplateNilai').addEventListener('click', function () {
         var rows = siswaList.map(function (s) { return barisExcelSiswa(s, true); });
-        var ws = XLSX.utils.json_to_sheet(rows, { header: NILAI_EXCEL_COLUMNS });
+        var ws = autoFitKolom(XLSX.utils.json_to_sheet(rows, { header: NILAI_EXCEL_COLUMNS }));
         var wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Template Nilai');
         XLSX.utils.book_append_sheet(wb, sheetKeteranganTp(), 'Keterangan TP');
@@ -2062,7 +2063,7 @@
             'Status': r.is_aktif ? 'Aktif' : 'Tidak Aktif'
           };
         });
-        var ws = XLSX.utils.json_to_sheet(rows, { header: TP_EXCEL_COLUMNS.map(function (c) { return c.header; }) });
+        var ws = autoFitKolom(XLSX.utils.json_to_sheet(rows, { header: TP_EXCEL_COLUMNS.map(function (c) { return c.header; }) }));
         var wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Tujuan Pembelajaran');
         XLSX.writeFile(wb, 'tujuan_pembelajaran_' + mapel.nama.replace(/[^a-z0-9]/gi, '_') + '.xlsx');
@@ -2072,7 +2073,7 @@
       document.getElementById('btnTemplateTujuan').addEventListener('click', function () {
         var headers = TP_EXCEL_COLUMNS.map(function (c) { return c.header; });
         var contoh = { 'Kode': 'TP.1', 'Deskripsi': 'Menjelaskan konsep dasar ...', 'Urutan': 1, 'Semester': 1, 'Status': 'Aktif' };
-        var ws = XLSX.utils.json_to_sheet([contoh], { header: headers });
+        var ws = autoFitKolom(XLSX.utils.json_to_sheet([contoh], { header: headers }));
         var wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Template Tujuan');
         XLSX.writeFile(wb, 'template_import_tujuan_pembelajaran.xlsx');
@@ -2485,7 +2486,7 @@
           }
           aoa.push(row);
         });
-        var ws = XLSX.utils.aoa_to_sheet(aoa);
+        var ws = autoFitKolom(XLSX.utils.aoa_to_sheet(aoa));
         var wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Leger Nilai');
         XLSX.writeFile(wb, 'leger_' + siswaObj.nama.replace(/[^a-z0-9]/gi, '_') + '.xlsx');
@@ -2569,7 +2570,7 @@
             'Tanpa Keterangan': pakaiDataTabel ? nilaiInput('presensi-alpha', s.id) : 0
           };
         });
-        var ws = XLSX.utils.json_to_sheet(rows, { header: PRESENSI_HEADERS });
+        var ws = autoFitKolom(XLSX.utils.json_to_sheet(rows, { header: PRESENSI_HEADERS }));
         var wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Presensi');
         XLSX.writeFile(wb, (pakaiDataTabel ? 'presensi_' : 'template_presensi_') + namaFileKelas + '.xlsx');
@@ -2742,7 +2743,10 @@
     // Tulis template: sheet pertama = data (header di baris 1), sheet kedua = Petunjuk.
     function tulisTemplateExcel(opts) {
       var ws = XLSX.utils.json_to_sheet(opts.rows, { header: opts.headers });
-      ws['!cols'] = opts.lebar.map(function (w) { return { wch: w }; });
+      // opts.lebar dipakai sebagai lebar MINIMUM per kolom (sudah ditata
+      // manual sebelumnya) — autoFitKolom melebarkan lebih lanjut kalau
+      // isi selnya ternyata lebih panjang dari itu.
+      autoFitKolom(ws, { minCols: opts.lebar });
       var aoa = [['Petunjuk Pengisian']].concat(opts.petunjuk.map(function (t, i) { return [(i + 1) + '. ' + t]; }));
       var wsInfo = XLSX.utils.aoa_to_sheet(aoa);
       wsInfo['!cols'] = [{ wch: 115 }];
@@ -3199,7 +3203,7 @@
         }
 
         document.getElementById('btnTemplatePklId').addEventListener('click', function () {
-          var ws = XLSX.utils.json_to_sheet(binaanList.map(baris), { header: KOLOM });
+          var ws = autoFitKolom(XLSX.utils.json_to_sheet(binaanList.map(baris), { header: KOLOM }));
           var wb = XLSX.utils.book_new();
           XLSX.utils.book_append_sheet(wb, ws, 'Identitas PKL');
           XLSX.writeFile(wb, 'template_identitas_pkl_' + tahunAktif.nama.replace(/[^a-z0-9]/gi, '_') + '.xlsx');
@@ -3438,7 +3442,7 @@
             });
             return row;
           });
-          var ws = XLSX.utils.json_to_sheet(rows, { header: KOLOM });
+          var ws = autoFitKolom(XLSX.utils.json_to_sheet(rows, { header: KOLOM }));
           var wb = XLSX.utils.book_new();
           XLSX.utils.book_append_sheet(wb, ws, 'Nilai DUDI');
           XLSX.writeFile(wb, 'template_nilai_dudi_pkl_' + tahunAktif.nama.replace(/[^a-z0-9]/gi, '_') + '.xlsx');
@@ -3576,7 +3580,7 @@
               'Tanpa Keterangan (Hari)': Number(kehadiranEl(b.siswa_id, 'tanpa_keterangan').value) || 0
             };
           });
-          var ws = XLSX.utils.json_to_sheet(rows, { header: KOLOM });
+          var ws = autoFitKolom(XLSX.utils.json_to_sheet(rows, { header: KOLOM }));
           var wb = XLSX.utils.book_new();
           XLSX.utils.book_append_sheet(wb, ws, 'Catatan & Presensi');
           XLSX.writeFile(wb, 'template_catatan_presensi_pkl_' + tahunAktif.nama.replace(/[^a-z0-9]/gi, '_') + '.xlsx');
@@ -4024,7 +4028,7 @@
 
       document.getElementById('btnExportPklPenguji').addEventListener('click', function () {
         var rows = ujiList.map(function (r) { return barisExcelPenguji(r, false); });
-        var ws = XLSX.utils.json_to_sheet(rows, { header: PKLU_EXCEL_COLUMNS });
+        var ws = autoFitKolom(XLSX.utils.json_to_sheet(rows, { header: PKLU_EXCEL_COLUMNS }));
         var wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Nilai Penguji PKL');
         XLSX.writeFile(wb, 'nilai_pkl_penguji_' + tahunAktif.nama.replace(/[^a-z0-9]/gi, '_') + '.xlsx');
@@ -4032,7 +4036,7 @@
 
       document.getElementById('btnTemplatePklPenguji').addEventListener('click', function () {
         var rows = ujiList.map(function (r) { return barisExcelPenguji(r, true); });
-        var ws = XLSX.utils.json_to_sheet(rows, { header: PKLU_EXCEL_COLUMNS });
+        var ws = autoFitKolom(XLSX.utils.json_to_sheet(rows, { header: PKLU_EXCEL_COLUMNS }));
         var wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Template Nilai Penguji PKL');
         XLSX.writeFile(wb, 'template_import_nilai_pkl_penguji.xlsx');

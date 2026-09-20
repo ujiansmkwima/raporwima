@@ -1773,21 +1773,23 @@ a { color: inherit; text-decoration: none; }
     transform: translate(-50%, -50%);
   }
 
-  /* Cetak Terpilih/Cetak Semua menaruh beberapa kartu (.rapor-cetak)
-     berurutan di #cetakRaporArea, dan tiap kartu punya watermark
-     sendiri lewat ::before di atas. Karena watermark itu "fixed" saat
-     cetak (supaya berulang di tiap halaman kertas), KALAU dibiarkan
-     apa adanya, watermark SETIAP kartu ikut berulang di SEMUA halaman
-     dokumen (bukan cuma halaman kartu itu sendiri) — jadi kalau ada N
-     siswa, tiap halaman malah menumpuk N watermark yang saling
-     bertindihan. Tumpukan logo 12% opacity yang berulang-ulang itu
-     mengunci jadi terlihat pekat/nyaris solid alih-alih transparan.
-     Perbaikannya: matikan watermark pada semua kartu KECUALI kartu
-     pertama, supaya cuma ada SATU watermark yang berulang di seluruh
-     halaman dokumen, seperti seharusnya. */
-  .rapor-cetak ~ .rapor-cetak::before {
-    display: none !important;
-  }
+  /* CATATAN (asumsi lama yang TERBUKTI SALAH, sudah dicabut):
+     versi sebelumnya di sini mematikan watermark pada semua kartu
+     KECUALI kartu pertama, dengan asumsi elemen "position: fixed"
+     otomatis berulang di SEMUA halaman fisik dokumen cetak (jadi
+     kalau dibiarkan nyala di tiap kartu, N siswa = N watermark
+     bertumpuk saling menindih tiap halaman).
+
+     Terbukti lewat pengujian nyata (render Chromium sungguhan) itu
+     TIDAK BENAR: watermark "fixed" tiap kartu ternyata cuma berulang
+     di halaman-halaman milik kartu itu SENDIRI (mengikuti kotak
+     ".rapor-cetak" yang membungkusnya, yang mulai halaman baru lewat
+     "page-break-before: always"), tidak bocor ke kartu/siswa
+     lain. Akibat asumsi lama itu, watermark cuma tampil di siswa
+     PERTAMA saat "Cetak Terpilih"/"Cetak Semua" — siswa ke-2 dst
+     jadi tanpa logo sama sekali. Makanya watermark sekarang dibiarkan
+     nyala di SETIAP kartu (tanpa aturan ini), supaya tiap siswa tetap
+     punya watermark di halamannya sendiri-sendiri. */
 
   .rapor-cetak__nilai,
   .rapor-cetak__ekskul,
