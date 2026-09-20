@@ -12,13 +12,12 @@
      meluber, page2 menyambung langsung (sama seperti aturan cetak).
    - Baris tabel tidak terpotong di tengah (pemotongan halaman
      selalu di batas baris/blok).
-   - Tiap siswa mulai di halaman baru, nomor halaman mulai dari 1
-     lagi per siswa.
+   - Blok penutup rapor (.rapor-cetak__akhir: Tanggapan Orangtua/ Wali
+     + tanda tangan) tidak pernah terpotong: kalau tidak muat di sisa
+     halaman, seluruh blok pindah ke halaman berikutnya.
+   - Tiap siswa mulai di halaman baru.
    - Watermark logo di tengah tiap halaman (opacity 12%).
-
-   Nomor halaman digambar langsung oleh jsPDF di dasar area konten,
-   BUKAN lewat position: absolute di HTML — jadi tidak bisa lagi
-   "lompat" ke halaman berikutnya.
+   - Tanpa nomor halaman (sama seperti hasil cetak).
 
    Pemakaian:  await unduhPdfCetak([htmlKartu1, htmlKartu2, ...], 'Nama File');
    (tiap htmlKartu = string HTML 1 kartu ".rapor-cetak" dari
@@ -30,7 +29,6 @@
   var MARGIN = 12.7;        // mm, Narrow — samakan dengan @page di style.css
   var LEBAR_KONTEN = HALAMAN_W - 2 * MARGIN;   // 184.6mm
   var TINGGI_KONTEN = HALAMAN_H - 2 * MARGIN;  // 271.6mm
-  var RESERVASI_NOMOR = 7;  // mm di dasar konten yang dikosongkan untuk nomor halaman
   var GAP_HEADER = 3;       // mm antara Identitas (header berulang) dan isi
   var SKALA = 2.5;          // resolusi render (2.5x ≈ 240 dpi)
   var KUALITAS_JPEG = 0.95;
@@ -90,15 +88,14 @@
     });
 
     // Aturan khusus mode PDF: kartu tanpa bingkai/padding layar (sama seperti
-    // @media print), lebar persis area konten A4, watermark & nomor halaman
-    // HTML dimatikan (keduanya digambar oleh jsPDF).
+    // @media print), lebar persis area konten A4, watermark HTML
+    // dimatikan (watermark digambar oleh jsPDF).
     var st = d.createElement('style');
     st.textContent =
       'html,body{margin:0;padding:0;background:#fff;}' +
       '#pdfRoot{width:' + LEBAR_KONTEN + 'mm;background:#fff;}' +
       '#pdfRoot .rapor-cetak{border:none!important;padding:0!important;margin:0!important;border-radius:0!important;box-sizing:border-box;width:100%;}' +
       '#pdfRoot .rapor-cetak::before{display:none!important;}' +
-      '#pdfRoot .rapor-cetak__page-no{display:none!important;}' +
       '#pdfRoot .rapor-cetak__page1 + .rapor-cetak__page2{margin-top:0!important;padding-top:0!important;border-top:none!important;}';
     d.head.appendChild(st);
 
@@ -115,11 +112,15 @@
   function kumpulkanTitikPotong(bodyEl) {
     var top0 = bodyEl.getBoundingClientRect().top;
     var hasil = [];
-    var daftar = bodyEl.querySelectorAll('tr, .rapor-cetak__bar, .rapor-cetak__box, .rapor-cetak__footer, .rapor-cetak__page2');
+    var daftar = bodyEl.querySelectorAll('tr, .rapor-cetak__bar, .rapor-cetak__box, .rapor-cetak__footer, .rapor-cetak__page2, .rapor-cetak__akhir');
     Array.prototype.forEach.call(daftar, function (el) {
+      // Isi blok penutup (Tanggapan Orangtua + tanda tangan) tidak boleh
+      // dijadikan titik potong: blok itu dipindah utuh ke halaman berikutnya.
+      var blokAkhir = el.closest('.rapor-cetak__akhir');
+      if (blokAkhir && blokAkhir !== el) return;
       var prev = el.previousElementSibling;
       var adalahBar = el.classList.contains('rapor-cetak__bar');
-      var adalahBlokAwal = el.classList.contains('rapor-cetak__page2');
+      var adalahBlokAwal = el.classList.contains('rapor-cetak__page2') || el.classList.contains('rapor-cetak__akhir');
       if (!adalahBar && !adalahBlokAwal) {
         if (!prev) return; // baris/elemen pertama: jangan dipisah dari induknya
         if (prev.classList && prev.classList.contains('rapor-cetak__bar')) return;
@@ -183,14 +184,6 @@
     } catch (e) { /* watermark gagal: lanjut tanpa */ }
   }
 
-  function gambarNomor(pdf, no) {
-    pdf.setFont('helvetica', 'normal');
-    pdf.setFontSize(9);
-    pdf.setTextColor(51, 51, 51);
-    // Baseline 1.5mm di atas garis margin bawah — selalu di dasar halaman.
-    pdf.text(String(no), HALAMAN_W / 2, HALAMAN_H - MARGIN - 1.5, { align: 'center' });
-  }
-
   async function unduhPdfCetak(daftarHtmlKartu, namaFile) {
     if (!window.html2canvas || !window.jspdf || !window.jspdf.jsPDF) {
       throw new Error('Pustaka PDF belum termuat (html2canvas / jsPDF). Periksa koneksi internet lalu muat ulang halaman.');
@@ -244,7 +237,7 @@
         var bodyCanvas = await window.html2canvas(bodyEl, opsi);
         var rasioCanvas = bodyCanvas.height / br.height; // px canvas per px CSS
 
-        var kapasitasMm = TINGGI_KONTEN - RESERVASI_NOMOR - (headerCanvas ? headerMm + GAP_HEADER : 0);
+        var kapasitasMm = TINGGI_KONTEN - (headerCanvas ? headerMm + GAP_HEADER : 0);
         var kapasitasPx = kapasitasMm / mmPerPx;
 
         var page2El = bodyEl.querySelector('.rapor-cetak__page2');
@@ -272,7 +265,6 @@
           var irisanMm = (akhir - mulai) * mmPerPx;
           pdf.addImage(irisan.toDataURL('image/jpeg', KUALITAS_JPEG), 'JPEG', MARGIN, y, LEBAR_KONTEN, irisanMm);
 
-          gambarNomor(pdf, p + 1);
         }
       }
       pdf.save(bersihkanNamaFile(namaFile) + '.pdf');

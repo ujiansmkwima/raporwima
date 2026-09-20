@@ -69,6 +69,7 @@ create table if not exists public.mata_pelajaran (
   nama text not null,
   kkm integer not null default 75,      -- kriteria ketuntasan minimal
   urutan_rapor integer,                 -- urutan tampil mapel ini di rapor
+  urutan_leger integer,                 -- urutan baris mapel di Leger 6 Semester (seragam semua kelas); lihat migrasi_urutan_leger.sql
   berlaku_untuk text not null default 'semua' check (berlaku_untuk in ('semua', 'tertentu')),
   -- Semester berlakunya mapel ini: 'semua' = Semester 1 s.d. 6,
   -- 'tertentu' = hanya semester yang dicentang (lihat mapel_semester).

@@ -13,6 +13,7 @@
 <script src="xlsx-autofit.js"></script>
 <script src="unsaved-guard.js?v=1"></script>
 <script src="supabase-client.js"></script>
+<script src="simpan-atas.js?v=1"></script>
 </head>
 <body>
 
@@ -42,6 +43,7 @@
       <a href="#" class="menu-item" data-view="ekskul"><i data-lucide="medal" class="menu-icon"></i><span class="menu-item__title">Ekstrakurikuler</span></a>
       <a href="#" class="menu-item" data-view="pkl"><i data-lucide="briefcase-business" class="menu-icon"></i><span class="menu-item__title">PKL</span></a>
       <a href="#" class="menu-item" data-view="leger"><i data-lucide="layers" class="menu-icon"></i><span class="menu-item__title">Leger Nilai (6 Semester)</span></a>
+      <a href="#" class="menu-item menu-item--nested" data-view="urutanLeger"><i data-lucide="corner-down-right" class="menu-icon"></i><span class="menu-item__title">Urutan Mapel Leger</span></a>
     </nav>
 
     <div class="sidebar__footer">
@@ -1468,6 +1470,7 @@
       '</div>' +
       '<div id="mtSaveMsg"></div>' +
       '<div id="mtPreview" style="margin-top:28px;"></div>';
+    SimpanAtas.pasang('mtBtnSimpan');
 
     // Mapel yang ditampilkan cuma yang benar-benar berlaku untuk kelas yang
     // relevan: mapel "Semua Kelas" selalu muncul, mapel "Kelas Tertentu"
@@ -2263,6 +2266,27 @@
     return null;
   }
 
+  // Urutan baris mapel di Leger (6 Semester): mengikuti "Urutan Mapel Leger"
+  // (mata_pelajaran.urutan_leger, diatur di menu Urutan Mapel Leger). Mapel
+  // yang belum punya urutan leger ditaruh setelah yang sudah punya, dengan
+  // urutan otomatis: Umum dulu baru Kejuruan, lalu "Urutan pada Rapor", lalu
+  // nama. Fungsi yang sama dipakai di guru.html (Rekap Leger Wali Kelas).
+  function urutkanMapelLeger(list) {
+    function punya(v) { return v !== null && v !== undefined; }
+    return list.slice().sort(function (a, b) {
+      var pa = punya(a.urutan_leger), pb = punya(b.urutan_leger);
+      if (pa && pb && a.urutan_leger !== b.urutan_leger) return a.urutan_leger - b.urutan_leger;
+      if (pa !== pb) return pa ? -1 : 1;
+      var ja = a.jenis_mapel === 'kejuruan' ? 1 : 0;
+      var jb = b.jenis_mapel === 'kejuruan' ? 1 : 0;
+      if (ja !== jb) return ja - jb;
+      var ua = punya(a.urutan_rapor) ? a.urutan_rapor : 9999;
+      var ub = punya(b.urutan_rapor) ? b.urutan_rapor : 9999;
+      if (ua !== ub) return ua - ub;
+      return (a.nama || '').localeCompare(b.nama || '');
+    });
+  }
+
   // Alur: pilih kelas -> daftar nama siswa di kelas itu -> klik nama -> tampil leger.
   async function renderLeger() {
     await renderLegerKelas();
@@ -2271,8 +2295,14 @@
   async function renderLegerKelas() {
     content.innerHTML =
       '<div class="panel-head"><div><div class="panel-head__title">Leger Nilai — Rekap 6 Semester</div>' +
-      '<div class="panel-head__desc">Pilih kelas untuk melihat daftar siswanya. Semester dihitung otomatis: Tingkat 10 Ganjil = Semester 1, ... Tingkat 12 Genap = Semester 6.</div></div></div>' +
+      '<div class="panel-head__desc">Pilih kelas untuk melihat daftar siswanya. Semester dihitung otomatis: Tingkat 10 Ganjil = Semester 1, ... Tingkat 12 Genap = Semester 6.</div></div>' +
+      '<button class="btn-small" id="btnKeUrutanLeger">Atur Urutan Mapel →</button></div>' +
       '<div id="legerArea"><div class="panel-note">Memuat daftar kelas...</div></div>';
+
+    document.getElementById('btnKeUrutanLeger').addEventListener('click', function () {
+      setActiveMenu('urutanLeger');
+      views.urutanLeger();
+    });
 
     var kelasRes = await supabaseClient.from('kelas').select('id, nama, tingkat, program_keahlian').order('tingkat').order('nama');
     var kelasList = kelasRes.data || [];
@@ -2442,7 +2472,7 @@
 
     var mapelSemuaRes = await supabaseClient
       .from('mata_pelajaran')
-      .select('id, nama, jenis_mapel, urutan_rapor, berlaku_untuk, berlaku_semester, agama_spesifik');
+      .select('id, nama, jenis_mapel, urutan_rapor, urutan_leger, berlaku_untuk, berlaku_semester, agama_spesifik');
     var mapelKelasRes = kelasIdList.length
       ? await supabaseClient.from('mapel_kelas').select('mapel_id').in('kelas_id', kelasIdList)
       : { data: [] };
@@ -2473,12 +2503,8 @@
       if (m.agama_spesifik && siswaObj.agama !== m.agama_spesifik) return false;
       return true;
     });
-    mapelList.sort(function (a, b) {
-      var ua = (a.urutan_rapor === null || a.urutan_rapor === undefined) ? 9999 : a.urutan_rapor;
-      var ub = (b.urutan_rapor === null || b.urutan_rapor === undefined) ? 9999 : b.urutan_rapor;
-      if (ua !== ub) return ua - ub;
-      return a.nama.localeCompare(b.nama);
-    });
+    // Urutan baris mengikuti menu "Urutan Mapel Leger" (sama untuk semua siswa).
+    mapelList = urutkanMapelLeger(mapelList);
 
     var nilaiRes = await supabaseClient
       .from('nilai')
@@ -2547,6 +2573,205 @@
       var wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Leger Nilai');
       XLSX.writeFile(wb, 'leger_' + siswaObj.nama.replace(/[^a-z0-9]/gi, '_') + '.xlsx');
+    });
+  }
+
+  // ================= PANEL: URUTAN MAPEL LEGER (6 SEMESTER) =================
+  // Satu urutan mapel yang berlaku SERAGAM di Leger Nilai (6 Semester) milik
+  // Admin dan Rekap Leger milik Wali Kelas (tampilan layar + unduhan Excel),
+  // untuk semua kelas dan semua siswa. Disimpan di mata_pelajaran.urutan_leger
+  // (lihat migrasi_urutan_leger.sql). Terpisah dari "Urutan pada Rapor" dan
+  // "Mata Pelajaran Per Tingkat", jadi tidak mengubah urutan di rapor.
+  // Cara kerja: DOM adalah sumber kebenaran urutan — baris <tr> dipindah
+  // langsung (seret / tombol ▲▼ / ketik nomor), lalu nomor dihitung ulang.
+  async function renderUrutanLeger(pesanSukses) {
+    var res = await supabaseClient
+      .from('mata_pelajaran')
+      .select('id, kode, nama, jenis_mapel, urutan_rapor, urutan_leger, berlaku_untuk, agama_spesifik');
+
+    content.innerHTML =
+      '<div class="panel-head"><div><div class="panel-head__title">Urutan Mapel di Leger (6 Semester)</div>' +
+      '<div class="panel-head__desc">Atur urutan baris mata pelajaran di Leger Nilai. Satu urutan ini dipakai untuk SEMUA kelas dan siswa, baik di menu Leger Admin maupun Rekap Leger Wali Kelas (termasuk file Excel-nya). Urutan di rapor tidak ikut berubah. Seret baris lewat ikon ⠿, pakai tombol ▲▼, atau ketik nomor tujuan lalu tekan Enter.</div></div></div>';
+
+    if (res.error) {
+      var kolomBelumAda = /urutan_leger/i.test(res.error.message || '');
+      content.insertAdjacentHTML('beforeend',
+        '<div class="panel-note" style="color:#b42318;">Gagal memuat mata pelajaran: ' + escapeHtml(res.error.message) +
+        (kolomBelumAda ? '<br>Jalankan dulu file <b>migrasi_urutan_leger.sql</b> di Supabase SQL Editor, lalu muat ulang halaman ini.' : '') + '</div>');
+      return;
+    }
+
+    var mapelList = urutkanMapelLeger(res.data || []);
+    if (!mapelList.length) {
+      content.insertAdjacentHTML('beforeend', '<div class="empty-state"><div class="empty-state__mark">！</div><div class="empty-state__title">Belum ada mata pelajaran</div><div class="empty-state__desc">Tambahkan mata pelajaran dulu di menu "Mata Pelajaran".</div></div>');
+      return;
+    }
+
+    var adaTersimpan = mapelList.some(function (m) { return m.urutan_leger !== null && m.urutan_leger !== undefined; });
+    var jumlahBaru = mapelList.filter(function (m) { return m.urutan_leger === null || m.urutan_leger === undefined; }).length;
+
+    var catatan;
+    if (!adaTersimpan) {
+      catatan = 'Urutan di bawah masih otomatis (Mapel Umum dulu, lalu Kejuruan, mengikuti "Urutan pada Rapor"). Atur sesuai keinginan lalu klik Simpan untuk menetapkannya.';
+    } else if (jumlahBaru > 0) {
+      catatan = jumlahBaru + ' mapel belum punya urutan leger (biasanya mapel baru), sementara ditaruh di paling bawah. Atur lalu klik Simpan.';
+    } else {
+      catatan = 'Semua mapel sudah punya urutan leger.';
+    }
+
+    var total = mapelList.length;
+    var barisHtml = mapelList.map(function (m, i) {
+      var awal = (m.urutan_leger === null || m.urutan_leger === undefined) ? '' : m.urutan_leger;
+      var chips = (m.jenis_mapel === 'kejuruan' ? ' <span class="chip chip--muted">Kejuruan</span>' : '') +
+        (m.berlaku_untuk === 'tertentu' ? ' <span class="chip chip--muted">Kelas Tertentu</span>' : '') +
+        (m.agama_spesifik ? ' <span class="chip chip--muted">' + escapeHtml(m.agama_spesifik) + '</span>' : '');
+      return '<tr class="ulRow" data-mapel-id="' + m.id + '" data-awal="' + awal + '">' +
+        '<td class="ulHandle" title="Seret untuk memindahkan" style="width:34px;text-align:center;cursor:grab;color:var(--ink-soft);user-select:none;">⠿</td>' +
+        '<td style="width:90px;"><input type="number" class="ulUrutanInput" min="1" max="' + total + '" value="' + (i + 1) + '" style="width:72px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;"></td>' +
+        '<td>' + escapeHtml(m.kode || '—') + '</td>' +
+        '<td>' + escapeHtml(m.nama) + chips + '</td>' +
+        '<td style="white-space:nowrap;"><button type="button" class="btn-small ulUp" title="Naikkan">▲</button> <button type="button" class="btn-small ulDown" title="Turunkan">▼</button></td>' +
+        '</tr>';
+    }).join('');
+
+    content.insertAdjacentHTML('beforeend',
+      '<div class="toolbar">' +
+      '<button class="btn-small" id="btnKeLegerDariUrutan" data-guard-nav="#content">← Ke Leger Nilai</button>' +
+      '<button class="btn-small btn-small--primary" id="ulBtnSimpan" type="button">Simpan Urutan Leger</button>' +
+      '<button class="btn-small btn-small--danger" id="ulBtnReset" type="button">Kembalikan ke Urutan Otomatis</button>' +
+      '</div>' +
+      '<div id="ulMsg">' + (pesanSukses ? '<div class="panel-note">' + escapeHtml(pesanSukses) + '</div>' : '') + '</div>' +
+      '<div class="panel-note">' + escapeHtml(catatan) + '</div>' +
+      '<div class="table-wrap"><table class="data-table"><thead><tr><th></th><th>No</th><th>Kode</th><th>Nama Mapel</th><th>Pindah</th></tr></thead>' +
+      '<tbody id="ulBody">' + barisHtml + '</tbody></table></div>');
+    SimpanAtas.pasang('ulBtnSimpan');
+
+    var tbody = document.getElementById('ulBody');
+    var msgBox = document.getElementById('ulMsg');
+
+    function semuaBaris() { return Array.prototype.slice.call(tbody.querySelectorAll('tr.ulRow')); }
+
+    function hitungUlangNomor() {
+      var rows = semuaBaris();
+      rows.forEach(function (tr, i) {
+        tr.querySelector('.ulUrutanInput').value = i + 1;
+        tr.querySelector('.ulUp').disabled = (i === 0);
+        tr.querySelector('.ulDown').disabled = (i === rows.length - 1);
+      });
+    }
+    hitungUlangNomor();
+
+    document.getElementById('btnKeLegerDariUrutan').addEventListener('click', function () {
+      setActiveMenu('leger');
+      views.leger();
+    });
+
+    // Tombol ▲ ▼
+    tbody.addEventListener('click', function (e) {
+      var tombol = e.target.closest('button.ulUp, button.ulDown');
+      if (!tombol) return;
+      var tr = tombol.closest('tr.ulRow');
+      if (tombol.classList.contains('ulUp')) {
+        var atas = tr.previousElementSibling;
+        if (atas) tbody.insertBefore(tr, atas);
+      } else {
+        var bawah = tr.nextElementSibling;
+        if (bawah) tbody.insertBefore(tr, bawah.nextSibling);
+      }
+      hitungUlangNomor();
+      tr.scrollIntoView({ block: 'nearest' });
+    });
+
+    // Ketik nomor tujuan lalu Enter / pindah fokus
+    tbody.addEventListener('change', function (e) {
+      var inp = e.target.closest('input.ulUrutanInput');
+      if (!inp) return;
+      var tr = inp.closest('tr.ulRow');
+      var rows = semuaBaris();
+      var tujuan = parseInt(inp.value, 10);
+      if (isNaN(tujuan)) { hitungUlangNomor(); return; }
+      tujuan = Math.max(1, Math.min(rows.length, tujuan));
+      rows.splice(rows.indexOf(tr), 1);
+      rows.splice(tujuan - 1, 0, tr);
+      rows.forEach(function (r) { tbody.appendChild(r); });
+      hitungUlangNomor();
+      tr.scrollIntoView({ block: 'nearest' });
+    });
+
+    // Seret & lepas (hanya lewat ikon ⠿; di layar sentuh pakai ▲▼ / nomor)
+    var barisDiseret = null;
+    tbody.addEventListener('mousedown', function (e) {
+      var handle = e.target.closest('.ulHandle');
+      if (handle) handle.closest('tr.ulRow').draggable = true;
+    });
+    tbody.addEventListener('dragstart', function (e) {
+      var tr = e.target.closest ? e.target.closest('tr.ulRow') : null;
+      if (!tr) return;
+      barisDiseret = tr;
+      tr.style.opacity = '0.4';
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', tr.dataset.mapelId);
+    });
+    tbody.addEventListener('dragover', function (e) {
+      if (!barisDiseret) return;
+      e.preventDefault();
+      var tr = e.target.closest ? e.target.closest('tr.ulRow') : null;
+      if (!tr || tr === barisDiseret) return;
+      var kotak = tr.getBoundingClientRect();
+      var sesudah = (e.clientY - kotak.top) > kotak.height / 2;
+      tbody.insertBefore(barisDiseret, sesudah ? tr.nextSibling : tr);
+    });
+    tbody.addEventListener('dragend', function () {
+      if (!barisDiseret) return;
+      barisDiseret.style.opacity = '';
+      barisDiseret.draggable = false;
+      barisDiseret = null;
+      hitungUlangNomor();
+    });
+    tbody.addEventListener('drop', function (e) { e.preventDefault(); });
+
+    document.getElementById('ulBtnSimpan').addEventListener('click', async function () {
+      var btn = this;
+      var perubahan = semuaBaris().map(function (tr, i) {
+        return { id: tr.dataset.mapelId, urutan: i + 1, awal: tr.dataset.awal };
+      }).filter(function (x) { return String(x.urutan) !== x.awal; });
+
+      if (!perubahan.length) {
+        msgBox.innerHTML = '<div class="panel-note">Tidak ada perubahan urutan untuk disimpan.</div>';
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Menyimpan...';
+      try {
+        var gagal = [];
+        for (var i = 0; i < perubahan.length; i += 10) {
+          var hasil = await Promise.all(perubahan.slice(i, i + 10).map(function (x) {
+            return supabaseClient.from('mata_pelajaran').update({ urutan_leger: x.urutan }).eq('id', x.id);
+          }));
+          hasil.forEach(function (r) { if (r.error) gagal.push(r.error.message); });
+        }
+        if (gagal.length) {
+          msgBox.innerHTML = '<div class="panel-note" style="color:#b42318;">Sebagian gagal disimpan (' + gagal.length + ' dari ' + perubahan.length + '): ' + escapeHtml(gagal[0]) + '</div>';
+          return;
+        }
+        if (window.UnsavedGuard) UnsavedGuard.markSaved('.ulUrutanInput');
+        await renderUrutanLeger('Urutan leger tersimpan (' + perubahan.length + ' mapel berubah posisi). Sudah berlaku di Leger Admin dan Rekap Leger Wali Kelas.');
+      } finally {
+        var tombolMasihAda = document.getElementById('ulBtnSimpan');
+        if (tombolMasihAda) { tombolMasihAda.disabled = false; tombolMasihAda.textContent = 'Simpan Urutan Leger'; }
+      }
+    });
+
+    document.getElementById('ulBtnReset').addEventListener('click', async function () {
+      if (!confirm('Kembalikan urutan leger ke urutan otomatis (Mapel Umum dulu, lalu Kejuruan, mengikuti "Urutan pada Rapor")?\n\nUrutan leger yang sudah kamu atur akan dihapus.')) return;
+      var r = await supabaseClient.from('mata_pelajaran').update({ urutan_leger: null }).not('urutan_leger', 'is', null);
+      if (r.error) {
+        msgBox.innerHTML = '<div class="panel-note" style="color:#b42318;">Gagal mengembalikan: ' + escapeHtml(r.error.message) + '</div>';
+        return;
+      }
+      if (window.UnsavedGuard) UnsavedGuard.markSaved('.ulUrutanInput');
+      await renderUrutanLeger('Urutan leger dikembalikan ke urutan otomatis.');
     });
   }
 
@@ -3984,6 +4209,7 @@
         '<tbody>' + rowsHtml + '</tbody></table></div>' +
         '<button class="btn-small btn-small--primary" id="btnSimpanPeserta" style="margin-top:10px;">Simpan Peserta</button>' +
         '<div id="pesertaSimpanMsg"></div>';
+      SimpanAtas.pasang('btnSimpanPeserta');
 
       // ---------- Pilih Semua / Batal Semua peserta ----------
       // Checkbox di header men-toggle SEMUA checkbox siswa di tabel ini
@@ -4452,6 +4678,7 @@
         '<div class="panel-note">Cara ini (centang manual) hanya menugaskan ke guru "' + escapeHtml((guruList.filter(function (g) { return g.id === guruIdDipilih; })[0] || {}).nama || '') + '" yang dipilih di atas. Tempat PKL &amp; Tanggal Mulai/Selesai di tabel ini hanya berlaku untuk siswa yang dicentang "Dibimbing?" — guru pembimbing masih bisa mengubahnya sendiri lewat menu "Nilai PKL".</div>' +
         '<button class="btn-small btn-small--primary" id="btnSimpanPkl" style="margin-top:10px;">Simpan Pembimbing PKL</button>' +
         '<div id="pklSimpanMsg"></div>';
+      SimpanAtas.pasang('btnSimpanPkl');
 
       // =========================================================
       // Unduh Template & Import Excel — PEMBAGIAN Guru Pembimbing PKL
@@ -4711,6 +4938,7 @@
         '<div class="panel-note">Cara ini (centang manual) hanya menugaskan ke guru "' + escapeHtml((guruList.filter(function (g) { return g.id === guruIdDipilih; })[0] || {}).nama || '') + '" yang dipilih di atas.</div>' +
         '<button class="btn-small btn-small--primary" id="btnSimpanPklPenguji" style="margin-top:10px;">Simpan Penguji PKL</button>' +
         '<div id="pklPengujiSimpanMsg"></div>';
+      SimpanAtas.pasang('btnSimpanPklPenguji');
 
       var pklPengujiSelectAll = document.getElementById('pklPengujiSelectAllChk');
       function pklPengujiChkList() { return document.querySelectorAll('.pkl-penguji-check'); }
@@ -4925,7 +5153,7 @@
     });
   }
 
-  var views = { dashboard: renderDashboard, profilSekolah: renderProfilSekolah, tahunAjaran: renderTahunAjaran, siswa: renderSiswa, leger: renderLeger, kelas: renderKelas, mapel: renderMapel, mapelTingkat: renderMapelTingkat, penugasan: renderPenugasan, guru: renderGuru, ekskul: renderEkstrakurikuler, pkl: renderPkl };
+  var views = { dashboard: renderDashboard, profilSekolah: renderProfilSekolah, tahunAjaran: renderTahunAjaran, siswa: renderSiswa, leger: renderLeger, urutanLeger: renderUrutanLeger, kelas: renderKelas, mapel: renderMapel, mapelTingkat: renderMapelTingkat, penugasan: renderPenugasan, guru: renderGuru, ekskul: renderEkstrakurikuler, pkl: renderPkl };
 
   document.querySelectorAll('#menuAdmin .menu-item').forEach(function (item) {
     item.addEventListener('click', function (e) {

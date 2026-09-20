@@ -1,0 +1,23 @@
+-- =========================================================
+-- MIGRASI: Urutan Mapel di Leger Nilai (6 Semester)
+--
+-- Menambah kolom mata_pelajaran.urutan_leger. Dipakai menu Admin →
+-- "Urutan Mapel Leger" untuk mengatur urutan baris mata pelajaran
+-- di Leger Nilai (6 Semester) — satu urutan yang SERAGAM untuk semua
+-- kelas dan siswa, dipakai di Leger Admin dan Rekap Leger Wali Kelas
+-- (tampilan layar dan file Excel).
+--
+-- Terpisah dari urutan_rapor (urutan di rapor) dan
+-- mapel_urutan_kelas (urutan rapor per kelas), jadi urutan rapor
+-- TIDAK ikut berubah.
+--
+-- Kolom boleh kosong (NULL): mapel yang belum punya urutan leger
+-- ditaruh di bawah, diurutkan otomatis (Umum dulu baru Kejuruan,
+-- lalu urutan_rapor, lalu nama).
+--
+-- Aman dijalankan berkali-kali. Jalankan di Supabase Dashboard
+-- → SQL Editor. Kebijakan RLS yang sudah ada di mata_pelajaran
+-- (semua user login boleh baca, admin boleh ubah) otomatis berlaku.
+-- =========================================================
+alter table public.mata_pelajaran
+  add column if not exists urutan_leger integer;

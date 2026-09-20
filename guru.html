@@ -11,11 +11,10 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="xlsx-autofit.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="pdf-cetak.js?v=1"></script>
 <script src="unsaved-guard.js?v=1"></script>
 <script src="supabase-client.js"></script>
+<script src="simpan-atas.js?v=1"></script>
+<script src="sambutan-guru.js?v=1"></script>
 </head>
 <body>
 
@@ -191,6 +190,28 @@
     });
   }
 
+  // ---------- Urutan baris mapel di Rekap Leger (6 Semester) ----------
+  // SAMA PERSIS dengan urutkanMapelLeger di admin.html: mengikuti menu Admin →
+  // "Urutan Mapel Leger" (mata_pelajaran.urutan_leger), seragam untuk semua
+  // kelas & siswa. Mapel yang belum punya urutan leger ditaruh setelah yang
+  // sudah punya, urut otomatis: Umum dulu baru Kejuruan, lalu "Urutan pada
+  // Rapor", lalu nama.
+  function urutkanMapelLeger(list) {
+    function punya(v) { return v !== null && v !== undefined; }
+    return list.slice().sort(function (a, b) {
+      var pa = punya(a.urutan_leger), pb = punya(b.urutan_leger);
+      if (pa && pb && a.urutan_leger !== b.urutan_leger) return a.urutan_leger - b.urutan_leger;
+      if (pa !== pb) return pa ? -1 : 1;
+      var ja = a.jenis_mapel === 'kejuruan' ? 1 : 0;
+      var jb = b.jenis_mapel === 'kejuruan' ? 1 : 0;
+      if (ja !== jb) return ja - jb;
+      var ua = punya(a.urutan_rapor) ? a.urutan_rapor : 9999;
+      var ub = punya(b.urutan_rapor) ? b.urutan_rapor : 9999;
+      if (ua !== ub) return ua - ub;
+      return (a.nama || '').localeCompare(b.nama || '');
+    });
+  }
+
   // ---------- Format tanggal "12 Desember 2026" untuk Tanggal Rapor ----------
   // Dipakai di baris tanda tangan Cetak Rapor, mengambil dari kolom
   // tanggal_rapor di profil_sekolah (diisi Admin). Kalau belum diisi,
@@ -235,6 +256,9 @@
     var nama = (profileResult.data && profileResult.data.nama) ? profileResult.data.nama : user.email;
     document.getElementById('userName').textContent = nama;
     document.getElementById('userAvatar').textContent = nama.trim().charAt(0).toUpperCase();
+
+    // Pop up penyemangat — hanya muncul sekali setelah login (lihat sambutan-guru.js).
+    if (window.SambutanGuru) SambutanGuru.tampilkanJikaBaruLogin(profileResult.data && profileResult.data.nama);
 
     // 3. Ambil tahun ajaran yang SEDANG AKTIF — ini kuncinya.
     //    Semua data guru di bawah selalu difilter pakai tahunAktif.id,
@@ -1118,7 +1142,9 @@
     //   - TP "baik"   = TP dengan nilai TERTINGGI. Kalau ada beberapa TP
     //                   bernilai sama-sama tertinggi, diambil SALAH SATU
     //                   (yang urutannya paling awal).
-    //   - TP "kurang" = TP yang nilainya DI BAWAH KKM.
+    //   - TP "kurang" = SATU TP saja: TP dengan nilai TERENDAH di antara
+    //                   yang DI BAWAH KKM. Kalau ada beberapa TP bernilai
+    //                   sama-sama terendah, diambil yang urutannya paling awal.
     // Guru bisa memilih tampilan: "Hanya capaian terbaik" atau "Capaian
     // baik dan kurang". Kalau dipilih baik+kurang TAPI tidak ada satu
     // pun nilai TP di bawah KKM, bagian "kurang" otomatis tidak muncul.
@@ -1330,18 +1356,25 @@
       // ---------- Penentuan TP baik & TP kurang ----------
       // baik   : TP bernilai tertinggi; kalau seri, ambil salah satu
       //          (yang urutannya paling awal di daftar TP).
-      // kurang : TP yang nilainya di bawah KKM. TP terbaik dikecualikan
-      //          supaya tidak muncul di dua sisi sekaligus.
+      // kurang : SATU TP saja — yang nilainya paling rendah di antara TP
+      //          yang di bawah KKM; kalau seri, ambil yang urutannya paling
+      //          awal di daftar TP. TP terbaik dikecualikan supaya tidak
+      //          muncul di dua sisi sekaligus. Hasilnya tetap berupa array
+      //          (berisi 0 atau 1 TP) supaya pemakainya tidak perlu berubah.
       function pilahTp(siswaId) {
         var h = hitungSiswa(siswaId);
         if (!h.terisi.length) return { baik: null, kurang: [] };
         var maks = Math.max.apply(null, h.terisi.map(function (x) { return x.nilai; }));
         var terbaik = h.terisi.filter(function (x) { return x.nilai === maks; })[0];
         var kkm = kkmSaatIni();
-        var kurang = h.terisi.filter(function (x) {
+        var dibawahKkm = h.terisi.filter(function (x) {
           return x.nilai < kkm && x.tp.id !== terbaik.tp.id;
         });
-        return { baik: terbaik, kurang: kurang };
+        var terendah = null;
+        dibawahKkm.forEach(function (x) {
+          if (terendah === null || x.nilai < terendah.nilai) terendah = x;
+        });
+        return { baik: terbaik, kurang: terendah ? [terendah] : [] };
       }
 
       function susunCapaian(siswaId) {
@@ -1430,7 +1463,7 @@
         '<strong>Catatan:</strong> komponen yang masih kosong tidak ikut dihitung dan bobotnya juga tidak ikut dibagi, jadi nilai sementara tetap masuk akal. Bobot 0 berarti komponen itu diabaikan. Bobot tidak harus berjumlah 100 atau 6 — perbandingannya yang dipakai.<br><br>' +
         '<strong>Petunjuk Capaian Pembelajaran</strong><br>' +
         '• <em>TP terbaik</em> diambil otomatis dari TP dengan nilai tertinggi. Kalau ada beberapa TP bernilai sama-sama tertinggi, sistem memilih salah satu (TP dengan urutan paling awal).<br>' +
-        '• <em>TP kurang</em> adalah TP yang nilainya <strong>di bawah KKM</strong>.<br>' +
+        '• <em>TP kurang</em> hanya <strong>satu</strong>: TP dengan nilai <strong>terendah di bawah KKM</strong>. Kalau ada beberapa TP sama-sama terendah, sistem memilih TP dengan urutan paling awal.<br>' +
         '• Kalau pilihan tampilan diisi "Capaian baik dan kurang" tetapi <strong>tidak ada</strong> nilai TP di bawah KKM, kalimat capaian kurang otomatis <strong>tidak dimunculkan</strong>.<br>' +
         '• Teks yang sudah kamu sunting manual tidak akan tertimpa saat bobot/KKM diubah. Klik "↺ Susun Ulang" kalau ingin dikembalikan ke teks otomatis.' +
         '</div>';
@@ -1486,6 +1519,7 @@
         '<th class="col-hitung">Nilai Rapor</th>' +
         '<th>Capaian Pembelajaran</th></tr></thead>' +
         '<tbody>' + rowsHtml + '</tbody></table></div>';
+      SimpanAtas.pasang('btnSimpanNilai');
 
       // ---------- Menandai textarea yang masih "otomatis" ----------
       // Teks yang pernah disunting manual oleh guru tidak boleh tertimpa
@@ -2391,7 +2425,7 @@
 
       var mapelSemuaRes = await supabaseClient
         .from('mata_pelajaran')
-        .select('id, nama, kode, jenis_mapel, urutan_rapor, berlaku_untuk, berlaku_semester, agama_spesifik');
+        .select('id, nama, kode, jenis_mapel, urutan_rapor, urutan_leger, berlaku_untuk, berlaku_semester, agama_spesifik');
       var mapelKelasRes = kelasIdList.length
         ? await supabaseClient.from('mapel_kelas').select('mapel_id').in('kelas_id', kelasIdList)
         : { data: [] };
@@ -2431,12 +2465,10 @@
         nilaiMap[ke][r.mapel_id] = { nilai: r.nilai };
       });
 
-      // Urutan baris mapel di leger dibuat KONSISTEN, sama seperti urutan
-      // mapel yang dipakai Admin di rapor kelas X s.d. XII (mapel_urutan_kelas
-      // milik kelas yang diampu wali kelas ini, jatuh balik ke urutan_rapor
-      // default), bukan urutan abjad — supaya baris tidak acak antar siswa.
-      var urutanKelasMapLeger = await ambilUrutanKelasMap(wk.kelas.id);
-      mapelList = urutkanMapelList(mapelList, urutanKelasMapLeger);
+      // Urutan baris mapel di leger mengikuti menu Admin → "Urutan Mapel
+      // Leger" (seragam untuk semua kelas & siswa, sama dengan Leger Admin),
+      // bukan urutan abjad dan bukan urutan rapor per kelas.
+      mapelList = urutkanMapelLeger(mapelList);
 
       if (!mapelList.length) {
         area.innerHTML = '<div class="empty-state"><div class="empty-state__mark">！</div>' +
@@ -2543,6 +2575,7 @@
         '<div id="presensiMsg"></div>' +
         '<div class="table-wrap"><table class="data-table"><thead><tr><th>No</th><th>NIS</th><th>Nama</th><th>Sakit</th><th>Izin</th><th>Tanpa Keterangan</th></tr></thead>' +
         '<tbody>' + rowsHtml + '</tbody></table></div>';
+      SimpanAtas.pasang('btnSimpanPresensi');
 
       // ---------- Excel: Unduh / Template / Import ----------
       var PRESENSI_HEADERS = ['NIS', 'Nama', 'Sakit', 'Izin', 'Tanpa Keterangan'];
@@ -2839,6 +2872,7 @@
         '<div id="ekskulNilaiMsg"></div>' +
         '<div class="table-wrap"><table class="data-table"><thead><tr><th>No</th><th>NIS</th><th>Nama</th><th>Kelas</th><th>Predikat</th><th>Deskripsi</th></tr></thead>' +
         '<tbody>' + rowsHtml + '</tbody></table></div>';
+      SimpanAtas.pasang('btnSimpanEkskul');
 
       // ---------- Unduh Template & Import Excel (isi massal) ----------
       // Template sudah berisi seluruh peserta ekskul ini (NIS, Nama, Kelas)
@@ -3673,8 +3707,7 @@
             '<td>' + escapeHtml(b.nama_dudi || '—') + '</td>' +
             '<td class="tc-center">' +
             '<button class="btn-small btn-pkl-preview" data-siswa="' + b.siswa_id + '"><i data-lucide="eye" style="width:14px;height:14px;"></i> Preview</button> ' +
-            '<button class="btn-small btn-small--primary btn-pkl-cetak-satu" data-siswa="' + b.siswa_id + '"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak</button> ' +
-            '<button class="btn-small btn-pkl-pdf-satu" data-siswa="' + b.siswa_id + '"><i data-lucide="file-down" style="width:14px;height:14px;"></i> PDF</button>' +
+            '<button class="btn-small btn-small--primary btn-pkl-cetak-satu" data-siswa="' + b.siswa_id + '"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak</button>' +
             '</td></tr>';
         }
 
@@ -3683,8 +3716,6 @@
           '<div class="no-print" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">' +
           '<button class="btn-small" id="btnPklCetakTerpilih"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak Terpilih</button>' +
           '<button class="btn-small btn-small--primary" id="btnPklCetakSemua"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak Semua</button>' +
-          '<button class="btn-small" id="btnPklPdfTerpilih"><i data-lucide="file-down" style="width:14px;height:14px;"></i> PDF Terpilih</button>' +
-          '<button class="btn-small" id="btnPklPdfSemua"><i data-lucide="file-down" style="width:14px;height:14px;"></i> PDF Semua</button>' +
           '</div>' +
           '<div class="table-wrap no-print"><table class="data-table"><thead><tr>' +
           '<th class="tc-center"><input type="checkbox" id="checkSemuaPklCetak"></th>' +
@@ -3711,17 +3742,6 @@
         document.getElementById('btnPklCetakSemua').addEventListener('click', function () {
           cetakFormatPkl(binaanList.map(function (b) { return b.siswa_id; }), this);
         });
-        body.querySelectorAll('.btn-pkl-pdf-satu').forEach(function (btn) {
-          btn.addEventListener('click', function () { cetakFormatPkl([this.getAttribute('data-siswa')], this, 'pdf'); });
-        });
-        document.getElementById('btnPklPdfTerpilih').addEventListener('click', function () {
-          var ids = Array.prototype.slice.call(body.querySelectorAll('.pkl-cetak-check:checked')).map(function (c) { return c.value; });
-          if (!ids.length) { alert('Centang minimal satu siswa terlebih dahulu.'); return; }
-          cetakFormatPkl(ids, this, 'pdf');
-        });
-        document.getElementById('btnPklPdfSemua').addEventListener('click', function () {
-          cetakFormatPkl(binaanList.map(function (b) { return b.siswa_id; }), this, 'pdf');
-        });
 
         async function tampilkanPreviewPkl(siswaId) {
           var b = cariBinaan(siswaId);
@@ -3732,12 +3752,10 @@
             '<div class="no-print" style="display:flex;gap:8px;margin:14px 0;align-items:center;flex-wrap:wrap;">' +
             '<button class="btn-small" id="btnKembaliDaftarPkl"><i data-lucide="arrow-left" style="width:14px;height:14px;"></i> Kembali ke Daftar</button>' +
             '<button class="btn-small btn-small--primary" id="btnCetakDariPreviewPkl"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak</button>' +
-            '<button class="btn-small" id="btnPdfDariPreviewPkl"><i data-lucide="file-down" style="width:14px;height:14px;"></i> Unduh PDF</button>' +
             '</div>' + html;
           lucide.createIcons();
           document.getElementById('btnKembaliDaftarPkl').addEventListener('click', function () { renderLangkahCetak(); });
           document.getElementById('btnCetakDariPreviewPkl').addEventListener('click', function () { cetakFormatPkl([siswaId], this); });
-          document.getElementById('btnPdfDariPreviewPkl').addEventListener('click', function () { cetakFormatPkl([siswaId], this, 'pdf'); });
         }
 
         // Empat Tujuan Pembelajaran PKL baku (sama untuk semua siswa,
@@ -3824,24 +3842,18 @@
             '<div class="ident-footer-ttd"><div class="rapor-cetak__footer-date">' + escapeHtml(NAMA_KOTA_TTD) + ', ' + (TANGGAL_CETAK || '…........') + '</div><div>Kepala Sekolah</div><div class="rapor-cetak__ttd-space"></div><div><strong>' + escapeHtml(NAMA_KEPALA_SEKOLAH) + '</strong></div></div>' +
             '</div>' +
             '</div>' +
-            '<div class="rapor-cetak__page-no">1</div>' +
             '</div>';
         }
 
         // Mencetak 1 siswa (dari tombol "Cetak" per baris/preview) atau
         // beberapa siswa sekaligus ("Cetak Terpilih"/"Cetak Semua") — tiap
         // siswa mulai di halaman barunya sendiri, sama seperti Cetak Rapor.
-        async function cetakFormatPkl(siswaIds, triggerBtn, mode) {
+        async function cetakFormatPkl(siswaIds, triggerBtn) {
           var teksAsliBtn = triggerBtn ? triggerBtn.innerHTML : null;
           if (triggerBtn) { triggerBtn.disabled = true; triggerBtn.innerHTML = 'Menyiapkan...'; }
           var judulAsli = document.title;
           try {
             var potongan = await Promise.all(siswaIds.map(function (id) { return buatFormatPkl(id); }));
-            if (mode === 'pdf') {
-              var judulPdf = 'PKL - ' + (siswaIds.length === 1 ? (cariBinaan(siswaIds[0]).siswa.nama + ' - ' + cariBinaan(siswaIds[0]).kelas.nama) : (siswaIds.length + ' siswa'));
-              await unduhPdfCetak(potongan, judulPdf);
-              return;
-            }
             var area = document.getElementById('cetakPklArea');
             if (!area) { area = document.createElement('div'); area.id = 'cetakPklArea'; body.appendChild(area); }
             area.innerHTML = potongan.join(''); // tiap siswa mulai halaman baru lewat aturan ".rapor-cetak + .rapor-cetak { page-break-before: always; }"
@@ -3984,6 +3996,7 @@
         '<tr><th rowspan="2">No</th><th rowspan="2">NIS</th><th rowspan="2">Nama Siswa</th><th rowspan="2">Tempat PKL</th><th rowspan="2">Waktu PKL</th><th rowspan="2">Pembimbing</th>' + pkluTpHeadGroups + '<th rowspan="2">Nilai Akhir DUDI</th><th rowspan="2">Nilai Akhir Penguji</th><th rowspan="2">Nilai Akhir Total</th></tr>' +
         '<tr>' + pkluTpSubHeads + '</tr>' +
         '</thead><tbody>' + ujiList.map(barisSiswaUji).join('') + '</tbody></table></div>';
+      SimpanAtas.pasang('btnSimpanPklPenguji');
       lucide.createIcons();
 
       function perbaruiAkhirPenguji(sId) {
@@ -4236,6 +4249,7 @@
         '<div id="kokuNilaiMsg"></div>' +
         '<div class="table-wrap"><table class="data-table"><thead><tr><th>No</th><th>NIS</th><th>Nama</th>' + (showKelasCol ? '<th>Kelas</th>' : '') + '<th>Deskripsi</th></tr></thead>' +
         '<tbody>' + rowsHtml + '</tbody></table></div>';
+      SimpanAtas.pasang('btnSimpanKoku');
 
       // ---------- Unduh Template & Import Excel (isi massal) ----------
       // Template berisi seluruh siswa dalam lingkup PJ ini (NIS, Nama, Kelas)
@@ -4772,6 +4786,7 @@
         '<div id="catatanWaliMsg"></div>' +
         '<div class="table-wrap"><table class="data-table"><thead><tr><th>No</th><th>NIS</th><th>Nama</th><th>Ringkasan Nilai &amp; Kehadiran</th><th>Catatan Wali Kelas</th></tr></thead>' +
         '<tbody>' + rowsHtml + '</tbody></table></div>';
+      SimpanAtas.pasang('btnSimpanCatatanWali');
 
       lucide.createIcons();
 
@@ -4917,11 +4932,11 @@
       var mapelKejuruan = mapelListKelasIni.filter(function (m) { return m.jenis_mapel === 'kejuruan'; }).sort(urutkanMapel);
 
       // ---- Tampilan 1: Daftar seluruh siswa kelas ini ----
-      // Tiap baris punya tombol Preview (lihat di layar) dan Unduh
-      // (langsung buat & unduh file PDF siswa itu saja), plus checkbox
-      // untuk memilih beberapa siswa sekaligus ("Unduh Terpilih"), dan
-      // tombol "Unduh Semua" untuk mengunduh satu kelas penuh sekaligus
-      // (semua rapor digabung jadi satu file PDF, tiap siswa halaman baru).
+      // Tiap baris punya tombol Preview (lihat di layar) dan Cetak, plus
+      // checkbox untuk memilih beberapa siswa sekaligus ("Cetak Terpilih"),
+      // dan tombol "Cetak Semua" untuk mencetak satu kelas penuh sekaligus
+      // (tiap siswa mulai di halaman baru). Simpan sebagai PDF lewat jendela
+      // cetak browser.
       function renderDaftarSiswa() {
         var rowsHtml = siswaList.map(function (s, i) {
           return '<tr>' +
@@ -4931,8 +4946,7 @@
             '<td>' + escapeHtml(s.nama) + '</td>' +
             '<td class="tc-center">' +
             '<button class="btn-small btn-cetak-preview" data-id="' + s.id + '"><i data-lucide="eye" style="width:14px;height:14px;"></i> Preview</button> ' +
-            '<button class="btn-small btn-small--primary btn-cetak-satu" data-id="' + s.id + '"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak</button> ' +
-            '<button class="btn-small btn-cetak-pdf-satu" data-id="' + s.id + '"><i data-lucide="file-down" style="width:14px;height:14px;"></i> PDF</button>' +
+            '<button class="btn-small btn-small--primary btn-cetak-satu" data-id="' + s.id + '"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak</button>' +
             '</td></tr>';
         }).join('');
 
@@ -4942,8 +4956,6 @@
           '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
           '<button class="btn-small" id="btnCetakTerpilih"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak Terpilih</button>' +
           '<button class="btn-small btn-small--primary" id="btnCetakSemua"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak Semua</button>' +
-          '<button class="btn-small" id="btnPdfTerpilih"><i data-lucide="file-down" style="width:14px;height:14px;"></i> PDF Terpilih</button>' +
-          '<button class="btn-small" id="btnPdfSemua"><i data-lucide="file-down" style="width:14px;height:14px;"></i> PDF Semua</button>' +
           '</div></div>' +
           '<div class="table-wrap no-print"><table class="data-table"><thead><tr>' +
           '<th class="tc-center"><input type="checkbox" id="checkSemuaCetak"></th>' +
@@ -4970,17 +4982,6 @@
         document.getElementById('btnCetakSemua').addEventListener('click', function () {
           cetakSiswa(siswaList.map(function (s) { return s.id; }), this);
         });
-        document.querySelectorAll('.btn-cetak-pdf-satu').forEach(function (btn) {
-          btn.addEventListener('click', function () { cetakSiswa([this.getAttribute('data-id')], this, 'pdf'); });
-        });
-        document.getElementById('btnPdfTerpilih').addEventListener('click', function () {
-          var ids = Array.prototype.slice.call(document.querySelectorAll('.cetak-rapor-check:checked')).map(function (c) { return c.value; });
-          if (!ids.length) { alert('Centang minimal satu siswa terlebih dahulu.'); return; }
-          cetakSiswa(ids, this, 'pdf');
-        });
-        document.getElementById('btnPdfSemua').addEventListener('click', function () {
-          cetakSiswa(siswaList.map(function (s) { return s.id; }), this, 'pdf');
-        });
       }
 
       // Tampilkan hasil rapor 1 siswa di layar (tanpa langsung mencetak),
@@ -4994,12 +4995,10 @@
           '<div class="no-print" style="display:flex;gap:8px;margin:14px 0;align-items:center;flex-wrap:wrap;">' +
           '<button class="btn-small" id="btnKembaliDaftarCetak"><i data-lucide="arrow-left" style="width:14px;height:14px;"></i> Kembali ke Daftar</button>' +
           '<button class="btn-small btn-small--primary" id="btnCetakDariPreview"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak</button>' +
-          '<button class="btn-small" id="btnPdfDariPreview"><i data-lucide="file-down" style="width:14px;height:14px;"></i> Unduh PDF</button>' +
           '</div>' + html;
         lucide.createIcons();
         document.getElementById('btnKembaliDaftarCetak').addEventListener('click', renderDaftarSiswa);
         document.getElementById('btnCetakDariPreview').addEventListener('click', function () { cetakSiswa([siswaId], this); });
-        document.getElementById('btnPdfDariPreview').addEventListener('click', function () { cetakSiswa([siswaId], this, 'pdf'); });
         area.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
 
@@ -5073,17 +5072,10 @@
         // di style.css yang berlaku — jangan suntikkan apa-apa.
         if (!tinggiMaxPx) return;
 
-        // PENYANGGA 4mm: sama seperti pada ".rapor-cetak--identitas" di
-        // style.css (lihat komentar di sana). Tanpa penyangga ini,
-        // min-height page1/page2 pas PERSIS 1 halaman kertas, dan
-        // pembulatan mm->px sekecil apapun bisa membuat kotak "tumpah"
-        // secuil ke halaman berikutnya — lalu nomor halaman (elemen
-        // position:absolute; bottom:0 di dalamnya) ikut menempel ke
-        // dasar potongan TERAKHIR itu, yaitu di halaman baru yang nyaris
-        // kosong, bukan di dasar halaman yang benar. Bug ini yang
-        // membuat nomor halaman "lompat" ke halaman berikutnya dan
-        // memunculkan 1 halaman tambahan yang nyaris kosong tiap kali
-        // page1 (tabel Nilai) muat pas 1 halaman.
+        // PENYANGGA 4mm: min-height page1 sengaja dikurangi sedikit dari tinggi
+        // halaman sebenarnya. Kalau pas PERSIS 1 halaman, pembulatan mm -> px
+        // sekecil apapun bisa membuat page1 "tumpah" secuil ke halaman
+        // berikutnya dan memunculkan halaman yang nyaris kosong.
         var PENYANGGA_MM = 4;
         var tinggiIdentitasMm = tinggiMaxPx / PX_PER_MM;
         var tinggiHalamanPertamaMm = 297 - TOP_MARGIN_MM - BOTTOM_MARGIN_MM - tinggiIdentitasMm - GAP_MM - PENYANGGA_MM;
@@ -5096,7 +5088,7 @@
         }
         styleEl.textContent =
           '@media print {' +
-          '.rapor-cetak__page1, .rapor-cetak__page2 { min-height: ' + tinggiHalamanPertamaMm.toFixed(2) + 'mm; }' +
+          '.rapor-cetak__page1 { min-height: ' + tinggiHalamanPertamaMm.toFixed(2) + 'mm; }' +
           '}';
       }
 
@@ -5109,7 +5101,7 @@
       // ".rapor-cetak + .rapor-cetak { page-break-before: always; }" di
       // @media print), jadi halaman tiap siswa tidak pernah bercampur
       // dengan siswa lain walau digabung dalam satu dokumen/file.
-      async function cetakSiswa(idList, triggerBtn, mode) {
+      async function cetakSiswa(idList, triggerBtn) {
         var teksAsliBtn = triggerBtn ? triggerBtn.innerHTML : null;
         if (triggerBtn) { triggerBtn.disabled = true; triggerBtn.innerHTML = 'Menyiapkan...'; }
 
@@ -5119,7 +5111,6 @@
           for (var i = 0; i < idList.length; i++) {
             htmlParts.push(await buatKartuRapor(idList[i]));
           }
-          if (mode === 'pdf') { await unduhPdfCetak(htmlParts, judulCetakRapor(idList)); return; }
           var area = document.getElementById('cetakRaporArea');
           area.innerHTML = htmlParts.join('');
 
@@ -5269,12 +5260,6 @@
             '</tbody></table>';
         }
 
-        // Nomor halaman "Halaman X dari Y" TIDAK lagi dibuat manual di
-        // sini — ditampilkan lewat footer cetak native browser (aturan
-        // @page di style.css), supaya X dan Y selalu otomatis mengikuti
-        // jumlah halaman fisik yang benar-benar tercetak (rapor dengan
-        // Capaian Kompetensi panjang bisa jadi lebih dari 2 halaman).
-
         return (
           '<div class="rapor-cetak">' +
 
@@ -5311,8 +5296,6 @@
           '<table class="rapor-cetak__nilai"><thead><tr><th class="rc-th-no">NO</th><th>Mata Pelajaran</th><th class="rc-th-nilai">Nilai Akhir</th><th>Capaian Kompetensi</th></tr></thead>' +
           '<tbody>' + nilaiRowsHtml + '</tbody></table>' +
 
-          '<div class="rapor-cetak__page-no">1</div>' +
-
           '</div>' + // /rapor-cetak__page1
 
           // ---------- HALAMAN 2: Kokurikuler s.d. tanda tangan ----------
@@ -5341,6 +5324,11 @@
           '</div>' +
           '<div class="no-print rapor-cetak__catatan-hint">Untuk mengisi/mengubah Catatan Wali Kelas, buka menu <strong>Catatan Wali Kelas</strong> di sidebar.</div>' +
 
+          // Tanggapan Orangtua + tanda tangan dibungkus 1 blok yang tidak
+          // boleh terpotong (lihat .rapor-cetak__akhir di style.css): kalau
+          // tidak muat di sisa halaman, seluruh blok pindah ke halaman
+          // berikutnya.
+          '<div class="rapor-cetak__akhir">' +
           '<div class="rapor-cetak__bar">Tanggapan Orangtua/ Wali</div>' +
           '<div class="rapor-cetak__box rapor-cetak__box--tall"></div>' +
 
@@ -5351,8 +5339,7 @@
           '<div class="rapor-cetak__footer-col"><div class="rapor-cetak__footer-date">' + escapeHtml(NAMA_KOTA_TTD) + ', ' + (TANGGAL_RAPOR_CETAK ? escapeHtml(TANGGAL_RAPOR_CETAK) : '…........' + escapeHtml(tahunAkhir)) + '</div><div>Wali Kelas</div><div class="rapor-cetak__ttd-space"></div><div><strong>' + escapeHtml(nama) + '</strong></div></div>' +
           '</div>' +
           '</div>' +
-
-          '<div class="rapor-cetak__page-no">2</div>' +
+          '</div>' + // /rapor-cetak__akhir
 
           '</div>' + // /rapor-cetak__page2
 
@@ -5400,8 +5387,7 @@
             '<td>' + escapeHtml(s.nama) + '</td>' +
             '<td class="tc-center">' +
             '<button class="btn-small btn-ident-preview" data-id="' + s.id + '"><i data-lucide="eye" style="width:14px;height:14px;"></i> Preview</button> ' +
-            '<button class="btn-small btn-small--primary btn-ident-satu" data-id="' + s.id + '"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak</button> ' +
-            '<button class="btn-small btn-ident-pdf-satu" data-id="' + s.id + '"><i data-lucide="file-down" style="width:14px;height:14px;"></i> PDF</button>' +
+            '<button class="btn-small btn-small--primary btn-ident-satu" data-id="' + s.id + '"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak</button>' +
             '</td></tr>';
         }).join('');
 
@@ -5411,8 +5397,6 @@
           '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
           '<button class="btn-small" id="btnIdentCetakTerpilih"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak Terpilih</button>' +
           '<button class="btn-small btn-small--primary" id="btnIdentCetakSemua"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak Semua</button>' +
-          '<button class="btn-small" id="btnIdentPdfTerpilih"><i data-lucide="file-down" style="width:14px;height:14px;"></i> PDF Terpilih</button>' +
-          '<button class="btn-small" id="btnIdentPdfSemua"><i data-lucide="file-down" style="width:14px;height:14px;"></i> PDF Semua</button>' +
           '</div></div>' +
           '<div class="table-wrap no-print"><table class="data-table"><thead><tr>' +
           '<th class="tc-center"><input type="checkbox" id="checkSemuaIdent"></th>' +
@@ -5439,17 +5423,6 @@
         document.getElementById('btnIdentCetakSemua').addEventListener('click', function () {
           cetakIdentitasSiswa(siswaList.map(function (s) { return s.id; }), this);
         });
-        document.querySelectorAll('.btn-ident-pdf-satu').forEach(function (btn) {
-          btn.addEventListener('click', function () { cetakIdentitasSiswa([this.getAttribute('data-id')], this, 'pdf'); });
-        });
-        document.getElementById('btnIdentPdfTerpilih').addEventListener('click', function () {
-          var ids = Array.prototype.slice.call(document.querySelectorAll('.cetak-identitas-check:checked')).map(function (c) { return c.value; });
-          if (!ids.length) { alert('Centang minimal satu siswa terlebih dahulu.'); return; }
-          cetakIdentitasSiswa(ids, this, 'pdf');
-        });
-        document.getElementById('btnIdentPdfSemua').addEventListener('click', function () {
-          cetakIdentitasSiswa(siswaList.map(function (s) { return s.id; }), this, 'pdf');
-        });
       }
 
       // Tampilkan hasil identitas 1 siswa di layar (tanpa langsung
@@ -5463,12 +5436,10 @@
           '<div class="no-print" style="display:flex;gap:8px;margin:14px 0;align-items:center;flex-wrap:wrap;">' +
           '<button class="btn-small" id="btnKembaliDaftarIdent"><i data-lucide="arrow-left" style="width:14px;height:14px;"></i> Kembali ke Daftar</button>' +
           '<button class="btn-small btn-small--primary" id="btnCetakDariPreviewIdent"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak</button>' +
-          '<button class="btn-small" id="btnPdfDariPreviewIdent"><i data-lucide="file-down" style="width:14px;height:14px;"></i> Unduh PDF</button>' +
           '</div>' + html;
         lucide.createIcons();
         document.getElementById('btnKembaliDaftarIdent').addEventListener('click', renderDaftarSiswa);
         document.getElementById('btnCetakDariPreviewIdent').addEventListener('click', function () { cetakIdentitasSiswa([siswaId], this); });
-        document.getElementById('btnPdfDariPreviewIdent').addEventListener('click', function () { cetakIdentitasSiswa([siswaId], this, 'pdf'); });
         area.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
 
@@ -5492,7 +5463,7 @@
       // lewat aturan ".rapor-cetak + .rapor-cetak { page-break-before:
       // always; }" di @media print, jadi halaman antar siswa tidak
       // pernah bercampur walau digabung jadi satu dokumen/file cetak.
-      async function cetakIdentitasSiswa(idList, triggerBtn, mode) {
+      async function cetakIdentitasSiswa(idList, triggerBtn) {
         var teksAsliBtn = triggerBtn ? triggerBtn.innerHTML : null;
         if (triggerBtn) { triggerBtn.disabled = true; triggerBtn.innerHTML = 'Menyiapkan...'; }
 
@@ -5502,7 +5473,6 @@
           for (var i = 0; i < idList.length; i++) {
             htmlParts.push(await buatKartuIdentitas(idList[i]));
           }
-          if (mode === 'pdf') { await unduhPdfCetak(htmlParts, judulCetakIdentitas(idList)); return; }
           var area = document.getElementById('cetakIdentitasArea');
           area.innerHTML = htmlParts.join('');
 
@@ -5591,8 +5561,6 @@
           '<div class="ident-footer-ttd"><div class="rapor-cetak__footer-date">' + escapeHtml(NAMA_KOTA_TTD) + ', ' + (TANGGAL_IDENTITAS_CETAK ? escapeHtml(TANGGAL_IDENTITAS_CETAK) : '…........' + escapeHtml(tahunAkhir)) + '</div><div>Kepala Sekolah</div><div class="rapor-cetak__ttd-space"></div><div><strong>' + escapeHtml(NAMA_KEPALA_SEKOLAH) + '</strong></div></div>' +
           '</div>' +
           '</div>' +
-
-          '<div class="rapor-cetak__page-no">1</div>' +
 
           '</div>'
         );

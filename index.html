@@ -108,6 +108,11 @@
 
     // 3. Arahkan sesuai role
     var role = profileResult.data.role;
+    // Penanda untuk pop up sambutan di guru.html (muncul sekali per login).
+    // Kunci harus sama dengan SambutanGuru.KUNCI_BARU_LOGIN di sambutan-guru.js.
+    if (role !== 'admin') {
+      try { sessionStorage.setItem('erapor_sambutan_baru_login', '1'); } catch (e) { /* abaikan */ }
+    }
     window.location.href = role === 'admin' ? 'admin.html' : 'guru.html';
   });
 </script>
