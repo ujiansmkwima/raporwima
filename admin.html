@@ -40,6 +40,7 @@
       <a href="#" class="menu-item" data-view="mapel"><i data-lucide="book-open" class="menu-icon"></i><span class="menu-item__title">Mata Pelajaran</span></a>
       <a href="#" class="menu-item menu-item--nested" data-view="mapelTingkat"><i data-lucide="corner-down-right" class="menu-icon"></i><span class="menu-item__title">Mata Pelajaran Per Tingkat</span></a>
       <a href="#" class="menu-item" data-view="penugasan"><i data-lucide="briefcase" class="menu-icon"></i><span class="menu-item__title">Penugasan Guru</span></a>
+      <a href="#" class="menu-item" data-view="tujuanPembelajaran"><i data-lucide="list-checks" class="menu-icon"></i><span class="menu-item__title">Tujuan Pembelajaran</span></a>
       <a href="#" class="menu-item" data-view="ekskul"><i data-lucide="medal" class="menu-icon"></i><span class="menu-item__title">Ekstrakurikuler</span></a>
       <a href="#" class="menu-item" data-view="pkl"><i data-lucide="briefcase-business" class="menu-icon"></i><span class="menu-item__title">PKL</span></a>
       <a href="#" class="menu-item" data-view="leger"><i data-lucide="layers" class="menu-icon"></i><span class="menu-item__title">Leger Nilai (6 Semester)</span></a>
@@ -3551,6 +3552,118 @@
     return { ok: out.success !== false, deleted_count: out.deleted_count, failed: out.failed || [] };
   }
 
+  // ================= PANEL: TUJUAN PEMBELAJARAN (lihat & hapus) =================
+  // Admin hanya bisa MELIHAT & MENGHAPUS bank Tujuan Pembelajaran (TP) yang
+  // disusun tiap guru — bukan menambah/mengubah isinya (itu tetap wewenang
+  // guru mapel masing-masing lewat menu "Tujuan Pembelajaran" di dashboard
+  // guru). Berguna untuk audit/pembersihan data, misalnya TP yang salah
+  // ketik, duplikat, atau ditinggalkan oleh guru yang sudah tidak aktif.
+  async function renderTujuanPembelajaran() {
+    var guruRes = await supabaseClient.from('profiles').select('id, nama').eq('role', 'guru').order('nama');
+    var guruList = guruRes.data || [];
+    var mapelRes = await supabaseClient.from('mata_pelajaran').select('id, nama').order('nama');
+    var mapelList = mapelRes.data || [];
+    var taRes = await supabaseClient.from('tahun_ajaran').select('id, nama').order('nama', { ascending: false });
+    var taList = taRes.data || [];
+
+    var guruNamaMap = {}; guruList.forEach(function (g) { guruNamaMap[g.id] = g.nama; });
+    var mapelNamaMap = {}; mapelList.forEach(function (m) { mapelNamaMap[m.id] = m.nama; });
+    var taNamaMap = {}; taList.forEach(function (t) { taNamaMap[t.id] = t.nama; });
+
+    function opsiFilter(list, placeholder) {
+      return '<option value="">' + escapeHtml(placeholder) + '</option>' + list.map(function (x) {
+        return '<option value="' + x.id + '">' + escapeHtml(x.nama) + '</option>';
+      }).join('');
+    }
+
+    content.innerHTML =
+      '<div class="panel-head"><div><div class="panel-head__title">Tujuan Pembelajaran</div>' +
+      '<div class="panel-head__desc">Daftar seluruh bank Tujuan Pembelajaran (TP) yang sudah disusun tiap guru, dari semua mata pelajaran & tahun ajaran. Admin di sini hanya bisa melihat dan menghapus — untuk menambah atau mengubah TP, lakukan lewat akun guru mapel yang bersangkutan. Menghapus TP juga akan menghapus pilihan TP siswa yang memakainya.</div></div></div>' +
+      '<form class="add-form" id="formFilterTp" style="flex-wrap:wrap;">' +
+      '<div class="field"><label>Guru</label><select id="tpFGuru">' + opsiFilter(guruList, 'Semua Guru') + '</select></div>' +
+      '<div class="field"><label>Mata Pelajaran</label><select id="tpFMapel">' + opsiFilter(mapelList, 'Semua Mapel') + '</select></div>' +
+      '<div class="field"><label>Tahun Ajaran</label><select id="tpFTahun">' + opsiFilter(taList, 'Semua Tahun Ajaran') + '</select></div>' +
+      '<div class="field"><label>Semester</label><select id="tpFSemester"><option value="">Semua Semester</option>' +
+      [1, 2, 3, 4, 5, 6].map(function (n) { return '<option value="' + n + '">Semester ' + n + '</option>'; }).join('') + '</select></div>' +
+      '<div class="field"><label>Status</label><select id="tpFStatus"><option value="">Semua Status</option><option value="aktif">Aktif</option><option value="nonaktif">Tidak Aktif</option></select></div>' +
+      '</form>' +
+      '<div class="toolbar">' +
+      '<button class="btn-small btn-small--danger" id="btnHapusTerpilihTp" disabled>🗑 Hapus Terpilih (<span id="tpTerpilihCount">0</span>)</button>' +
+      '</div>' +
+      '<div class="table-wrap"><table class="data-table"><thead><tr><th style="width:32px;"><input type="checkbox" id="tpSelectAll"></th><th>Guru</th><th>Mata Pelajaran</th><th>Tahun Ajaran</th><th>Semester</th><th>Urutan</th><th>Kode</th><th>Deskripsi</th><th>Status</th><th></th></tr></thead><tbody id="tpAdminBody"></tbody></table></div>';
+
+    var listRes = await supabaseClient
+      .from('tujuan_pembelajaran')
+      .select('id, guru_id, mapel_id, tahun_ajaran_id, kode, deskripsi, urutan, semester, is_aktif')
+      .order('semester')
+      .order('urutan');
+    var semuaBaris = listRes.data || [];
+
+    function gambarTabelTp() {
+      var fGuru = document.getElementById('tpFGuru').value;
+      var fMapel = document.getElementById('tpFMapel').value;
+      var fTahun = document.getElementById('tpFTahun').value;
+      var fSemester = document.getElementById('tpFSemester').value;
+      var fStatus = document.getElementById('tpFStatus').value;
+
+      var rows = semuaBaris.filter(function (r) {
+        if (fGuru && r.guru_id !== fGuru) return false;
+        if (fMapel && r.mapel_id !== fMapel) return false;
+        if (fTahun && r.tahun_ajaran_id !== fTahun) return false;
+        if (fSemester && String(r.semester) !== fSemester) return false;
+        if (fStatus === 'aktif' && !r.is_aktif) return false;
+        if (fStatus === 'nonaktif' && r.is_aktif) return false;
+        return true;
+      });
+
+      var body = document.getElementById('tpAdminBody');
+      body.innerHTML = rows.length ? '' : '<tr><td colspan="10">Tidak ada Tujuan Pembelajaran yang cocok dengan filter di atas.</td></tr>';
+      rows.forEach(function (r) {
+        var tr = document.createElement('tr');
+        tr.innerHTML =
+          '<td><input type="checkbox" class="tpRowChk" value="' + r.id + '"></td>' +
+          '<td>' + escapeHtml(guruNamaMap[r.guru_id] || '—') + '</td>' +
+          '<td>' + escapeHtml(mapelNamaMap[r.mapel_id] || '—') + '</td>' +
+          '<td>' + escapeHtml(taNamaMap[r.tahun_ajaran_id] || '—') + '</td>' +
+          '<td>Semester ' + r.semester + '</td>' +
+          '<td>' + escapeHtml(r.urutan) + '</td>' +
+          '<td>' + escapeHtml(r.kode || '—') + '</td>' +
+          '<td>' + escapeHtml(r.deskripsi) + '</td>' +
+          '<td>' + (r.is_aktif ? '<span class="chip chip--aktif">Aktif</span>' : '<span class="chip chip--muted">Tidak Aktif</span>') + '</td>' +
+          '<td><button class="btn-small btn-small--danger" data-id="' + r.id + '">Hapus</button></td>';
+        body.appendChild(tr);
+      });
+
+      body.querySelectorAll('button[data-id]').forEach(function (btn) {
+        btn.addEventListener('click', async function () {
+          if (!confirm('Hapus Tujuan Pembelajaran ini? Pilihan TP siswa yang memakainya juga akan ikut terhapus.')) return;
+          await supabaseClient.from('tujuan_pembelajaran').delete().eq('id', btn.dataset.id);
+          semuaBaris = semuaBaris.filter(function (r) { return r.id !== btn.dataset.id; });
+          gambarTabelTp();
+        });
+      });
+
+      wireBulkDelete({
+        checkboxClass: 'tpRowChk',
+        selectAllId: 'tpSelectAll',
+        btnId: 'btnHapusTerpilihTp',
+        countId: 'tpTerpilihCount',
+        confirmMsg: function (n) { return 'Hapus ' + n + ' Tujuan Pembelajaran terpilih? Pilihan TP siswa yang memakainya juga akan ikut terhapus.'; },
+        onDelete: async function (ids) {
+          await supabaseClient.from('tujuan_pembelajaran').delete().in('id', ids);
+          semuaBaris = semuaBaris.filter(function (r) { return ids.indexOf(r.id) === -1; });
+          gambarTabelTp();
+        }
+      });
+    }
+
+    ['tpFGuru', 'tpFMapel', 'tpFTahun', 'tpFSemester', 'tpFStatus'].forEach(function (id) {
+      document.getElementById(id).addEventListener('change', gambarTabelTp);
+    });
+
+    gambarTabelTp();
+  }
+
   async function renderGuru() {
     var guruRes = await supabaseClient.from('profiles').select('id, nama, email, role').eq('role', 'guru').order('nama');
     var guruList = guruRes.data || [];
@@ -5153,7 +5266,7 @@
     });
   }
 
-  var views = { dashboard: renderDashboard, profilSekolah: renderProfilSekolah, tahunAjaran: renderTahunAjaran, siswa: renderSiswa, leger: renderLeger, urutanLeger: renderUrutanLeger, kelas: renderKelas, mapel: renderMapel, mapelTingkat: renderMapelTingkat, penugasan: renderPenugasan, guru: renderGuru, ekskul: renderEkstrakurikuler, pkl: renderPkl };
+  var views = { dashboard: renderDashboard, profilSekolah: renderProfilSekolah, tahunAjaran: renderTahunAjaran, siswa: renderSiswa, leger: renderLeger, urutanLeger: renderUrutanLeger, kelas: renderKelas, mapel: renderMapel, mapelTingkat: renderMapelTingkat, penugasan: renderPenugasan, tujuanPembelajaran: renderTujuanPembelajaran, guru: renderGuru, ekskul: renderEkstrakurikuler, pkl: renderPkl };
 
   document.querySelectorAll('#menuAdmin .menu-item').forEach(function (item) {
     item.addEventListener('click', function (e) {
