@@ -1756,7 +1756,12 @@
     optTanpaKelas.textContent = 'Belum Ada Kelas';
     selFilterKelas.appendChild(optTanpaKelas);
 
-    async function muatUlangDaftar() {
+    // Ambil daftar siswa dari server, lalu terapkan filter status/kelas/pencarian
+    // dan urutan yang sedang aktif di layar (dibaca langsung dari elemen filter).
+    // Dipakai bersama oleh tabel (muatUlangDaftar) dan tombol Unduh Data (Excel),
+    // supaya file yang diunduh selalu mengikuti filter yang sedang aktif —
+    // seluruh siswa hanya jika Filter Kelas = "Semua Kelas" (dan filter lain kosong).
+    async function ambilSiswaTerfilter() {
       var siswaRes = await supabaseClient.from('siswa').select('*').order('nama');
       var siswaListAsli = siswaRes.data || [];
       var skRes = await supabaseClient.from('siswa_kelas').select('siswa_id, kelas_id').eq('tahun_ajaran_id', tahunAktif.id);
@@ -1807,6 +1812,18 @@
       } else {
         siswaList.sort(function (a, b) { return a.data.nama.localeCompare(b.data.nama); });
       }
+
+      return { siswaList: siswaList, siswaListAsli: siswaListAsli, totalSemua: totalSemua, filterVal: filterVal, filterStatus: filterStatus, kataCari: kataCari };
+    }
+
+    async function muatUlangDaftar() {
+      var hasil = await ambilSiswaTerfilter();
+      var siswaList = hasil.siswaList;
+      var siswaListAsli = hasil.siswaListAsli;
+      var totalSemua = hasil.totalSemua;
+      var filterVal = hasil.filterVal;
+      var filterStatus = hasil.filterStatus;
+      var kataCari = hasil.kataCari;
 
       // ---- Keterangan total siswa ----
       var totalInfo = document.getElementById('sTotalInfo');
@@ -1994,20 +2011,24 @@
     }
 
     // ---------- Export Excel ----------
+    // Mengunduh sesuai filter yang sedang aktif di layar (Filter Kelas, Status,
+    // Cari) — hanya berisi seluruh siswa bila Filter Kelas = "Semua Kelas" dan
+    // filter lain tidak diisi.
     document.getElementById('btnExportSiswa').addEventListener('click', async function () {
-      var siswaRes = await supabaseClient.from('siswa').select('*').order('nama');
-      var siswaList = siswaRes.data || [];
-      var skRes = await supabaseClient.from('siswa_kelas').select('siswa_id, kelas_id').eq('tahun_ajaran_id', tahunAktif.id);
-      var skMap = {};
-      (skRes.data || []).forEach(function (r) { skMap[r.siswa_id] = r.kelas_id; });
-      var kelasNamaMap = {};
-      kelasList.forEach(function (k) { kelasNamaMap[k.id] = k.nama; });
+      var hasil = await ambilSiswaTerfilter();
+      var siswaList = hasil.siswaList;
 
-      var rows = siswaList.map(function (s) {
+      if (!siswaList.length) {
+        alert('Tidak ada data siswa yang cocok dengan filter saat ini.');
+        return;
+      }
+
+      var rows = siswaList.map(function (row) {
+        var s = row.data;
         var obj = {};
         EXCEL_COLUMNS.forEach(function (c) {
           if (c.key === 'kelas') {
-            obj[c.header] = kelasNamaMap[skMap[s.id]] || '';
+            obj[c.header] = row.kelasNama || '';
           } else {
             obj[c.header] = s[c.key] === null || s[c.key] === undefined ? '' : s[c.key];
           }
@@ -2015,10 +2036,19 @@
         return obj;
       });
 
+      // Tambahkan keterangan filter kelas ke nama file bila sedang difilter.
+      var namaFileFilter = '';
+      if (hasil.filterVal === '__tanpa_kelas__') {
+        namaFileFilter = '_tanpa_kelas';
+      } else if (hasil.filterVal) {
+        var kelasTerpilih = kelasList.find(function (k) { return k.id === hasil.filterVal; });
+        if (kelasTerpilih) { namaFileFilter = '_' + kelasTerpilih.nama.replace(/[^a-z0-9]/gi, '_'); }
+      }
+
       var ws = autoFitKolom(XLSX.utils.json_to_sheet(rows, { header: EXCEL_COLUMNS.map(function (c) { return c.header; }) }));
       var wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Data Siswa');
-      XLSX.writeFile(wb, 'data_siswa_' + tahunAktif.nama.replace(/\//g, '-') + '.xlsx');
+      XLSX.writeFile(wb, 'data_siswa_' + tahunAktif.nama.replace(/\//g, '-') + namaFileFilter + '.xlsx');
     });
 
     // ---------- Unduh Template ----------
