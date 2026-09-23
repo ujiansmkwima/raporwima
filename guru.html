@@ -444,6 +444,20 @@
         renderCetakRapor(waliKelas);
       });
       menuCetak.appendChild(itemCetak);
+
+      // Cetak Nilai Tengah Semester — format cetak sama seperti Cetak
+      // Rapor, tapi isinya khusus Nilai Tengah Semester asli & Catatan
+      // KBM per mapel + rekap Presensi (tanpa Kokurikuler/Ekstrakurikuler).
+      var itemCetakNts = document.createElement('a');
+      itemCetakNts.href = '#';
+      itemCetakNts.className = 'menu-item';
+      itemCetakNts.innerHTML = '<i data-lucide="printer" class="menu-icon"></i><span class="menu-item__title">Cetak Nilai Tengah Semester</span><span class="menu-item__sub">' + waliKelas.kelas.nama + '</span>';
+      itemCetakNts.addEventListener('click', function (e) {
+        e.preventDefault();
+        setActiveMenuItem(itemCetakNts);
+        renderCetakNts(waliKelas);
+      });
+      menuCetak.appendChild(itemCetakNts);
     }
 
     // 5b. Cek apakah guru ini ditugaskan sebagai PEMBINA EKSTRAKURIKULER
@@ -5757,6 +5771,295 @@
           '</div>' + // /rapor-cetak__akhir
 
           '</div>' + // /rapor-cetak__page2
+
+          '</td></tr></tbody></table>' + // /rapor-cetak__print-frame
+
+          '</div>' // /rapor-cetak
+        );
+      }
+
+      renderDaftarSiswa();
+    }
+
+    // ================= WALI KELAS: Cetak Nilai Tengah Semester =================
+    // Format cetak sama seperti Cetak Rapor (kop Identitas Siswa berulang
+    // tiap halaman, tanda tangan Wali Kelas & Kepala Sekolah), tapi isinya
+    // HANYA Nilai Tengah Semester ASLI per mapel (nilai_tengah_semester.nilai,
+    // TIDAK dikonversi) + Catatan Selama KBM per mapel, dan rekap Presensi
+    // (Sakit/Izin/Alpha) yang TETAP diambil dari menu "Presensi Kelas"
+    // (tabel rekap_presensi) — sumber datanya sama persis dengan Cetak
+    // Rapor. TIDAK ada Kokurikuler, Ekstrakurikuler, Catatan Wali Kelas,
+    // maupun Tanggapan Orangtua di format ini.
+    async function renderCetakNts(wk) {
+      content.innerHTML = renderPlaceholder('Memuat...', 'Menyiapkan data cetak nilai tengah semester kelas ' + wk.kelas.nama + '.');
+
+      var siswaList = await ambilSiswaKelas(wk.kelas.id);
+      if (!siswaList.length) {
+        content.innerHTML = renderPlaceholder('Cetak Nilai Tengah Semester — ' + wk.kelas.nama, 'Belum ada siswa di kelas ini pada tahun ajaran aktif.');
+        return;
+      }
+
+      // Profil Sekolah — sama seperti yang dipakai Cetak Rapor.
+      var profilRes = await supabaseClient.from('profil_sekolah').select('*').maybeSingle();
+      var profilSekolah = profilRes.data || {};
+      var NAMA_SEKOLAH = profilSekolah.nama_sekolah || 'SMK Widya Mandala Tambak';
+      var ALAMAT_SEKOLAH = profilSekolah.alamat_sekolah || '';
+      var NAMA_KEPALA_SEKOLAH = profilSekolah.kepala_sekolah || '—';
+      var NAMA_KOTA_TTD = profilSekolah.kota_ttd || 'Tambak';
+      var TANGGAL_NTS_CETAK = formatTanggalIndonesia(profilSekolah.tanggal_rapor);
+
+      // Daftar Mata Pelajaran kelas ini — logika & urutan SAMA PERSIS
+      // dengan Cetak Rapor, supaya urutan mapel di kedua format konsisten.
+      var mapelSemuaRes = await supabaseClient
+        .from('mata_pelajaran')
+        .select('id, nama, jenis_mapel, urutan_rapor, berlaku_untuk, berlaku_semester, agama_spesifik');
+      var mapelKelasRes = await supabaseClient
+        .from('mapel_kelas')
+        .select('mapel_id')
+        .eq('kelas_id', wk.kelas.id);
+      var mapelUrutanKelasRes = await supabaseClient
+        .from('mapel_urutan_kelas')
+        .select('mapel_id, urutan_rapor')
+        .eq('kelas_id', wk.kelas.id);
+      var mapelKelasSet = {};
+      (mapelKelasRes.data || []).forEach(function (r) { mapelKelasSet[r.mapel_id] = true; });
+      var mapelSemesterSet = await ambilMapelSemesterSet();
+      var semesterKeAktifCetak = hitungSemesterKe(wk.kelas.tingkat, tahunAktif.semester);
+      var urutanKelasMap = {};
+      (mapelUrutanKelasRes.data || []).forEach(function (r) { urutanKelasMap[r.mapel_id] = r.urutan_rapor; });
+      function efektifUrutanRapor(m) {
+        if (urutanKelasMap[m.id] !== undefined && urutanKelasMap[m.id] !== null) return urutanKelasMap[m.id];
+        return (m.urutan_rapor === null || m.urutan_rapor === undefined) ? 9999 : m.urutan_rapor;
+      }
+      function urutkanMapel(a, b) {
+        var ua = efektifUrutanRapor(a);
+        var ub = efektifUrutanRapor(b);
+        if (ua !== ub) return ua - ub;
+        return a.nama.localeCompare(b.nama);
+      }
+      var mapelListKelasIni = (mapelSemuaRes.data || []).filter(function (m) {
+        if (m.berlaku_untuk === 'tertentu' && !mapelKelasSet[m.id]) return false;
+        if (m.berlaku_semester === 'tertentu' && semesterKeAktifCetak && (mapelSemesterSet[m.id] || []).indexOf(semesterKeAktifCetak) === -1) return false;
+        return true;
+      });
+      var mapelUmum = mapelListKelasIni.filter(function (m) { return m.jenis_mapel !== 'kejuruan'; }).sort(urutkanMapel);
+      var mapelKejuruan = mapelListKelasIni.filter(function (m) { return m.jenis_mapel === 'kejuruan'; }).sort(urutkanMapel);
+
+      // ---- Tampilan 1: Daftar seluruh siswa kelas ini ----
+      function renderDaftarSiswa() {
+        var rowsHtml = siswaList.map(function (s, i) {
+          return '<tr>' +
+            '<td class="tc-center"><input type="checkbox" class="cetak-nts-check" value="' + s.id + '"></td>' +
+            '<td class="tc-center">' + (i + 1) + '</td>' +
+            '<td>' + escapeHtml(s.nis || '—') + '</td>' +
+            '<td>' + escapeHtml(s.nama) + '</td>' +
+            '<td class="tc-center">' +
+            '<button class="btn-small btn-nts-preview" data-id="' + s.id + '"><i data-lucide="eye" style="width:14px;height:14px;"></i> Preview</button> ' +
+            '<button class="btn-small btn-small--primary btn-nts-satu" data-id="' + s.id + '"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak</button>' +
+            '</td></tr>';
+        }).join('');
+
+        content.innerHTML =
+          '<div class="panel-head"><div><div class="panel-head__title">Cetak Nilai Tengah Semester — ' + escapeHtml(wk.kelas.nama) + '</div>' +
+          '<div class="panel-head__desc">Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + '. Mencetak Nilai Tengah Semester asli &amp; Catatan Selama KBM tiap mapel (diisi guru mapel), ditambah rekap Presensi dari menu "Presensi Kelas". Tidak memuat Kokurikuler/Ekstrakurikuler. Klik Preview untuk melihat, Cetak untuk mencetak/menyimpan sebagai PDF lewat jendela cetak browser, atau centang beberapa lalu Cetak Terpilih.</div></div>' +
+          '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+          '<button class="btn-small" id="btnNtsCetakTerpilih"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak Terpilih</button>' +
+          '<button class="btn-small btn-small--primary" id="btnNtsCetakSemua"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak Semua</button>' +
+          '</div></div>' +
+          '<div class="table-wrap no-print"><table class="data-table"><thead><tr>' +
+          '<th class="tc-center"><input type="checkbox" id="checkSemuaNts"></th>' +
+          '<th class="rc-th-no">No</th><th>NIS</th><th>Nama Siswa</th><th class="tc-center">Aksi</th>' +
+          '</tr></thead><tbody>' + rowsHtml + '</tbody></table></div>' +
+          '<div id="cetakNtsArea"></div>';
+        lucide.createIcons();
+
+        document.getElementById('checkSemuaNts').addEventListener('change', function () {
+          var checked = this.checked;
+          document.querySelectorAll('.cetak-nts-check').forEach(function (c) { c.checked = checked; });
+        });
+        document.querySelectorAll('.btn-nts-preview').forEach(function (btn) {
+          btn.addEventListener('click', function () { tampilkanPreview(this.getAttribute('data-id')); });
+        });
+        document.querySelectorAll('.btn-nts-satu').forEach(function (btn) {
+          btn.addEventListener('click', function () { cetakSiswaNts([this.getAttribute('data-id')], this); });
+        });
+        document.getElementById('btnNtsCetakTerpilih').addEventListener('click', function () {
+          var ids = Array.prototype.slice.call(document.querySelectorAll('.cetak-nts-check:checked')).map(function (c) { return c.value; });
+          if (!ids.length) { alert('Centang minimal satu siswa terlebih dahulu.'); return; }
+          cetakSiswaNts(ids, this);
+        });
+        document.getElementById('btnNtsCetakSemua').addEventListener('click', function () {
+          cetakSiswaNts(siswaList.map(function (s) { return s.id; }), this);
+        });
+      }
+
+      // Tampilkan hasil 1 siswa di layar (tanpa langsung mencetak), dengan
+      // tombol Kembali ke daftar dan Cetak dari sini — sama seperti Cetak Rapor.
+      async function tampilkanPreview(siswaId) {
+        var siswaRingkas = siswaList.find(function (s) { return s.id === siswaId; });
+        var area = document.getElementById('cetakNtsArea');
+        area.innerHTML = '<div class="panel-note no-print">Memuat data nilai tengah semester ' + escapeHtml(siswaRingkas.nama) + '...</div>';
+        var html = await buatKartuNts(siswaId);
+        area.innerHTML =
+          '<div class="no-print" style="display:flex;gap:8px;margin:14px 0;align-items:center;flex-wrap:wrap;">' +
+          '<button class="btn-small" id="btnKembaliDaftarNts"><i data-lucide="arrow-left" style="width:14px;height:14px;"></i> Kembali ke Daftar</button>' +
+          '<button class="btn-small btn-small--primary" id="btnCetakDariPreviewNts"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak</button>' +
+          '</div>' + html;
+        lucide.createIcons();
+        document.getElementById('btnKembaliDaftarNts').addEventListener('click', renderDaftarSiswa);
+        document.getElementById('btnCetakDariPreviewNts').addEventListener('click', function () { cetakSiswaNts([siswaId], this); });
+        area.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+
+      // Judul dokumen dipakai browser sebagai nama file default saat
+      // "Simpan sebagai PDF" — sama polanya dengan Cetak Rapor.
+      function judulCetakNts(idList) {
+        var semesterKe = hitungSemesterKe(wk.kelas.tingkat, tahunAktif.semester);
+        var labelSemester = 'Tengah Semester ' + (semesterKe || tahunAktif.semester);
+        if (idList.length === 1) {
+          var s = siswaList.find(function (x) { return x.id === idList[0]; });
+          var namaSiswa = s ? s.nama : 'Nilai Tengah Semester';
+          return namaSiswa + ' - ' + labelSemester + ' - ' + wk.kelas.nama;
+        }
+        return 'Nilai Tengah Semester ' + wk.kelas.nama + ' - ' + labelSemester;
+      }
+
+      // Susun kartu untuk 1/beberapa siswa sekaligus, panggil window.print()
+      // SEKALI SAJA — tiap siswa tetap mulai di halaman barunya sendiri
+      // lewat aturan ".rapor-cetak + .rapor-cetak { page-break-before: always; }"
+      // di @media print (style.css), sama seperti Cetak Rapor & Cetak Identitas.
+      async function cetakSiswaNts(idList, triggerBtn) {
+        var teksAsliBtn = triggerBtn ? triggerBtn.innerHTML : null;
+        if (triggerBtn) { triggerBtn.disabled = true; triggerBtn.innerHTML = 'Menyiapkan...'; }
+
+        var judulAsli = document.title;
+        try {
+          var htmlParts = [];
+          for (var i = 0; i < idList.length; i++) {
+            htmlParts.push(await buatKartuNts(idList[i]));
+          }
+          var area = document.getElementById('cetakNtsArea');
+          area.innerHTML = htmlParts.join('');
+
+          document.title = judulCetakNts(idList);
+
+          await new Promise(function (resolve) { setTimeout(resolve, 150); });
+          window.print();
+        } catch (err) {
+          alert('Gagal menyiapkan cetak: ' + (err && err.message ? err.message : err));
+        } finally {
+          document.title = judulAsli;
+          if (triggerBtn) { triggerBtn.disabled = false; triggerBtn.innerHTML = teksAsliBtn; lucide.createIcons(); }
+        }
+      }
+
+      async function buatKartuNts(siswaId) {
+        var siswaRingkas = siswaList.find(function (s) { return s.id === siswaId; });
+
+        var siswaRes = await supabaseClient
+          .from('siswa')
+          .select('nama, nis, nisn, agama, alamat_siswa')
+          .eq('id', siswaId)
+          .single();
+        var siswa = siswaRes.data || siswaRingkas;
+
+        var fase = faseDariTingkat(wk.kelas.tingkat);
+        var semesterKeCetak = hitungSemesterKe(wk.kelas.tingkat, tahunAktif.semester);
+
+        // Nilai Tengah Semester ASLI + Catatan KBM per mapel — diisi guru
+        // mapel lewat menu "Nilai Tengah Semester & Catatan KBM", TIDAK
+        // memakai tabel nilai rapor / hasil konversi.
+        var ntsRes = await supabaseClient
+          .from('nilai_tengah_semester')
+          .select('mapel_id, nilai, catatan_kbm')
+          .eq('siswa_id', siswaId)
+          .eq('kelas_id', wk.kelas.id)
+          .eq('tahun_ajaran_id', tahunAktif.id);
+        var ntsMap = {};
+        (ntsRes.data || []).forEach(function (r) { ntsMap[r.mapel_id] = r; });
+
+        function barisNilai(list) {
+          // Mapel agama_spesifik cuma tampil di rapor siswa yang agamanya
+          // cocok — sama seperti Cetak Rapor.
+          var listRelevan = list.filter(function (m) {
+            return !m.agama_spesifik || m.agama_spesifik === siswa.agama;
+          });
+          return listRelevan.map(function (m, i) {
+            var n = ntsMap[m.id] || {};
+            var namaTampil = namaMapelUntukSiswa(m.nama, siswa.agama);
+            var nilaiTampil = (n.nilai === undefined || n.nilai === null) ? '—' : Math.round(Number(n.nilai));
+            return '<tr><td class="tc-center">' + (i + 1) + '</td><td>' + escapeHtml(namaTampil) + '</td>' +
+              '<td class="tc-center">' + nilaiTampil + '</td>' +
+              '<td class="rc-td-capaian">' + escapeHtml(n.catatan_kbm || '—') + '</td></tr>';
+          }).join('');
+        }
+        var nilaiRowsHtml =
+          '<tr class="rapor-cetak__section-row"><td colspan="4">A. Mata Pelajaran Umum</td></tr>' +
+          (barisNilai(mapelUmum) || '<tr><td colspan="4" class="tc-center tc-soft">Belum ada mata pelajaran umum.</td></tr>') +
+          '<tr class="rapor-cetak__section-row"><td colspan="4">B. Mata Pelajaran Kejuruan</td></tr>' +
+          (barisNilai(mapelKejuruan) || '<tr><td colspan="4" class="tc-center tc-soft">Belum ada mata pelajaran kejuruan.</td></tr>');
+
+        // Rekap Presensi — TETAP diambil dari rekap_presensi (diisi lewat
+        // menu "Presensi Kelas"), sumber datanya SAMA dengan Cetak Rapor.
+        // Catatan Wali Kelas SENGAJA tidak diikutkan di format ini.
+        var presensiRes = await supabaseClient
+          .from('rekap_presensi')
+          .select('jumlah_sakit, jumlah_izin, jumlah_alpha')
+          .eq('siswa_id', siswaId)
+          .eq('kelas_id', wk.kelas.id)
+          .eq('tahun_ajaran_id', tahunAktif.id)
+          .maybeSingle();
+        var rp = presensiRes.data || {};
+        var tally = { sakit: rp.jumlah_sakit || 0, izin: rp.jumlah_izin || 0, alpha: rp.jumlah_alpha || 0 };
+
+        var tahunAkhir = (String(tahunAktif.nama).split('/')[1] || tahunAktif.nama).trim();
+
+        // Blok Biodata — ditaruh di <thead> tabel pembungkus supaya
+        // berulang otomatis di tiap halaman fisik saat dicetak, sama
+        // persis dengan mekanisme di Cetak Rapor.
+        function biodataHtml() {
+          return '<table class="rapor-cetak__biodata"><tbody>' +
+            '<tr><td class="rc-label">Nama</td><td class="rc-colon">:</td><td class="rc-value">' + escapeHtml(siswa.nama) + '</td>' +
+            '<td class="rc-label rc-label--kanan">Kelas</td><td class="rc-colon">:</td><td class="rc-value">' + escapeHtml(wk.kelas.nama) + '</td></tr>' +
+            '<tr><td class="rc-label">NIS / NISN</td><td class="rc-colon">:</td><td class="rc-value">' + escapeHtml((siswa.nis || '—') + ' / ' + (siswa.nisn || '—')) + '</td>' +
+            '<td class="rc-label rc-label--kanan">Fase</td><td class="rc-colon">:</td><td class="rc-value">' + escapeHtml(fase) + '</td></tr>' +
+            '<tr><td class="rc-label">Sekolah</td><td class="rc-colon">:</td><td class="rc-value">' + escapeHtml(NAMA_SEKOLAH.toUpperCase()) + '</td>' +
+            '<td class="rc-label rc-label--kanan">Semester</td><td class="rc-colon">:</td><td class="rc-value">' + escapeHtml((semesterKeCetak || '—') + ' (' + tahunAktif.semester + ')') + '</td></tr>' +
+            '<tr><td class="rc-label">Alamat</td><td class="rc-colon">:</td><td class="rc-value">' + escapeHtml(ALAMAT_SEKOLAH || '—') + '</td>' +
+            '<td class="rc-label rc-label--kanan">Tahun Ajaran</td><td class="rc-colon">:</td><td class="rc-value">' + escapeHtml(tahunAktif.nama) + '</td></tr>' +
+            '</tbody></table>';
+        }
+
+        return (
+          '<div class="rapor-cetak">' +
+
+          '<table class="rapor-cetak__print-frame"><thead><tr><td>' +
+
+          biodataHtml() +
+
+          '</td></tr></thead><tbody><tr><td>' +
+
+          '<div class="rapor-cetak__bar" style="margin-top:0;">LAPORAN NILAI TENGAH SEMESTER &amp; CATATAN KBM</div>' +
+
+          '<table class="rapor-cetak__nilai"><thead><tr><th class="rc-th-no">NO</th><th>Mata Pelajaran</th><th class="rc-th-nilai">Nilai</th><th>Catatan Selama KBM</th></tr></thead>' +
+          '<tbody>' + nilaiRowsHtml + '</tbody></table>' +
+
+          '<div class="rapor-cetak__bar">Ketidakhadiran</div>' +
+          '<table class="rapor-cetak__kehadiran" style="margin-bottom:14px;"><tbody>' +
+          '<tr><td class="rc-label">Sakit</td><td class="rc-colon">:</td><td class="tc-center">' + tally.sakit + '</td><td>Hari</td></tr>' +
+          '<tr><td class="rc-label">Izin</td><td class="rc-colon">:</td><td class="tc-center">' + tally.izin + '</td><td>Hari</td></tr>' +
+          '<tr><td class="rc-label">Tanpa Keterangan</td><td class="rc-colon">:</td><td class="tc-center">' + tally.alpha + '</td><td>Hari</td></tr>' +
+          '</tbody></table>' +
+
+          '<div class="rapor-cetak__akhir">' +
+          '<div class="rapor-cetak__footer">' +
+          '<div class="rapor-cetak__footer-cols">' +
+          '<div class="rapor-cetak__footer-col"><div class="rapor-cetak__footer-col-spacer">&nbsp;</div><div>Orangtua/ Wali</div><div class="rapor-cetak__ttd-space"></div><div>…...........................................</div></div>' +
+          '<div class="rapor-cetak__footer-col"><div class="rapor-cetak__footer-col-spacer">&nbsp;</div><div>Kepala Sekolah</div><div class="rapor-cetak__ttd-space"></div><div><strong>' + escapeHtml(NAMA_KEPALA_SEKOLAH) + '</strong></div></div>' +
+          '<div class="rapor-cetak__footer-col"><div class="rapor-cetak__footer-date">' + escapeHtml(NAMA_KOTA_TTD) + ', ' + (TANGGAL_NTS_CETAK ? escapeHtml(TANGGAL_NTS_CETAK) : '…........' + escapeHtml(tahunAkhir)) + '</div><div>Wali Kelas</div><div class="rapor-cetak__ttd-space"></div><div><strong>' + escapeHtml(nama) + '</strong></div></div>' +
+          '</div>' +
+          '</div>' +
+          '</div>' + // /rapor-cetak__akhir
 
           '</td></tr></tbody></table>' + // /rapor-cetak__print-frame
 
