@@ -11,6 +11,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="xlsx-autofit.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="excel-rekap.js"></script>
 <script src="unsaved-guard.js?v=1"></script>
 <script src="supabase-client.js"></script>
 <script src="simpan-atas.js?v=1"></script>
@@ -2281,10 +2283,38 @@
 
       content.innerHTML =
         '<div class="panel-head"><div><div class="panel-head__title">Rekap Nilai — ' + escapeHtml(wk.kelas.nama) + '</div>' +
-        '<div class="panel-head__desc">Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + ' — Semester ' + escapeHtml(tahunAktif.semester) + ' (aktif), seluruh mata pelajaran, diurutkan sesuai urutan mapel. Header kolom pakai Kode Mapel (arahkan kursor ke header untuk lihat nama lengkap).</div></div></div>' +
+        '<div class="panel-head__desc">Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + ' — Semester ' + escapeHtml(tahunAktif.semester) + ' (aktif), seluruh mata pelajaran, diurutkan sesuai urutan mapel. Header kolom pakai Kode Mapel (arahkan kursor ke header untuk lihat nama lengkap).</div></div>' +
+        '<button class="btn-small" id="btnExportRekapNilai">⬇ Unduh Rekap Nilai (Excel)</button></div>' +
         '<div class="table-wrap"><table class="data-table"><thead><tr><th>No</th><th>Nama</th>' + headerMapel + '</tr></thead>' +
         '<tbody>' + rowsHtml + '</tbody></table></div>' +
         (adaMapelAgamaGenerik ? '<div class="panel-note">* Nama mapel otomatis menyesuaikan agama tiap siswa saat dicetak di rapor (contoh: siswa Buddha → "Pendidikan Agama Buddha dan Budi Pekerti").</div>' : '');
+
+      var btnExport = document.getElementById('btnExportRekapNilai');
+      btnExport.addEventListener('click', async function () {
+        btnExport.disabled = true;
+        var teksAsli = btnExport.textContent;
+        btnExport.textContent = 'Menyiapkan...';
+        try {
+          var profilRes = await supabaseClient.from('profil_sekolah').select('*').maybeSingle();
+          var profilSekolah = profilRes.data || {};
+          await RekapExcel.unduhRekapNilaiSemester({
+            namaFile: 'rekap_nilai_' + RekapExcel.namaFileAman(wk.kelas.nama) + '_' + RekapExcel.namaFileAman(tahunAktif.nama) + '_' + RekapExcel.namaFileAman(tahunAktif.semester) + '.xlsx',
+            namaSheet: 'Rekap ' + wk.kelas.nama,
+            profilSekolah: profilSekolah,
+            tahunAjaran: { nama: tahunAktif.nama, semester: tahunAktif.semester },
+            kelas: wk.kelas,
+            waliKelasNama: nama,
+            mapelList: mapelList,
+            siswaList: siswaList,
+            nilaiMap: nilaiMap
+          });
+        } catch (err) {
+          alert('Gagal membuat file Excel: ' + (err && err.message ? err.message : err));
+        } finally {
+          btnExport.disabled = false;
+          btnExport.textContent = teksAsli;
+        }
+      });
     }
 
     // ================= WALI KELAS: Rekap Leger (6 Semester) =================
@@ -2504,24 +2534,30 @@
         '<tbody>' + rowsHtml + '</tbody></table></div>';
 
       btnExport.disabled = false;
-      btnExport.addEventListener('click', function () {
-        var aoa = [];
-        aoa.push(['Leger Nilai — ' + siswaObj.nama + (siswaObj.nis ? ' (' + siswaObj.nis + ')' : '')]);
-        var headerRow = ['Kode Mapel', 'Mata Pelajaran'];
-        for (var ke = 1; ke <= 6; ke++) headerRow.push('Semester ' + ke);
-        aoa.push(headerRow);
-        mapelList.forEach(function (m) {
-          var row = [m.kode || '—', m.nama];
-          for (var ke = 1; ke <= 6; ke++) {
-            var n = (nilaiMap[ke] && nilaiMap[ke][m.id]) || {};
-            row.push(n.nilai === undefined || n.nilai === null ? '' : Math.round(Number(n.nilai)));
-          }
-          aoa.push(row);
-        });
-        var ws = autoFitKolom(XLSX.utils.aoa_to_sheet(aoa));
-        var wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'Leger Nilai');
-        XLSX.writeFile(wb, 'leger_' + siswaObj.nama.replace(/[^a-z0-9]/gi, '_') + '.xlsx');
+      btnExport.addEventListener('click', async function () {
+        btnExport.disabled = true;
+        var teksAsli = btnExport.textContent;
+        btnExport.textContent = 'Menyiapkan...';
+        try {
+          var profilRes = await supabaseClient.from('profil_sekolah').select('*').maybeSingle();
+          var profilSekolah = profilRes.data || {};
+          await RekapExcel.unduhLegerSiswa({
+            namaFile: 'leger_' + RekapExcel.namaFileAman(siswaObj.nama) + '.xlsx',
+            namaSheet: 'Leger ' + siswaObj.nama,
+            profilSekolah: profilSekolah,
+            siswa: siswaObj,
+            kelas: wk.kelas,
+            waliKelasNama: nama,
+            mapelList: mapelList,
+            nilaiMap: nilaiMap,
+            tidakBerlakuFn: function (m, ke) { return !semesterBerlakuUntukMapel(m, ke); }
+          });
+        } catch (err) {
+          alert('Gagal membuat file Excel: ' + (err && err.message ? err.message : err));
+        } finally {
+          btnExport.disabled = false;
+          btnExport.textContent = teksAsli;
+        }
       });
     }
 

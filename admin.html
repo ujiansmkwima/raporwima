@@ -11,6 +11,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="xlsx-autofit.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="excel-rekap.js"></script>
 <script src="unsaved-guard.js?v=1"></script>
 <script src="supabase-client.js"></script>
 <script src="simpan-atas.js?v=1"></script>
@@ -43,6 +45,7 @@
       <a href="#" class="menu-item" data-view="tujuanPembelajaran"><i data-lucide="list-checks" class="menu-icon"></i><span class="menu-item__title">Tujuan Pembelajaran</span></a>
       <a href="#" class="menu-item" data-view="ekskul"><i data-lucide="medal" class="menu-icon"></i><span class="menu-item__title">Ekstrakurikuler</span></a>
       <a href="#" class="menu-item" data-view="pkl"><i data-lucide="briefcase-business" class="menu-icon"></i><span class="menu-item__title">PKL</span></a>
+      <a href="#" class="menu-item" data-view="rekapNilai"><i data-lucide="bar-chart-3" class="menu-icon"></i><span class="menu-item__title">Rekap Nilai Semester</span></a>
       <a href="#" class="menu-item" data-view="leger"><i data-lucide="layers" class="menu-icon"></i><span class="menu-item__title">Leger Nilai (6 Semester)</span></a>
       <a href="#" class="menu-item menu-item--nested" data-view="urutanLeger"><i data-lucide="corner-down-right" class="menu-icon"></i><span class="menu-item__title">Urutan Mapel Leger</span></a>
     </nav>
@@ -2318,6 +2321,192 @@
     });
   }
 
+  // ================= PANEL: REKAP NILAI SEMESTER (per kelas) =================
+  // Alur: pilih kelas -> tampil rekap nilai semua mapel x semua siswa
+  // untuk tahun ajaran/semester AKTIF, dengan tombol Unduh Excel yang
+  // rapi (berjudul, tabel bergaris, identitas lengkap, tanda tangan
+  // Wali Kelas & Kepala Sekolah). Setara dengan menu "Rekap Nilai
+  // Kelas" milik Wali Kelas di dashboard Guru, tapi Admin bisa buka
+  // untuk SEMUA kelas.
+  async function renderRekapNilai() {
+    await renderRekapNilaiKelas();
+  }
+
+  async function renderRekapNilaiKelas() {
+    content.innerHTML =
+      '<div class="panel-head"><div><div class="panel-head__title">Rekap Nilai Semester</div>' +
+      '<div class="panel-head__desc">Pilih kelas untuk melihat & mengunduh rekap nilai semua mata pelajaran pada tahun ajaran/semester aktif.</div></div></div>' +
+      '<div id="rekapNilaiArea"><div class="panel-note">Memuat daftar kelas...</div></div>';
+
+    var kelasRes = await supabaseClient.from('kelas').select('id, nama, tingkat, program_keahlian').order('tingkat').order('nama');
+    var kelasList = kelasRes.data || [];
+    var area = document.getElementById('rekapNilaiArea');
+
+    if (!kelasList.length) {
+      area.innerHTML = '<div class="empty-state"><div class="empty-state__mark">＋</div>' +
+        '<div class="empty-state__title">Belum ada kelas</div>' +
+        '<div class="empty-state__desc">Tambahkan kelas dulu di menu "Kelas".</div></div>';
+      return;
+    }
+
+    area.innerHTML =
+      '<div class="table-wrap"><table class="data-table"><thead><tr><th>Kelas</th><th>Tingkat</th><th>Program Keahlian</th><th></th></tr></thead>' +
+      '<tbody>' + kelasList.map(function (k) {
+        return '<tr><td>' + escapeHtml(k.nama) + '</td><td>' + escapeHtml(k.tingkat) + '</td><td>' + escapeHtml(k.program_keahlian || '—') + '</td>' +
+          '<td><button class="btn-small btn-small--primary" data-kelas-id="' + k.id + '">Lihat Rekap</button></td></tr>';
+      }).join('') + '</tbody></table></div>';
+
+    area.querySelectorAll('button[data-kelas-id]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var kelasObj = kelasList.find(function (k) { return k.id === btn.dataset.kelasId; });
+        renderRekapNilaiDetail(kelasObj);
+      });
+    });
+  }
+
+  async function renderRekapNilaiDetail(kelasObj) {
+    content.innerHTML =
+      '<div class="panel-head"><div><div class="panel-head__title">Rekap Nilai — ' + escapeHtml(kelasObj.nama) + '</div>' +
+      '<div class="panel-head__desc">Memuat rekap nilai...</div></div></div>' +
+      '<div class="toolbar">' +
+      '<button class="btn-small" id="btnRekapKembaliKelas">← Kembali ke Daftar Kelas</button>' +
+      '<button class="btn-small" id="btnExportRekapNilai" disabled>⬇ Unduh Rekap Nilai (Excel)</button>' +
+      '</div>' +
+      '<div id="rekapNilaiDetailArea"><div class="panel-note">Memuat...</div></div>';
+
+    document.getElementById('btnRekapKembaliKelas').addEventListener('click', renderRekapNilaiKelas);
+    var area = document.getElementById('rekapNilaiDetailArea');
+    var btnExport = document.getElementById('btnExportRekapNilai');
+
+    if (!tahunAktif) {
+      area.innerHTML = '<div class="empty-state"><div class="empty-state__mark">！</div>' +
+        '<div class="empty-state__title">Belum ada tahun ajaran aktif</div>' +
+        '<div class="empty-state__desc">Aktifkan tahun ajaran dulu di menu "Tahun Ajaran".</div></div>';
+      return;
+    }
+
+    var skRes = await supabaseClient
+      .from('siswa_kelas')
+      .select('siswa:siswa_id(id, nis, nisn, nama, agama)')
+      .eq('kelas_id', kelasObj.id)
+      .eq('tahun_ajaran_id', tahunAktif.id);
+    var siswaList = (skRes.data || []).map(function (r) { return r.siswa; }).filter(Boolean);
+    siswaList.sort(function (a, b) { return a.nama.localeCompare(b.nama); });
+
+    if (!siswaList.length) {
+      area.innerHTML = '<div class="empty-state"><div class="empty-state__mark">！</div>' +
+        '<div class="empty-state__title">Belum ada siswa</div>' +
+        '<div class="empty-state__desc">Belum ada siswa yang ditempatkan di kelas ini pada tahun ajaran aktif.</div></div>';
+      return;
+    }
+
+    var mapelSemuaRes = await supabaseClient
+      .from('mata_pelajaran')
+      .select('id, nama, kode, jenis_mapel, urutan_rapor, berlaku_untuk, berlaku_semester, agama_spesifik');
+    var mapelKelasRes = await supabaseClient.from('mapel_kelas').select('mapel_id').eq('kelas_id', kelasObj.id);
+    var mapelKelasSet = {};
+    (mapelKelasRes.data || []).forEach(function (r) { mapelKelasSet[r.mapel_id] = true; });
+    var mapelSemesterRes = await supabaseClient.from('mapel_semester').select('mapel_id, semester_ke');
+    var mapelSemesterSet = {};
+    (mapelSemesterRes.data || []).forEach(function (r) {
+      if (!mapelSemesterSet[r.mapel_id]) mapelSemesterSet[r.mapel_id] = [];
+      mapelSemesterSet[r.mapel_id].push(r.semester_ke);
+    });
+    var semesterKeAktif = hitungSemesterKe(kelasObj.tingkat, tahunAktif.semester);
+
+    var mapelList = (mapelSemuaRes.data || []).filter(function (m) {
+      if (m.berlaku_untuk === 'tertentu' && !mapelKelasSet[m.id]) return false;
+      if (m.berlaku_semester === 'tertentu' && semesterKeAktif && (mapelSemesterSet[m.id] || []).indexOf(semesterKeAktif) === -1) return false;
+      return true;
+    });
+    mapelList.sort(function (a, b) {
+      var ja = a.jenis_mapel === 'kejuruan' ? 1 : 0, jb = b.jenis_mapel === 'kejuruan' ? 1 : 0;
+      if (ja !== jb) return ja - jb;
+      var ua = (a.urutan_rapor === null || a.urutan_rapor === undefined) ? 9999 : a.urutan_rapor;
+      var ub = (b.urutan_rapor === null || b.urutan_rapor === undefined) ? 9999 : b.urutan_rapor;
+      if (ua !== ub) return ua - ub;
+      return (a.nama || '').localeCompare(b.nama || '');
+    });
+
+    if (!mapelList.length) {
+      area.innerHTML = '<div class="empty-state"><div class="empty-state__mark">！</div>' +
+        '<div class="empty-state__title">Belum ada mata pelajaran</div>' +
+        '<div class="empty-state__desc">Belum ada mata pelajaran yang berlaku untuk kelas ini di tahun ajaran aktif.</div></div>';
+      return;
+    }
+
+    var siswaIds = siswaList.map(function (s) { return s.id; });
+    var nilaiRes = await supabaseClient
+      .from('nilai')
+      .select('siswa_id, mapel_id, nilai')
+      .eq('tahun_ajaran_id', tahunAktif.id)
+      .eq('jenis', 'rapor')
+      .in('siswa_id', siswaIds);
+    var nilaiMap = {};
+    (nilaiRes.data || []).forEach(function (r) {
+      if (!nilaiMap[r.siswa_id]) nilaiMap[r.siswa_id] = {};
+      nilaiMap[r.siswa_id][r.mapel_id] = r;
+    });
+
+    var waliRes = await supabaseClient
+      .from('wali_kelas')
+      .select('guru:guru_id(nama)')
+      .eq('kelas_id', kelasObj.id)
+      .eq('tahun_ajaran_id', tahunAktif.id)
+      .maybeSingle();
+    var waliKelasNama = (waliRes.data && waliRes.data.guru && waliRes.data.guru.nama) || null;
+
+    var headerMapel = mapelList.map(function (m) {
+      return '<th title="' + escapeHtml(m.nama) + '">' + escapeHtml(m.kode || m.nama) + '</th>';
+    }).join('');
+    var rowsHtml = siswaList.map(function (s, i) {
+      var cells = mapelList.map(function (m) {
+        if (m.agama_spesifik && s.agama !== m.agama_spesifik) {
+          return '<td style="text-align:center;color:var(--ink-soft);">–</td>';
+        }
+        var n = (nilaiMap[s.id] && nilaiMap[s.id][m.id]) || {};
+        var nilaiTampil = (n.nilai === undefined || n.nilai === null) ? '—' : n.nilai;
+        return '<td style="text-align:center;">' + nilaiTampil + '</td>';
+      }).join('');
+      return '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(s.nama) + '</td>' + cells + '</tr>';
+    }).join('');
+
+    content.querySelector('.panel-head__desc').textContent =
+      'Tahun Ajaran ' + tahunAktif.nama + ' — Semester ' + tahunAktif.semester + ' (aktif), seluruh mata pelajaran. Header kolom pakai Kode Mapel (arahkan kursor ke header untuk lihat nama lengkap).' +
+      (waliKelasNama ? ' Wali Kelas: ' + waliKelasNama + '.' : ' Kelas ini belum punya Wali Kelas.');
+
+    area.innerHTML =
+      '<div class="table-wrap"><table class="data-table"><thead><tr><th>No</th><th>Nama</th>' + headerMapel + '</tr></thead>' +
+      '<tbody>' + rowsHtml + '</tbody></table></div>';
+
+    btnExport.disabled = false;
+    btnExport.addEventListener('click', async function () {
+      btnExport.disabled = true;
+      var teksAsli = btnExport.textContent;
+      btnExport.textContent = 'Menyiapkan...';
+      try {
+        var profilRes = await supabaseClient.from('profil_sekolah').select('*').maybeSingle();
+        var profilSekolah = profilRes.data || {};
+        await RekapExcel.unduhRekapNilaiSemester({
+          namaFile: 'rekap_nilai_' + RekapExcel.namaFileAman(kelasObj.nama) + '_' + RekapExcel.namaFileAman(tahunAktif.nama) + '_' + RekapExcel.namaFileAman(tahunAktif.semester) + '.xlsx',
+          namaSheet: 'Rekap ' + kelasObj.nama,
+          profilSekolah: profilSekolah,
+          tahunAjaran: { nama: tahunAktif.nama, semester: tahunAktif.semester },
+          kelas: kelasObj,
+          waliKelasNama: waliKelasNama,
+          mapelList: mapelList,
+          siswaList: siswaList,
+          nilaiMap: nilaiMap
+        });
+      } catch (err) {
+        alert('Gagal membuat file Excel: ' + (err && err.message ? err.message : err));
+      } finally {
+        btnExport.disabled = false;
+        btnExport.textContent = teksAsli;
+      }
+    });
+  }
+
   // Alur: pilih kelas -> daftar nama siswa di kelas itu -> klik nama -> tampil leger.
   async function renderLeger() {
     await renderLegerKelas();
@@ -2586,24 +2775,36 @@
       '<tbody>' + rowsHtml + '</tbody></table></div>';
 
     btnExport.disabled = false;
-    btnExport.addEventListener('click', function () {
-      var aoa = [];
-      aoa.push(['Leger Nilai — ' + siswaObj.nama + (siswaObj.nis ? ' (' + siswaObj.nis + ')' : '')]);
-      var headerRow = ['Mata Pelajaran'];
-      for (var ke = 1; ke <= 6; ke++) headerRow.push('Semester ' + ke);
-      aoa.push(headerRow);
-      mapelList.forEach(function (m) {
-        var row = [m.nama];
-        for (var ke = 1; ke <= 6; ke++) {
-          var n = (nilaiMap[ke] && nilaiMap[ke][m.id]) || {};
-          row.push(n.nilai === undefined || n.nilai === null ? '' : Math.round(Number(n.nilai)));
-        }
-        aoa.push(row);
-      });
-      var ws = autoFitKolom(XLSX.utils.aoa_to_sheet(aoa));
-      var wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Leger Nilai');
-      XLSX.writeFile(wb, 'leger_' + siswaObj.nama.replace(/[^a-z0-9]/gi, '_') + '.xlsx');
+    btnExport.addEventListener('click', async function () {
+      btnExport.disabled = true;
+      var teksAsli = btnExport.textContent;
+      btnExport.textContent = 'Menyiapkan...';
+      try {
+        var profilResP = supabaseClient.from('profil_sekolah').select('*').maybeSingle();
+        var waliResP = tahunAktif
+          ? supabaseClient.from('wali_kelas').select('guru:guru_id(nama)').eq('kelas_id', kelasObj.id).eq('tahun_ajaran_id', tahunAktif.id).maybeSingle()
+          : Promise.resolve({ data: null });
+        var hasil = await Promise.all([profilResP, waliResP]);
+        var profilSekolah = hasil[0].data || {};
+        var waliKelasNama = (hasil[1].data && hasil[1].data.guru && hasil[1].data.guru.nama) || null;
+
+        await RekapExcel.unduhLegerSiswa({
+          namaFile: 'leger_' + RekapExcel.namaFileAman(siswaObj.nama) + '.xlsx',
+          namaSheet: 'Leger ' + siswaObj.nama,
+          profilSekolah: profilSekolah,
+          siswa: siswaObj,
+          kelas: kelasObj,
+          waliKelasNama: waliKelasNama,
+          mapelList: mapelList,
+          nilaiMap: nilaiMap,
+          tidakBerlakuFn: function (m, ke) { return !semesterBerlakuUntukMapel(m, ke); }
+        });
+      } catch (err) {
+        alert('Gagal membuat file Excel: ' + (err && err.message ? err.message : err));
+      } finally {
+        btnExport.disabled = false;
+        btnExport.textContent = teksAsli;
+      }
     });
   }
 
@@ -5296,7 +5497,7 @@
     });
   }
 
-  var views = { dashboard: renderDashboard, profilSekolah: renderProfilSekolah, tahunAjaran: renderTahunAjaran, siswa: renderSiswa, leger: renderLeger, urutanLeger: renderUrutanLeger, kelas: renderKelas, mapel: renderMapel, mapelTingkat: renderMapelTingkat, penugasan: renderPenugasan, tujuanPembelajaran: renderTujuanPembelajaran, guru: renderGuru, ekskul: renderEkstrakurikuler, pkl: renderPkl };
+  var views = { dashboard: renderDashboard, profilSekolah: renderProfilSekolah, tahunAjaran: renderTahunAjaran, siswa: renderSiswa, rekapNilai: renderRekapNilai, leger: renderLeger, urutanLeger: renderUrutanLeger, kelas: renderKelas, mapel: renderMapel, mapelTingkat: renderMapelTingkat, penugasan: renderPenugasan, tujuanPembelajaran: renderTujuanPembelajaran, guru: renderGuru, ekskul: renderEkstrakurikuler, pkl: renderPkl };
 
   document.querySelectorAll('#menuAdmin .menu-item').forEach(function (item) {
     item.addEventListener('click', function (e) {
