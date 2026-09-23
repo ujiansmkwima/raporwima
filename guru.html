@@ -312,6 +312,23 @@
       });
       menuMengajar.appendChild(itemMengajar);
 
+      var itemTengahSemester = document.createElement('a');
+      itemTengahSemester.href = '#';
+      itemTengahSemester.className = 'menu-item';
+      itemTengahSemester.innerHTML = '<i data-lucide="notebook-pen" class="menu-icon"></i><span class="menu-item__title">Nilai Tengah Semester</span>';
+      itemTengahSemester.addEventListener('click', function (e) {
+        e.preventDefault();
+        setActiveMenuItem(itemTengahSemester);
+        renderPilihMapelKelas({
+          title: 'Nilai Tengah Semester & Catatan KBM',
+          desc: 'Pilih mapel, lalu pilih kelas, untuk mengisi nilai tengah semester dan catatan perkembangan siswa selama KBM.',
+          list: penugasan,
+          onPilih: renderInputNilaiTengahSemester
+        });
+      });
+      menuMengajar.appendChild(itemTengahSemester);
+      if (window.lucide) lucide.createIcons();
+
       menuTujuan.innerHTML = '';
       var itemTujuan = document.createElement('a');
       itemTujuan.href = '#';
@@ -1895,6 +1912,204 @@
         document.getElementById('nilaiMsg').innerHTML = gagal.length
           ? '<div class="import-summary">Sebagian gagal disimpan: ' + escapeHtml(gagal.slice(0, 3).join(' | ')) + '</div>'
           : '<div class="import-summary">Nilai ' + jobs.length + ' siswa berhasil disimpan (nilai TP, tengah semester, akhir semester, nilai rapor, dan capaian pembelajaran).</div>';
+      });
+    }
+
+    // ================= GURU MAPEL: Nilai Tengah Semester & Catatan KBM =================
+    // Terpisah dari renderInputNilai (yang mengisi TP/PTS/PAS untuk Nilai
+    // Rapor akhir). Menu ini khusus laporan perkembangan siswa DI TENGAH
+    // SEMESTER: satu angka Nilai (opsional) + satu Catatan Selama KBM
+    // (naratif bebas) per siswa, disimpan ke tabel nilai_tengah_semester.
+    // Bisa diunduh sebagai Template Excel dan diimpor kembali dari Excel.
+    var NTS_EXCEL_COLUMNS = ['NIS', 'Nama', 'Nilai', 'Catatan Selama KBM'];
+
+    async function renderInputNilaiTengahSemester(p) {
+      content.innerHTML = renderPlaceholder('Memuat...', 'Mengambil data siswa kelas ' + p.kelas.nama + '.');
+
+      var siswaListSemua = await ambilSiswaKelas(p.kelas.id);
+      // Sama seperti Input Nilai: mapel Pendidikan Agama yang sudah
+      // ditandai agama_spesifik hanya menampilkan siswa yang agamanya cocok.
+      var siswaList = p.mapel.agama_spesifik
+        ? siswaListSemua.filter(function (s) { return s.agama === p.mapel.agama_spesifik; })
+        : siswaListSemua;
+      if (!siswaList.length) {
+        var pesanKosong = p.mapel.agama_spesifik
+          ? 'Tidak ada siswa beragama ' + p.mapel.agama_spesifik + ' di kelas ' + p.kelas.nama + ' pada tahun ajaran ini.'
+          : 'Belum ada siswa yang ditempatkan di kelas ' + p.kelas.nama + ' pada tahun ajaran ini.';
+        content.innerHTML = renderPlaceholder('Nilai Tengah Semester — ' + p.mapel.nama, pesanKosong);
+        return;
+      }
+      var siswaIds = siswaList.map(function (s) { return s.id; });
+      var semesterKe = hitungSemesterKe(p.kelas.tingkat, tahunAktif.semester);
+
+      var ntsRes = await supabaseClient
+        .from('nilai_tengah_semester')
+        .select('siswa_id, nilai, catatan_kbm')
+        .eq('guru_id', user.id)
+        .eq('mapel_id', p.mapel.id)
+        .eq('kelas_id', p.kelas.id)
+        .eq('tahun_ajaran_id', tahunAktif.id)
+        .in('siswa_id', siswaIds);
+
+      // Kalau migrasi SQL belum dijalankan, tabelnya belum ada.
+      var kendalaMigrasi = !!ntsRes.error;
+
+      var ntsMap = {};
+      (ntsRes.data || []).forEach(function (r) { ntsMap[r.siswa_id] = r; });
+
+      var isPAI = isPendidikanAgama(p.mapel.nama) && !p.mapel.agama_spesifik;
+      var kolomMapel = isPAI ? '<th>Mapel (sesuai agama)</th>' : '';
+
+      function barisSiswaHtml(s, i) {
+        var n = ntsMap[s.id] || {};
+        var v = (n.nilai !== null && n.nilai !== undefined) ? n.nilai : '';
+        var catatan = n.catatan_kbm || '';
+        var selMapel = isPAI
+          ? '<td>' + (s.agama ? escapeHtml(namaMapelUntukSiswa(p.mapel.nama, s.agama)) : '<span style="color:var(--ink-soft);">Agama belum diisi</span>') + '</td>'
+          : '';
+        return '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(s.nis || '—') + '</td><td>' + escapeHtml(s.nama) + '</td>' + selMapel +
+          '<td class="col-tp"><input type="number" min="0" max="100" step="0.01" class="nilai-input nts-nilai" data-siswa="' + s.id + '" value="' + v + '"></td>' +
+          '<td style="min-width:300px;"><textarea class="catatan-input nts-catatan" data-siswa="' + s.id + '" rows="3" placeholder="Perkembangan, keaktifan, atau perilaku siswa selama KBM...">' + escapeHtml(catatan) + '</textarea></td>' +
+          '</tr>';
+      }
+
+      var rowsHtml = siswaList.map(barisSiswaHtml).join('');
+
+      var bannerMigrasi = kendalaMigrasi
+        ? '<div class="panel-note" style="color:var(--danger);"><strong>Perlu migrasi database.</strong> Sistem belum menemukan tabel <code>nilai_tengah_semester</code>. Jalankan file <code>migrasi_nilai_tengah_semester.sql</code> di Supabase Dashboard → SQL Editor, lalu muat ulang halaman ini.</div>'
+        : '';
+
+      content.innerHTML =
+        '<div class="panel-head"><div><div class="panel-head__title">Nilai Tengah Semester — ' + escapeHtml(p.mapel.nama) + '</div>' +
+        '<div class="panel-head__desc">Kelas ' + escapeHtml(p.kelas.nama) + (semesterKe ? ' · Semester ' + semesterKe : '') + ', Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + '. ' +
+        'Isi Nilai (0–100, opsional) dan Catatan Selama KBM untuk tiap siswa.' +
+        (isPAI ? ' Nama mapel di kolom Catatan otomatis menyesuaikan agama tiap siswa.' : '') +
+        (p.mapel.agama_spesifik ? ' Daftar di bawah hanya menampilkan siswa beragama <strong>' + escapeHtml(p.mapel.agama_spesifik) + '</strong> (' + siswaList.length + ' dari ' + siswaListSemua.length + ' siswa kelas ' + escapeHtml(p.kelas.nama) + ').' : '') +
+        '</div></div>' +
+        '<button class="btn-small btn-small--primary" id="btnSimpanNts" data-guard-scope=".nts-nilai, .nts-catatan">Simpan Semua</button></div>' +
+
+        bannerMigrasi +
+
+        '<div class="toolbar">' +
+        '<button class="btn-small" id="btnTemplateNts">⬇ Unduh Template Excel</button>' +
+        '<button class="btn-small" id="btnImportNts">⬆ Import dari Excel</button>' +
+        '<input type="file" id="fileImportNts" accept=".xlsx,.xls" style="display:none;">' +
+        '</div>' +
+        '<div id="importSummaryNts"></div>' +
+        '<div id="ntsMsg"></div>' +
+        '<div class="table-wrap"><table class="data-table"><thead><tr><th>No</th><th>NIS</th><th>Nama</th>' + kolomMapel +
+        '<th class="col-tp">Nilai</th><th>Catatan Selama KBM</th></tr></thead>' +
+        '<tbody>' + rowsHtml + '</tbody></table></div>';
+      SimpanAtas.pasang('btnSimpanNts');
+
+      // =======================================================
+      //  Excel
+      // =======================================================
+      function barisExcelSiswa(s, kosongkan) {
+        var elNilai = content.querySelector('.nts-nilai[data-siswa="' + s.id + '"]');
+        var elCatatan = content.querySelector('.nts-catatan[data-siswa="' + s.id + '"]');
+        var v = elNilai ? angkaAtauNull(elNilai.value) : null;
+        return {
+          'NIS': s.nis || '',
+          'Nama': s.nama,
+          'Nilai': kosongkan ? '' : (v === null ? '' : v),
+          'Catatan Selama KBM': kosongkan ? '' : (elCatatan ? elCatatan.value : '')
+        };
+      }
+
+      document.getElementById('btnTemplateNts').addEventListener('click', function () {
+        var rows = siswaList.map(function (s) { return barisExcelSiswa(s, true); });
+        var ws = autoFitKolom(XLSX.utils.json_to_sheet(rows, { header: NTS_EXCEL_COLUMNS }), { minCols: [10, 20, 8, 50] });
+        var wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Template Nilai Tengah Smt');
+        XLSX.writeFile(wb, 'template_nilai_tengah_semester_' + p.mapel.nama.replace(/[^a-z0-9]/gi, '_') + '_' + p.kelas.nama.replace(/[^a-z0-9]/gi, '_') + '.xlsx');
+      });
+
+      document.getElementById('btnImportNts').addEventListener('click', function () {
+        document.getElementById('fileImportNts').click();
+      });
+
+      // Import hanya MENGISI form di layar (tidak langsung menyimpan),
+      // supaya guru bisa memeriksa hasilnya dulu sebelum klik Simpan.
+      document.getElementById('fileImportNts').addEventListener('change', function (e) {
+        var file = e.target.files[0];
+        if (!file) return;
+
+        var reader = new FileReader();
+        reader.onload = function (evt) {
+          var data = new Uint8Array(evt.target.result);
+          var wb = XLSX.read(data, { type: 'array', cellDates: true });
+          var sheet = wb.Sheets[wb.SheetNames[0]];
+          var rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+          var siswaByNis = {};
+          siswaList.forEach(function (s) { if (s.nis) siswaByNis[String(s.nis).trim()] = s; });
+
+          var terisi = 0, dilewati = 0;
+          var pesan = [];
+
+          rows.forEach(function (row, i) {
+            var nis = String(row['NIS'] || '').trim();
+            if (!nis) { dilewati++; pesan.push('Baris ' + (i + 2) + ': dilewati (NIS belum diisi).'); return; }
+            var siswa = siswaByNis[nis];
+            if (!siswa) { dilewati++; pesan.push('Baris ' + (i + 2) + ': dilewati (NIS ' + nis + ' tidak ada di kelas ' + p.kelas.nama + ').'); return; }
+
+            var elNilai = content.querySelector('.nts-nilai[data-siswa="' + siswa.id + '"]');
+            var elCatatan = content.querySelector('.nts-catatan[data-siswa="' + siswa.id + '"]');
+            var vNilai = angkaAtauNull(row['Nilai']);
+            if (elNilai) elNilai.value = vNilai === null ? '' : vNilai;
+            if (elCatatan) elCatatan.value = String(row['Catatan Selama KBM'] || '').trim();
+
+            terisi++;
+          });
+
+          document.getElementById('importSummaryNts').innerHTML =
+            '<div class="import-summary"><strong>Hasil import:</strong> ' + terisi + ' baris siswa dimuat ke form, ' + dilewati + ' baris dilewati. ' +
+            'Data BELUM tersimpan — periksa dulu, lalu klik "Simpan Semua".' +
+            (pesan.length ? '\n\n' + escapeHtml(pesan.join('\n')) : '') + '</div>';
+
+          document.getElementById('fileImportNts').value = '';
+        };
+        reader.readAsArrayBuffer(file);
+      });
+
+      // =======================================================
+      //  Simpan
+      // =======================================================
+      document.getElementById('btnSimpanNts').addEventListener('click', async function () {
+        var btn = this;
+        btn.disabled = true;
+        btn.textContent = 'Menyimpan...';
+        var gagal = [];
+
+        var jobs = [];
+        siswaList.forEach(function (s) {
+          var elNilai = content.querySelector('.nts-nilai[data-siswa="' + s.id + '"]');
+          var elCatatan = content.querySelector('.nts-catatan[data-siswa="' + s.id + '"]');
+          var vNilai = elNilai ? angkaAtauNull(elNilai.value) : null;
+          var vCatatan = elCatatan ? elCatatan.value.trim() : '';
+          var sudahPunyaData = !!ntsMap[s.id];
+          if (vNilai === null && vCatatan === '' && !sudahPunyaData) return;
+
+          jobs.push(supabaseClient.from('nilai_tengah_semester').upsert({
+            siswa_id: s.id,
+            guru_id: user.id,
+            mapel_id: p.mapel.id,
+            kelas_id: p.kelas.id,
+            tahun_ajaran_id: tahunAktif.id,
+            nilai: vNilai,
+            catatan_kbm: vCatatan === '' ? null : vCatatan,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'siswa_id,mapel_id,kelas_id,tahun_ajaran_id' }));
+        });
+        var hasil = await Promise.all(jobs);
+        hasil.filter(function (r) { return r.error; }).forEach(function (r) { gagal.push(r.error.message); });
+
+        btn.disabled = false;
+        btn.textContent = 'Simpan Semua';
+        document.getElementById('ntsMsg').innerHTML = gagal.length
+          ? '<div class="import-summary">Sebagian gagal disimpan: ' + escapeHtml(gagal.slice(0, 3).join(' | ')) + '</div>'
+          : '<div class="import-summary">Nilai Tengah Semester & Catatan KBM untuk ' + jobs.length + ' siswa berhasil disimpan.</div>';
       });
     }
 
