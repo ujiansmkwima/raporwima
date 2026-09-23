@@ -134,13 +134,13 @@
 
   // ---------- Penomoran Semester 1–6 dari Tingkat kelas + Semester tahun ajaran ----------
   // Sama persis dengan yang dipakai admin di Leger Nilai (6 Semester):
-  // Tingkat 10 Ganjil=1, Genap=2, Tingkat 11 Ganjil=3, Genap=4,
-  // Tingkat 12 Ganjil=5, Genap=6. Dipakai untuk menyaring bank Tujuan
+  // Tingkat 10 Gasal=1, Genap=2, Tingkat 11 Gasal=3, Genap=4,
+  // Tingkat 12 Gasal=5, Genap=6. Dipakai untuk menyaring bank Tujuan
   // Pembelajaran (yang ditandai Semester 1–6) sesuai kelas yang dipilih.
   function hitungSemesterKe(tingkat, semesterTA) {
     if (!tingkat || !semesterTA) return null;
     var basis = (Number(tingkat) - 10) * 2;
-    if (semesterTA === 'Ganjil') return basis + 1;
+    if (semesterTA === 'Gasal') return basis + 1;
     if (semesterTA === 'Genap') return basis + 2;
     return null;
   }
@@ -432,7 +432,7 @@
 
       // Cetak Nilai Tengah Semester — format cetak sama seperti Cetak
       // Rapor, tapi isinya khusus Nilai Tengah Semester asli & Catatan
-      // KBM per mapel + rekap Presensi (tanpa Kokurikuler/Ekstrakurikuler).
+      // KBM per mapel (tanpa Presensi, Kokurikuler/Ekstrakurikuler).
       // Ditaruh DI ATAS menu Cetak Rapor (lihat urutan appendChild di bawah).
       var menuCetak = document.getElementById('menuCetakRapor');
       var itemCetakNts = document.createElement('a');
@@ -5579,7 +5579,7 @@
         // Angka semester sebenarnya (1–6) berdasarkan Tingkat kelas +
         // Semester tahun ajaran aktif — sama seperti penomoran yang
         // dipakai di Tujuan Pembelajaran/Leger Nilai. Contoh: kelas XI
-        // (Tingkat 11) di semester Ganjil = Semester 3.
+        // (Tingkat 11) di semester Gasal = Semester 3.
         var semesterKeCetak = hitungSemesterKe(wk.kelas.tingkat, tahunAktif.semester);
 
         // Mapel Umum/Kejuruan untuk kelas ini (mapelUmum, mapelKejuruan)
@@ -5786,11 +5786,10 @@
     // Format cetak sama seperti Cetak Rapor (kop Identitas Siswa berulang
     // tiap halaman, tanda tangan Wali Kelas & Kepala Sekolah), tapi isinya
     // HANYA Nilai Tengah Semester ASLI per mapel (nilai_tengah_semester.nilai,
-    // TIDAK dikonversi) + Catatan Selama KBM per mapel, dan rekap Presensi
-    // (Sakit/Izin/Alpha) yang TETAP diambil dari menu "Presensi Kelas"
-    // (tabel rekap_presensi) — sumber datanya sama persis dengan Cetak
-    // Rapor. TIDAK ada Kokurikuler, Ekstrakurikuler, Catatan Wali Kelas,
-    // maupun Tanggapan Orangtua di format ini.
+    // TIDAK dikonversi) + Catatan Selama KBM per mapel. TIDAK ada Presensi/
+    // Ketidakhadiran, Kokurikuler, Ekstrakurikuler, Catatan Wali Kelas,
+    // maupun Tanggapan Orangtua di format ini. Judul dokumen tetap
+    // "LAPORAN HASIL ASESMEN TENGAH SEMESTER GASAL" (tidak dinamis).
     async function renderCetakNts(wk) {
       content.innerHTML = renderPlaceholder('Memuat...', 'Menyiapkan data cetak nilai tengah semester kelas ' + wk.kelas.nama + '.');
 
@@ -5862,7 +5861,7 @@
 
         content.innerHTML =
           '<div class="panel-head"><div><div class="panel-head__title">Cetak Nilai Tengah Semester — ' + escapeHtml(wk.kelas.nama) + '</div>' +
-          '<div class="panel-head__desc">Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + '. Mencetak Nilai Tengah Semester asli &amp; Catatan Selama KBM tiap mapel (diisi guru mapel), ditambah rekap Presensi dari menu "Presensi Kelas". Tidak memuat Kokurikuler/Ekstrakurikuler. Klik Preview untuk melihat, Cetak untuk mencetak/menyimpan sebagai PDF lewat jendela cetak browser, atau centang beberapa lalu Cetak Terpilih.</div></div>' +
+          '<div class="panel-head__desc">Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + '. Mencetak Nilai Tengah Semester asli &amp; Catatan Selama KBM tiap mapel (diisi guru mapel). Tidak memuat Ketidakhadiran/Presensi, Kokurikuler, maupun Ekstrakurikuler. Klik Preview untuk melihat, Cetak untuk mencetak/menyimpan sebagai PDF lewat jendela cetak browser, atau centang beberapa lalu Cetak Terpilih.</div></div>' +
           '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
           '<button class="btn-small" id="btnNtsCetakTerpilih"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak Terpilih</button>' +
           '<button class="btn-small btn-small--primary" id="btnNtsCetakSemua"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak Semua</button>' +
@@ -6000,19 +5999,6 @@
           '<tr class="rapor-cetak__section-row"><td colspan="4">B. Mata Pelajaran Kejuruan</td></tr>' +
           (barisNilai(mapelKejuruan) || '<tr><td colspan="4" class="tc-center tc-soft">Belum ada mata pelajaran kejuruan.</td></tr>');
 
-        // Rekap Presensi — TETAP diambil dari rekap_presensi (diisi lewat
-        // menu "Presensi Kelas"), sumber datanya SAMA dengan Cetak Rapor.
-        // Catatan Wali Kelas SENGAJA tidak diikutkan di format ini.
-        var presensiRes = await supabaseClient
-          .from('rekap_presensi')
-          .select('jumlah_sakit, jumlah_izin, jumlah_alpha')
-          .eq('siswa_id', siswaId)
-          .eq('kelas_id', wk.kelas.id)
-          .eq('tahun_ajaran_id', tahunAktif.id)
-          .maybeSingle();
-        var rp = presensiRes.data || {};
-        var tally = { sakit: rp.jumlah_sakit || 0, izin: rp.jumlah_izin || 0, alpha: rp.jumlah_alpha || 0 };
-
         var tahunAkhir = (String(tahunAktif.nama).split('/')[1] || tahunAktif.nama).trim();
 
         // Blok Biodata — ditaruh di <thead> tabel pembungkus supaya
@@ -6040,17 +6026,10 @@
 
           '</td></tr></thead><tbody><tr><td>' +
 
-          '<div class="rapor-cetak__judul-utama" style="margin-top:0;">LAPORAN NILAI TENGAH SEMESTER &amp; CATATAN KBM</div>' +
+          '<div class="rapor-cetak__judul-utama" style="margin-top:0;">LAPORAN HASIL ASESMEN TENGAH SEMESTER GASAL</div>' +
 
-          '<div class="rapor-cetak__subjudul">A. NILAI</div>' +
-          '<table class="rapor-cetak__nilai"><thead><tr><th class="rc-th-no">NO</th><th>Mata Pelajaran</th><th class="rc-th-nilai">Nilai</th><th>Catatan Selama KBM</th></tr></thead>' +
+          '<table class="rapor-cetak__nilai" style="margin-bottom:14px;"><thead><tr><th class="rc-th-no">NO</th><th>Mata Pelajaran</th><th class="rc-th-nilai">Nilai</th><th>Catatan Selama KBM</th></tr></thead>' +
           '<tbody>' + nilaiRowsHtml + '</tbody></table>' +
-
-          '<div class="rapor-cetak__subjudul">B. KETIDAKHADIRAN</div>' +
-          '<table class="rapor-cetak__kehadiran rapor-cetak__kehadiran--nts" style="margin-bottom:14px;">' +
-          '<thead><tr><th>Sakit</th><th>Izin</th><th>Tanpa Keterangan</th></tr></thead>' +
-          '<tbody><tr><td>' + tally.sakit + ' Hari</td><td>' + tally.izin + ' Hari</td><td>' + tally.alpha + ' Hari</td></tr></tbody>' +
-          '</table>' +
 
           '<div class="rapor-cetak__akhir">' +
           '<div class="rapor-cetak__footer">' +

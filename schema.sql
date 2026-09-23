@@ -18,7 +18,7 @@
 create table if not exists public.tahun_ajaran (
   id uuid primary key default gen_random_uuid(),
   nama text not null,                 -- contoh: '2025/2026'
-  semester text not null check (semester in ('Ganjil', 'Genap')),
+  semester text not null check (semester in ('Gasal', 'Genap')),
   is_aktif boolean not null default false,
   created_at timestamptz default now(),
   unique (nama, semester)

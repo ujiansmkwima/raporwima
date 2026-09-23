@@ -423,7 +423,7 @@
       '<div class="panel-head__desc">Hanya satu tahun ajaran yang boleh aktif. Semua data guru & siswa mengikuti yang aktif di sini.</div></div></div>' +
       '<form class="add-form" id="formTA">' +
       '<div class="field"><label>Nama (contoh: 2026/2027)</label><input type="text" id="taNama" required></div>' +
-      '<div class="field"><label>Semester</label><select id="taSemester"><option value="Ganjil">Ganjil</option><option value="Genap">Genap</option></select></div>' +
+      '<div class="field"><label>Semester</label><select id="taSemester"><option value="Gasal">Gasal</option><option value="Genap">Genap</option></select></div>' +
       '<button type="submit" class="btn-small btn-small--primary">Tambah</button>' +
       '</form>' +
       '<div class="table-wrap"><table class="data-table"><thead><tr><th>Nama</th><th>Semester</th><th>Status</th><th></th></tr></thead><tbody id="taBody"></tbody></table></div>' +
@@ -484,7 +484,7 @@
         '<div class="form-grid">' +
         '<div class="field"><label>Nama</label><input type="text" id="f_taNama" value="' + escapeHtml(existing.nama) + '" required></div>' +
         '<div class="field"><label>Semester</label><select id="f_taSemester">' +
-        '<option value="Ganjil"' + (existing.semester === 'Ganjil' ? ' selected' : '') + '>Ganjil</option>' +
+        '<option value="Gasal"' + (existing.semester === 'Gasal' ? ' selected' : '') + '>Gasal</option>' +
         '<option value="Genap"' + (existing.semester === 'Genap' ? ' selected' : '') + '>Genap</option>' +
         '</select></div>' +
         '</div>' +
@@ -572,7 +572,7 @@
       'Data tahun ajaran lama tidak diubah atau dihapus.</div></div></div>';
 
     if (semuaTA.length < 2) {
-      wrap.innerHTML = headHtml + '<div class="panel-note">Buat dulu tahun ajaran tujuan (mis. 2027/2028 Ganjil) lewat form di atas, lalu proses kenaikan kelas dari sini.</div>';
+      wrap.innerHTML = headHtml + '<div class="panel-note">Buat dulu tahun ajaran tujuan (mis. 2027/2028 Gasal) lewat form di atas, lalu proses kenaikan kelas dari sini.</div>';
       return;
     }
 
@@ -581,7 +581,7 @@
       .filter(function (t) { return t.id !== asalDefault.id && t.nama > asalDefault.nama; })
       .sort(function (a, b) {
         if (a.nama !== b.nama) return a.nama < b.nama ? -1 : 1;
-        return a.semester === 'Ganjil' ? -1 : 1;
+        return a.semester === 'Gasal' ? -1 : 1;
       });
     var tujuanDefault = kandidatTujuan.length ? kandidatTujuan[0].id : '';
 
@@ -667,8 +667,8 @@
 
     // Peringatan kalau kombinasi tahun ajaran tidak lazim.
     var peringatan = [];
-    if (asal.semester !== 'Genap' || tujuan.semester !== 'Ganjil') {
-      peringatan.push('Kenaikan kelas biasanya dilakukan dari semester Genap ke semester Ganjil tahun ajaran berikutnya. ' +
+    if (asal.semester !== 'Genap' || tujuan.semester !== 'Gasal') {
+      peringatan.push('Kenaikan kelas biasanya dilakukan dari semester Genap ke semester Gasal tahun ajaran berikutnya. ' +
         'Kamu memilih ' + asal.nama + ' ' + asal.semester + ' → ' + tujuan.nama + ' ' + tujuan.semester + '.');
     }
     var thAsal = parseInt(String(asal.nama).slice(0, 4), 10);
@@ -2289,13 +2289,13 @@
   }
 
   // ================= PANEL: LEGER NILAI (6 SEMESTER) =================
-  // Pemetaan tetap: Tingkat 10 Ganjil = Semester 1, Tingkat 10 Genap = Semester 2,
-  // Tingkat 11 Ganjil = Semester 3, Tingkat 11 Genap = Semester 4,
-  // Tingkat 12 Ganjil = Semester 5, Tingkat 12 Genap = Semester 6.
+  // Pemetaan tetap: Tingkat 10 Gasal = Semester 1, Tingkat 10 Genap = Semester 2,
+  // Tingkat 11 Gasal = Semester 3, Tingkat 11 Genap = Semester 4,
+  // Tingkat 12 Gasal = Semester 5, Tingkat 12 Genap = Semester 6.
   function hitungSemesterKe(tingkat, semester) {
     if (!tingkat || !semester) return null;
     var basis = (Number(tingkat) - 10) * 2;
-    if (semester === 'Ganjil') return basis + 1;
+    if (semester === 'Gasal') return basis + 1;
     if (semester === 'Genap') return basis + 2;
     return null;
   }
@@ -2515,7 +2515,7 @@
   async function renderLegerKelas() {
     content.innerHTML =
       '<div class="panel-head"><div><div class="panel-head__title">Leger Nilai — Rekap 6 Semester</div>' +
-      '<div class="panel-head__desc">Pilih kelas untuk melihat daftar siswanya. Semester dihitung otomatis: Tingkat 10 Ganjil = Semester 1, ... Tingkat 12 Genap = Semester 6.</div></div>' +
+      '<div class="panel-head__desc">Pilih kelas untuk melihat daftar siswanya. Semester dihitung otomatis: Tingkat 10 Gasal = Semester 1, ... Tingkat 12 Genap = Semester 6.</div></div>' +
       '<button class="btn-small" id="btnKeUrutanLeger">Atur Urutan Mapel →</button></div>' +
       '<div id="legerArea"><div class="panel-note">Memuat daftar kelas...</div></div>';
 

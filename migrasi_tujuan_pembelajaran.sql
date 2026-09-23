@@ -29,8 +29,8 @@
 -- CATATAN (revisi): TP TIDAK lagi terikat ke kelas tertentu — guru
 -- menyusun TP per mapel saja, lalu menandai TP itu untuk Semester
 -- keberapa (1–6, memakai penomoran yang sama dengan Leger Nilai:
--- Tingkat 10 Ganjil=1, Genap=2, Tingkat 11 Ganjil=3, Genap=4,
--- Tingkat 12 Ganjil=5, Genap=6) dan status Aktif/Tidak Aktif (TP
+-- Tingkat 10 Gasal=1, Genap=2, Tingkat 11 Gasal=3, Genap=4,
+-- Tingkat 12 Gasal=5, Genap=6) dan status Aktif/Tidak Aktif (TP
 -- yang tidak aktif tetap tersimpan tapi disembunyikan dari daftar
 -- pilihan "Pilih Tujuan Pembelajaran" per siswa).
 create table if not exists public.tujuan_pembelajaran (
@@ -167,8 +167,8 @@ create index if not exists idx_tp_siswa_siswa
 -- "TP — Capaian Baik" dan "TP — Capaian Kurang". Pilihan TP yang
 -- muncul otomatis disaring ke TP berstatus Aktif pada Semester yang
 -- sesuai dengan Tingkat kelas tsb + Semester tahun ajaran aktif
--- (Tingkat 10 Ganjil=1, Genap=2, Tingkat 11 Ganjil=3, Genap=4,
--- Tingkat 12 Ganjil=5, Genap=6). Guru mencentang TP yang sesuai
+-- (Tingkat 10 Gasal=1, Genap=2, Tingkat 11 Gasal=3, Genap=4,
+-- Tingkat 12 Gasal=5, Genap=6). Guru mencentang TP yang sesuai
 -- untuk tiap siswa (boleh lebih dari satu, di kolom baik dan/atau
 -- kurang), minimal satu tercentang.
 -- =========================================================
