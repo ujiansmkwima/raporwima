@@ -1536,13 +1536,16 @@ a { color: inherit; text-decoration: none; }
 }
 
 /* ---- Tabel Ketidakhadiran khusus di cetak Nilai Tengah Semester (NTS):
-   dibuat selebar penuh dan segaris (rata kiri-kanan) dengan tabel Nilai di
-   atasnya, lengkap dengan kepala tabel (thead), memakai gaya garis/warna
-   yang sama persis dengan .rapor-cetak__nilai supaya kedua tabel terlihat
-   sebagai satu kesatuan format, bukan tabel kecil terpisah di tengah. ---- */
+   rata kiri dengan tabel Nilai di atasnya, tapi lebarnya SENGAJA dibatasi
+   hanya sampai kolom NO + Mata Pelajaran + Nilai (persis lebar
+   gabungan tiga kolom itu di .rapor-cetak__nilai: rc-th-no 42px +
+   kolom Mata Pelajaran 30% + rc-th-nilai 90px) — TIDAK melebar sampai
+   kolom Catatan Selama KBM, memakai gaya garis/warna yang sama persis
+   dengan .rapor-cetak__nilai supaya kedua tabel terlihat sebagai satu
+   kesatuan format, bukan tabel kecil terpisah di tengah. ---- */
 .rapor-cetak__kehadiran--nts {
-  width: 100%;
-  max-width: none;
+  width: calc(42px + 30% + 90px);
+  max-width: calc(42px + 30% + 90px);
   border-collapse: separate;
   border-spacing: 0;
   border: none;
