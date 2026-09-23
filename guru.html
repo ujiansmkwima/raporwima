@@ -1979,10 +1979,32 @@
         ? '<div class="panel-note" style="color:var(--danger);"><strong>Perlu migrasi database.</strong> Sistem belum menemukan tabel <code>nilai_tengah_semester</code>. Jalankan file <code>migrasi_nilai_tengah_semester.sql</code> di Supabase Dashboard → SQL Editor, lalu muat ulang halaman ini.</div>'
         : '';
 
+      // ---------- Nilai PTS yang sudah ada di "Input Nilai Mapel" ----------
+      // Dipakai di tab Konversi Nilai supaya guru tahu nilai PTS mana yang
+      // sudah/belum terisi di sana, sebelum & sesudah dikirim.
+      var ptsRes = await supabaseClient
+        .from('nilai')
+        .select('siswa_id, nilai_pts')
+        .eq('mapel_id', p.mapel.id)
+        .eq('tahun_ajaran_id', tahunAktif.id)
+        .eq('jenis', 'rapor')
+        .in('siswa_id', siswaIds);
+      var ptsMap = {};
+      (ptsRes.data || []).forEach(function (r) { ptsMap[r.siswa_id] = r.nilai_pts; });
+
+      function konversiRowHtml(s, i) {
+        var ptsLama = (ptsMap[s.id] !== null && ptsMap[s.id] !== undefined) ? ptsMap[s.id] : '—';
+        return '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(s.nis || '—') + '</td><td>' + escapeHtml(s.nama) + '</td>' +
+          '<td class="col-hitung" data-konv-asli="' + s.id + '">—</td>' +
+          '<td class="col-hitung" data-konv-hasil="' + s.id + '">—</td>' +
+          '<td data-konv-pts-lama="' + s.id + '">' + ptsLama + '</td></tr>';
+      }
+      var konversiRowsHtml = siswaList.map(konversiRowHtml).join('');
+
       content.innerHTML =
         '<div class="panel-head"><div><div class="panel-head__title">Nilai Tengah Semester — ' + escapeHtml(p.mapel.nama) + '</div>' +
         '<div class="panel-head__desc">Kelas ' + escapeHtml(p.kelas.nama) + (semesterKe ? ' · Semester ' + semesterKe : '') + ', Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + '. ' +
-        'Isi Nilai (0–100, opsional) dan Catatan Selama KBM untuk tiap siswa.' +
+        'Isi Nilai dan Catatan Selama KBM di tab pertama, lalu konversi & kirim ke Nilai PTS "Input Nilai Mapel" lewat tab Konversi Nilai — tidak perlu ketik ulang di sana.' +
         (isPAI ? ' Nama mapel di kolom Catatan otomatis menyesuaikan agama tiap siswa.' : '') +
         (p.mapel.agama_spesifik ? ' Daftar di bawah hanya menampilkan siswa beragama <strong>' + escapeHtml(p.mapel.agama_spesifik) + '</strong> (' + siswaList.length + ' dari ' + siswaListSemua.length + ' siswa kelas ' + escapeHtml(p.kelas.nama) + ').' : '') +
         '</div></div>' +
@@ -1990,6 +2012,12 @@
 
         bannerMigrasi +
 
+        '<div class="subtab-nav">' +
+        '<button type="button" class="subtab-btn active" data-subtab="isi">Nilai Tengah Semester</button>' +
+        '<button type="button" class="subtab-btn" data-subtab="konversi">Konversi Nilai</button>' +
+        '</div>' +
+
+        '<div class="subtab-panel" id="subtabIsi">' +
         '<div class="toolbar">' +
         '<button class="btn-small" id="btnTemplateNts">⬇ Unduh Template Excel</button>' +
         '<button class="btn-small" id="btnImportNts">⬆ Import dari Excel</button>' +
@@ -1999,8 +2027,131 @@
         '<div id="ntsMsg"></div>' +
         '<div class="table-wrap"><table class="data-table"><thead><tr><th>No</th><th>NIS</th><th>Nama</th>' + kolomMapel +
         '<th class="col-tp">Nilai</th><th>Catatan Selama KBM</th></tr></thead>' +
-        '<tbody>' + rowsHtml + '</tbody></table></div>';
+        '<tbody>' + rowsHtml + '</tbody></table></div>' +
+        '</div>' +
+
+        '<div class="subtab-panel" id="subtabKonversi" hidden>' +
+        '<div class="panel-note">' +
+        'Ubah skala Nilai Tengah Semester di tab sebelumnya (mis. hasil ulangan 0–60) ke skala 0–100, lalu kirim hasilnya langsung sebagai <strong>Nilai Tengah Semester (PTS)</strong> di menu "Input Nilai Mapel" — guru tidak perlu mengetik ulang di sana.<br>' +
+        'Rumus: <code>Nilai Konversi = (Nilai − Nilai Minimal) ÷ (Nilai Maksimal − Nilai Minimal) × 100</code>, dibulatkan 2 desimal.' +
+        '</div>' +
+        '<div class="add-form">' +
+        '<div class="field"><label>Nilai Minimal</label><input type="number" step="0.01" id="cfgKonvMin" value="0"></div>' +
+        '<div class="field"><label>Nilai Maksimal</label><input type="number" step="0.01" id="cfgKonvMax" value="100"></div>' +
+        '</div>' +
+        '<div class="panel-note" id="konversiPeringatan" style="color:var(--danger);display:none;">Nilai Maksimal harus lebih besar dari Nilai Minimal.</div>' +
+        '<div class="toolbar"><button class="btn-small btn-small--primary" id="btnKirimKonversi">⇪ Kirim ke Input Nilai Semester (PTS)</button></div>' +
+        '<div id="konversiMsg"></div>' +
+        '<div class="table-wrap"><table class="data-table"><thead><tr><th>No</th><th>NIS</th><th>Nama</th>' +
+        '<th class="col-hitung">Nilai Tengah Semester</th><th class="col-hitung">Nilai Konversi</th><th>PTS di Input Nilai Semester (saat ini)</th></tr></thead>' +
+        '<tbody>' + konversiRowsHtml + '</tbody></table></div>' +
+        '</div>';
       SimpanAtas.pasang('btnSimpanNts');
+
+      // =======================================================
+      //  Sub-tab: Nilai Tengah Semester <-> Konversi Nilai
+      // =======================================================
+      function angkaAtauDefault(id, def) {
+        var v = angkaAtauNull(document.getElementById(id).value);
+        return v === null ? def : v;
+      }
+
+      function batasKonversi() {
+        return { min: angkaAtauDefault('cfgKonvMin', 0), max: angkaAtauDefault('cfgKonvMax', 100) };
+      }
+
+      function hitungKonversi(nilaiAsli, batas) {
+        if (nilaiAsli === null || batas.max <= batas.min) return null;
+        var hasil = ((nilaiAsli - batas.min) / (batas.max - batas.min)) * 100;
+        return bulatkan2(Math.max(0, Math.min(100, hasil)));
+      }
+
+      function perbaruiTabelKonversi() {
+        var batas = batasKonversi();
+        var elPeringatan = document.getElementById('konversiPeringatan');
+        if (elPeringatan) elPeringatan.style.display = (batas.max <= batas.min) ? '' : 'none';
+        siswaList.forEach(function (s) {
+          var elNilai = content.querySelector('.nts-nilai[data-siswa="' + s.id + '"]');
+          var asli = elNilai ? angkaAtauNull(elNilai.value) : null;
+          var hasil = hitungKonversi(asli, batas);
+          var elAsli = content.querySelector('[data-konv-asli="' + s.id + '"]');
+          var elHasil = content.querySelector('[data-konv-hasil="' + s.id + '"]');
+          if (elAsli) elAsli.textContent = asli === null ? '—' : asli;
+          if (elHasil) elHasil.textContent = hasil === null ? '—' : hasil;
+        });
+      }
+
+      var subtabBtns = content.querySelectorAll('.subtab-btn');
+      var subtabPanels = { isi: content.querySelector('#subtabIsi'), konversi: content.querySelector('#subtabKonversi') };
+      subtabBtns.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          subtabBtns.forEach(function (b) { b.classList.remove('active'); });
+          btn.classList.add('active');
+          Object.keys(subtabPanels).forEach(function (key) { subtabPanels[key].hidden = (key !== btn.dataset.subtab); });
+          if (btn.dataset.subtab === 'konversi') perbaruiTabelKonversi();
+        });
+      });
+
+      ['cfgKonvMin', 'cfgKonvMax'].forEach(function (id) {
+        document.getElementById(id).addEventListener('input', perbaruiTabelKonversi);
+      });
+
+      // ---------- Kirim hasil konversi ke "Input Nilai Mapel" (Nilai PTS) ----------
+      document.getElementById('btnKirimKonversi').addEventListener('click', async function () {
+        var batas = batasKonversi();
+        if (batas.max <= batas.min) { alert('Nilai Maksimal harus lebih besar dari Nilai Minimal.'); return; }
+
+        var daftarKirim = [];
+        siswaList.forEach(function (s) {
+          var elNilai = content.querySelector('.nts-nilai[data-siswa="' + s.id + '"]');
+          var asli = elNilai ? angkaAtauNull(elNilai.value) : null;
+          var hasil = hitungKonversi(asli, batas);
+          if (hasil !== null) daftarKirim.push({ siswa: s, hasil: hasil });
+        });
+        if (!daftarKirim.length) {
+          alert('Belum ada Nilai Tengah Semester yang bisa dikonversi. Isi dulu di tab "Nilai Tengah Semester".');
+          return;
+        }
+
+        var konfirmasi = confirm(
+          'Kirim Nilai Konversi (skala ' + batas.min + '–' + batas.max + ' → 0–100) sebagai Nilai Tengah Semester (PTS) di menu "Input Nilai Mapel" untuk ' + daftarKirim.length + ' siswa?\n\n' +
+          'Nilai PTS yang sudah ada di sana akan DITIMPA. Komponen nilai lain (TP, Akhir Semester, Nilai Rapor) tidak ikut berubah.'
+        );
+        if (!konfirmasi) return;
+
+        var btn = this;
+        btn.disabled = true;
+        btn.textContent = 'Mengirim...';
+
+        var jobs = daftarKirim.map(function (x) {
+          return supabaseClient.from('nilai').upsert({
+            siswa_id: x.siswa.id,
+            mapel_id: p.mapel.id,
+            tahun_ajaran_id: tahunAktif.id,
+            jenis: 'rapor',
+            nilai_pts: x.hasil,
+            guru_id: user.id,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'siswa_id,mapel_id,tahun_ajaran_id,jenis' });
+        });
+        var hasilKirim = await Promise.all(jobs);
+        var gagal = hasilKirim.filter(function (r) { return r.error; });
+
+        btn.disabled = false;
+        btn.textContent = '⇪ Kirim ke Input Nilai Semester (PTS)';
+
+        if (gagal.length) {
+          document.getElementById('konversiMsg').innerHTML =
+            '<div class="import-summary">Sebagian gagal dikirim: ' + escapeHtml(gagal[0].error.message) + '</div>';
+        } else {
+          daftarKirim.forEach(function (x) {
+            var el = content.querySelector('[data-konv-pts-lama="' + x.siswa.id + '"]');
+            if (el) el.textContent = x.hasil;
+          });
+          document.getElementById('konversiMsg').innerHTML =
+            '<div class="import-summary">Nilai Konversi berhasil dikirim sebagai Nilai Tengah Semester (PTS) untuk ' + daftarKirim.length + ' siswa. Buka menu "Input Nilai Mapel" untuk melanjutkan Nilai Akhir Semester &amp; Nilai Rapor.</div>';
+        }
+      });
 
       // =======================================================
       //  Excel
