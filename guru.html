@@ -430,24 +430,11 @@
       });
       menuCetakIdentitas.appendChild(itemCetakIdentitas);
 
-      // Cetak Rapor — hanya untuk wali kelas, mencetak rapor per siswa
-      // di kelas yang diampunya (gabungan Nilai, Capaian Pembelajaran,
-      // Ekstrakurikuler, Kokurikuler, dan rekap Presensi).
-      var menuCetak = document.getElementById('menuCetakRapor');
-      var itemCetak = document.createElement('a');
-      itemCetak.href = '#';
-      itemCetak.className = 'menu-item';
-      itemCetak.innerHTML = '<i data-lucide="printer" class="menu-icon"></i><span class="menu-item__title">Cetak Rapor</span><span class="menu-item__sub">' + waliKelas.kelas.nama + '</span>';
-      itemCetak.addEventListener('click', function (e) {
-        e.preventDefault();
-        setActiveMenuItem(itemCetak);
-        renderCetakRapor(waliKelas);
-      });
-      menuCetak.appendChild(itemCetak);
-
       // Cetak Nilai Tengah Semester — format cetak sama seperti Cetak
       // Rapor, tapi isinya khusus Nilai Tengah Semester asli & Catatan
       // KBM per mapel + rekap Presensi (tanpa Kokurikuler/Ekstrakurikuler).
+      // Ditaruh DI ATAS menu Cetak Rapor (lihat urutan appendChild di bawah).
+      var menuCetak = document.getElementById('menuCetakRapor');
       var itemCetakNts = document.createElement('a');
       itemCetakNts.href = '#';
       itemCetakNts.className = 'menu-item';
@@ -458,6 +445,20 @@
         renderCetakNts(waliKelas);
       });
       menuCetak.appendChild(itemCetakNts);
+
+      // Cetak Rapor — hanya untuk wali kelas, mencetak rapor per siswa
+      // di kelas yang diampunya (gabungan Nilai, Capaian Pembelajaran,
+      // Ekstrakurikuler, Kokurikuler, dan rekap Presensi).
+      var itemCetak = document.createElement('a');
+      itemCetak.href = '#';
+      itemCetak.className = 'menu-item';
+      itemCetak.innerHTML = '<i data-lucide="printer" class="menu-icon"></i><span class="menu-item__title">Cetak Rapor</span><span class="menu-item__sub">' + waliKelas.kelas.nama + '</span>';
+      itemCetak.addEventListener('click', function (e) {
+        e.preventDefault();
+        setActiveMenuItem(itemCetak);
+        renderCetakRapor(waliKelas);
+      });
+      menuCetak.appendChild(itemCetak);
     }
 
     // 5b. Cek apakah guru ini ditugaskan sebagai PEMBINA EKSTRAKURIKULER
@@ -6045,7 +6046,7 @@
           '<tbody>' + nilaiRowsHtml + '</tbody></table>' +
 
           '<div class="rapor-cetak__bar">Ketidakhadiran</div>' +
-          '<table class="rapor-cetak__kehadiran" style="margin-bottom:14px;"><tbody>' +
+          '<table class="rapor-cetak__kehadiran rapor-cetak__kehadiran--nts" style="margin-bottom:14px;"><tbody>' +
           '<tr><td class="rc-label">Sakit</td><td class="rc-colon">:</td><td class="tc-center">' + tally.sakit + '</td><td>Hari</td></tr>' +
           '<tr><td class="rc-label">Izin</td><td class="rc-colon">:</td><td class="tc-center">' + tally.izin + '</td><td>Hari</td></tr>' +
           '<tr><td class="rc-label">Tanpa Keterangan</td><td class="rc-colon">:</td><td class="tc-center">' + tally.alpha + '</td><td>Hari</td></tr>' +
