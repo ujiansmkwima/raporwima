@@ -740,28 +740,46 @@ a { color: inherit; text-decoration: none; }
 
 /* Sub-tab navigasi di dalam satu panel konten (mis. "Nilai Tengah
    Semester" vs "Konversi Nilai"). Beda dari sidebar .menu-item —
-   ini untuk berpindah tampilan TANPA memuat ulang data dari server. */
+   ini untuk berpindah tampilan TANPA memuat ulang data dari server.
+   Gaya pill mengikuti .pkl-step-btn supaya konsisten dengan tab
+   langkah di menu Nilai PKL. */
 .subtab-nav {
   display: flex;
-  gap: 6px;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
   border-bottom: 1px solid var(--border);
-  margin: 4px 0 16px;
+  padding-bottom: 14px;
 }
 .subtab-btn {
-  padding: 9px 16px;
-  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: 12.5px;
   font-weight: 600;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
   color: var(--ink-soft);
-  background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
   cursor: pointer;
-  margin-bottom: -1px;
-  transition: color 0.15s ease, border-color 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
-.subtab-btn:hover { color: var(--ink); }
-.subtab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+.subtab-btn:hover { background: var(--surface-tint-strong); border-color: var(--primary-soft); color: var(--ink); }
+.subtab-btn.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+  box-shadow: 0 4px 10px -3px rgba(37, 99, 235, 0.5);
+}
+.subtab-btn.active:hover { background: var(--primary-dim); border-color: var(--primary-dim); color: #fff; }
+.subtab-btn i { width: 14px; height: 14px; }
 .subtab-panel[hidden] { display: none; }
+.subtab-panel { animation: subtabFadeIn 0.15s ease; }
+@keyframes subtabFadeIn {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 
 .panel-note {
   font-size: 12.5px;
