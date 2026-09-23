@@ -6046,11 +6046,10 @@
           '<tbody>' + nilaiRowsHtml + '</tbody></table>' +
 
           '<div class="rapor-cetak__bar">Ketidakhadiran</div>' +
-          '<table class="rapor-cetak__kehadiran rapor-cetak__kehadiran--nts" style="margin-bottom:14px;"><tbody>' +
-          '<tr><td class="rc-label">Sakit</td><td class="rc-colon">:</td><td class="tc-center">' + tally.sakit + '</td><td>Hari</td></tr>' +
-          '<tr><td class="rc-label">Izin</td><td class="rc-colon">:</td><td class="tc-center">' + tally.izin + '</td><td>Hari</td></tr>' +
-          '<tr><td class="rc-label">Tanpa Keterangan</td><td class="rc-colon">:</td><td class="tc-center">' + tally.alpha + '</td><td>Hari</td></tr>' +
-          '</tbody></table>' +
+          '<table class="rapor-cetak__kehadiran rapor-cetak__kehadiran--nts" style="margin-bottom:14px;">' +
+          '<thead><tr><th>Sakit</th><th>Izin</th><th>Tanpa Keterangan</th></tr></thead>' +
+          '<tbody><tr><td>' + tally.sakit + ' Hari</td><td>' + tally.izin + ' Hari</td><td>' + tally.alpha + ' Hari</td></tr></tbody>' +
+          '</table>' +
 
           '<div class="rapor-cetak__akhir">' +
           '<div class="rapor-cetak__footer">' +

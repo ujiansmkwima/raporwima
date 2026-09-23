@@ -1536,17 +1536,44 @@ a { color: inherit; text-decoration: none; }
 }
 
 /* ---- Tabel Ketidakhadiran khusus di cetak Nilai Tengah Semester (NTS):
-   dibuat lebih kecil/ringkas daripada versi di Cetak Rapor biasa, karena di
-   NTS tabel ini berdiri sendiri selebar halaman (bukan berdampingan dengan
-   kotak Catatan Wali Kelas seperti di Cetak Rapor). ---- */
+   dibuat selebar penuh dan segaris (rata kiri-kanan) dengan tabel Nilai di
+   atasnya, lengkap dengan kepala tabel (thead), memakai gaya garis/warna
+   yang sama persis dengan .rapor-cetak__nilai supaya kedua tabel terlihat
+   sebagai satu kesatuan format, bukan tabel kecil terpisah di tengah. ---- */
 .rapor-cetak__kehadiran--nts {
-  width: auto;
-  max-width: 260px;
+  width: 100%;
+  max-width: none;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: none;
+}
+
+.rapor-cetak__kehadiran--nts th {
+  background: #FFC000;
+  color: #000;
+  font-weight: 700;
+  text-align: center;
+  font-size: 12px;
+  border-top: 1px solid #000;
+  border-left: 1px solid #000;
+  border-bottom: 1px solid #000;
+  padding: 5px 8px;
+}
+
+.rapor-cetak__kehadiran--nts th:last-child {
+  border-right: 1px solid #000;
 }
 
 .rapor-cetak__kehadiran--nts td {
-  padding: 2px 6px;
-  font-size: 11px;
+  border-left: 1px solid #000;
+  border-bottom: 1px solid #000;
+  padding: 5px 8px;
+  font-size: 12px;
+  text-align: center;
+}
+
+.rapor-cetak__kehadiran--nts td:last-child {
+  border-right: 1px solid #000;
 }
 
 /* ---- Hint kecil (hanya di layar) mengarahkan ke menu Catatan Wali Kelas ---- */
