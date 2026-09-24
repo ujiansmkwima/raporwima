@@ -2045,6 +2045,7 @@
         '<button class="btn-small" id="btnTemplateNts">⬇ Unduh Template Excel</button>' +
         '<button class="btn-small" id="btnImportNts">⬆ Import dari Excel</button>' +
         '<input type="file" id="fileImportNts" accept=".xlsx,.xls" style="display:none;">' +
+        '<button class="btn-small" id="btnKosongkanNts">🗑 Kosongkan Semua Nilai &amp; Catatan</button>' +
         '</div>' +
         '<div id="importSummaryNts"></div>' +
         '<div id="ntsMsg"></div>' +
@@ -2250,6 +2251,21 @@
           document.getElementById('fileImportNts').value = '';
         };
         reader.readAsArrayBuffer(file);
+      });
+
+      // ---------- Kosongkan Semua ----------
+      document.getElementById('btnKosongkanNts').addEventListener('click', function () {
+        var konfirmasi = confirm(
+          'Kosongkan SEMUA Nilai dan Catatan Selama KBM untuk ' + siswaList.length + ' siswa di kelas ini?\n\n' +
+          'Ini hanya mengosongkan tampilan di layar — data baru benar-benar terhapus setelah kamu klik "Simpan Semua".'
+        );
+        if (!konfirmasi) return;
+
+        content.querySelectorAll('.nts-nilai').forEach(function (inp) { inp.value = ''; });
+        content.querySelectorAll('.nts-catatan').forEach(function (ta) { ta.value = ''; });
+
+        document.getElementById('ntsMsg').innerHTML =
+          '<div class="import-summary">Semua kolom Nilai &amp; Catatan Selama KBM di layar sudah dikosongkan. Klik "Simpan Semua" untuk menyimpan perubahan ini.</div>';
       });
 
       // =======================================================
