@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Panduan E-Rapor — SMK Widya Mandala Tambak</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f8fafc;--sf:#fff;--ink:#0f172a;--soft:#64748b;--line:#e2e8f0;--p:#2563eb;--pt:#eff6ff;--ok:#059669;--okt:#ecfdf5;--bad:#dc2626;--badt:#fef2f2;--warn:#b45309;--warnt:#fffbeb;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0b1220;--sf:#111a2e;--ink:#e6edf7;--soft:#94a3b8;--line:#22304a;--p:#60a5fa;--pt:#12233f;--ok:#34d399;--okt:#0d2a22;--bad:#f87171;--badt:#2b1416;--warn:#fbbf24;--warnt:#2a2210}}
+:root[data-theme="dark"]{--bg:#0b1220;--sf:#111a2e;--ink:#e6edf7;--soft:#94a3b8;--line:#22304a;--p:#60a5fa;--pt:#12233f;--ok:#34d399;--okt:#0d2a22;--bad:#f87171;--badt:#2b1416;--warn:#fbbf24;--warnt:#2a2210}
+html{scroll-padding-top:calc(60px + env(safe-area-inset-top,0px));scroll-behavior:smooth}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 "Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:920px;margin:0 auto;padding:0 18px 60px}
+nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--sf);border-bottom:1px solid var(--line);display:flex;gap:4px;overflow-x:auto;padding:8px 14px;white-space:nowrap}
+nav a{color:var(--soft);text-decoration:none;font-size:14px;font-weight:600;padding:6px 12px;border-radius:8px}
+nav a:hover{background:var(--pt);color:var(--p)}
+h1{font-size:clamp(28px,5vw,40px);line-height:1.15;margin:40px 0 10px;font-weight:800;letter-spacing:-.02em}
+h2{font-size:26px;margin:52px 0 6px;font-weight:800;letter-spacing:-.01em}
+h3{font-size:18px;margin:26px 0 6px}
+p{margin:8px 0;max-width:70ch}
+.lead{color:var(--soft);font-size:18px}
+code{background:var(--pt);color:var(--p);padding:1px 6px;border-radius:5px;font-size:.9em}
+.card{background:var(--sf);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin:14px 0}
+.step{display:grid;grid-template-columns:34px 1fr;gap:12px;margin:18px 0}
+.n{width:34px;height:34px;border-radius:50%;background:var(--p);color:#fff;font-weight:800;display:grid;place-items:center}
+.step h3{margin:3px 0 4px}
+.note,.warn,.ok{border-radius:10px;padding:10px 14px;margin:12px 0;font-size:15px;max-width:70ch}
+.note{background:var(--pt);border-left:4px solid var(--p)}
+.warn{background:var(--warnt);border-left:4px solid var(--warn)}
+.ok{background:var(--okt);border-left:4px solid var(--ok)}
+.lane{display:flex;align-items:stretch;gap:0;flex-wrap:wrap;margin:10px 0}
+.lane b.t{flex:0 0 100%;font-size:14px;color:var(--soft);margin-bottom:6px}
+.box{flex:1 1 130px;background:var(--sf);border:1.5px solid var(--p);border-radius:12px;padding:10px 12px;font-size:14px;font-weight:600;min-width:120px}
+.box small{display:block;font-weight:400;color:var(--soft)}
+.ar{align-self:center;padding:0 6px;color:var(--p);font-weight:800;font-size:20px}
+@media(max-width:640px){.ar{flex:0 0 100%;text-align:center;transform:rotate(90deg);height:22px;padding:0}}
+.mock{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--sf);margin:14px 0;font-size:13px}
+.mock .bar{background:var(--pt);color:var(--p);font-weight:700;padding:7px 12px;border-bottom:1px solid var(--line)}
+.side{display:grid;grid-template-columns:minmax(190px,240px) 1fr}
+.side>div:first-child{background:var(--bg);border-right:1px solid var(--line);padding:10px}
+.g{color:var(--soft);font-size:11px;margin:10px 0 4px;font-weight:700}
+.mi{padding:6px 9px;border-radius:7px;margin:2px 0;display:flex;justify-content:space-between;gap:6px}
+.mi.on{background:var(--pt);color:var(--p);font-weight:700}
+.mi i{font-style:normal;background:var(--p);color:#fff;border-radius:9px;padding:0 7px;font-size:11px;align-self:center}
+.side>div:last-child{padding:14px;color:var(--soft)}
+.tw{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:560px}
+th,td{border-bottom:1px solid var(--line);padding:7px 9px;text-align:center}
+th{background:var(--bg);font-weight:700}
+td:first-child,th:first-child{text-align:left}
+.in{display:inline-block;min-width:38px;border:1px solid var(--line);border-radius:6px;padding:1px 6px;background:var(--bg)}
+.hl{background:var(--okt);color:var(--ok);font-weight:800}
+.lo{background:var(--badt);color:var(--bad);font-weight:700}
+.bar3{display:flex;height:34px;border-radius:8px;overflow:hidden;margin:10px 0;font-size:12px;color:#fff;font-weight:700}
+.bar3 span{display:grid;place-items:center}
+.calc{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px}
+label{font-size:13px;color:var(--soft);font-weight:600;display:block}
+input{width:100%;font:inherit;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
+.res{margin-top:12px;font-size:22px;font-weight:800;color:var(--p)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+details{background:var(--sf);border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin:8px 0}
+summary{cursor:pointer;font-weight:700}
+details p{color:var(--soft)}
+ul{padding-left:20px;margin:6px 0}
+li{margin:3px 0}
+</style>
+</head>
+<body>
+<nav>
+<a href="guru.html">← Dashboard</a><a href="#alur">Alur</a><a href="#mulai">Mulai</a><a href="#guru">Guru Mapel</a><a href="#wali">Wali Kelas</a><a href="#lain">Peran Lain</a><a href="#faq">Kendala</a>
+</nav>
+<main>
+<h1>Panduan E-Rapor untuk Guru & Wali Kelas</h1>
+<p class="lead">SMK Widya Mandala Tambak. Dari masuk ke aplikasi sampai rapor tercetak, langkah demi langkah.</p>
+
+<h2 id="alur">Alur kerja singkat</h2>
+<p>Guru mapel mengisi nilai lebih dulu. Wali kelas menyusun rapor dari nilai-nilai itu, jadi kerjakan berurutan.</p>
+<div class="card">
+<div class="lane"><b class="t">Guru mapel</b>
+<div class="box">1. Susun Tujuan Pembelajaran<small>kode, deskripsi, semester</small></div><span class="ar">→</span>
+<div class="box">2. Isi nilai TP, tengah & akhir semester<small>nilai rapor terhitung otomatis</small></div><span class="ar">→</span>
+<div class="box">3. Simpan Semua Nilai<small>tanpa simpan, data tidak masuk</small></div></div>
+<div class="lane" style="margin-top:22px"><b class="t">Wali kelas (setelah nilai guru terisi)</b>
+<div class="box">1. Isi Presensi<small>sakit, izin, alpha</small></div><span class="ar">→</span>
+<div class="box">2. Cek Rekap Nilai<small>cari kolom yang masih —</small></div><span class="ar">→</span>
+<div class="box">3. Catatan Wali Kelas<small>susun otomatis</small></div><span class="ar">→</span>
+<div class="box">4. Cetak Rapor<small>preview, lalu cetak/PDF</small></div></div>
+</div>
+
+<h2 id="mulai">Masuk dan mengenal layar</h2>
+<div class="step"><div class="n">1</div><div><h3>Login</h3><p>Buka halaman E-Rapor, isi email dan kata sandi dari admin, klik <b>Masuk</b>. Sistem mengenali kamu sebagai guru atau admin secara otomatis. Tanda mata di kolom sandi untuk menampilkan/menyembunyikan sandi.</p></div></div>
+<div class="step"><div class="n">2</div><div><h3>Baca menu di kiri</h3><p>Menu muncul sesuai penugasan dari admin. Guru mapel biasa hanya melihat <b>Intrakurikuler</b>. Kalau kamu juga wali kelas, pembina ekskul, PJ kokurikuler, atau pembimbing PKL, bagian lain muncul sendiri. Di kanan atas tertulis peranmu, misalnya <i>Guru · Wali Kelas X-A</i>.</p></div></div>
+<div class="mock"><div class="bar">Tampilan menu (contoh guru yang juga wali kelas)</div>
+<div class="side"><div>
+<div class="g">Ringkasan</div><div class="mi on">Dashboard Saya</div>
+<div class="g">Intrakurikuler</div><div class="mi">Tujuan Pembelajaran <i>A</i></div><div class="mi">Input Nilai Mapel <i>B</i></div><div class="mi">Nilai Tengah Semester <i>B</i></div>
+<div class="g">Wali Kelas</div><div class="mi">Rekap Nilai Kelas <i>C</i></div><div class="mi">Presensi Kelas <i>C</i></div><div class="mi">Catatan Wali Kelas <i>C</i></div><div class="mi">Rekap Leger (6 Semester)</div>
+<div class="g">Cetak</div><div class="mi">Cetak Rapor <i>D</i></div>
+</div><div>Bagian A dan B untuk semua guru mapel. C dan D hanya muncul kalau kamu ditetapkan admin sebagai wali kelas. Halaman pertama setelah login adalah <b>Dashboard Saya</b>: progres pengisian nilai per mapel dan kelas, dengan tombol <b>Isi Nilai</b> langsung ke halamannya.</div></div></div>
+<div class="note">Muncul pop up penyemangat setelah login? Itu normal, sekali per login. Kalau tertulis "Belum ada tahun ajaran aktif" atau "Belum ada penugasan", hubungi admin.</div>
+
+<h2 id="guru">Untuk guru mapel</h2>
+<div class="step"><div class="n">1</div><div><h3>Susun Tujuan Pembelajaran (TP)</h3>
+<p>Menu <b>Tujuan Pembelajaran</b> → pilih mapel (tidak perlu pilih kelas) → isi form lalu klik <b>Tambah</b>.</p>
+<ul><li><b>Kode</b> boleh kosong, misalnya <code>TP.1</code>.</li><li><b>Deskripsi</b> maksimal 300 karakter dan otomatis huruf kecil, karena kalimat ini disambung ke narasi capaian di rapor.</li><li><b>Semester</b> memakai nomor 1–6 (lihat tabel di bawah). <b>Status</b> harus <b>Aktif</b> supaya TP dipakai.</li><li>Tombol <b>Edit</b>, <b>Nonaktifkan</b>, dan <b>Hapus</b> ada di tiap baris. Bisa juga lewat Unduh Template Excel lalu Import.</li></ul>
+<div class="tw"><table style="min-width:420px"><tr><th>Tingkat</th><th>Gasal</th><th>Genap</th></tr><tr><td>Kelas 10 (Fase E)</td><td>Semester 1</td><td>Semester 2</td></tr><tr><td>Kelas 11 (Fase F)</td><td>Semester 3</td><td>Semester 4</td></tr><tr><td>Kelas 12 (Fase F)</td><td>Semester 5</td><td>Semester 6</td></tr></table></div>
+<div class="warn">Hanya TP <b>Aktif</b> untuk semester yang sedang berjalan yang jadi kolom nilai (TP1, TP2, ...). Kalau belum ada, kolom TP tidak muncul dan capaian tidak bisa disusun otomatis.</div></div></div>
+
+<div class="step"><div class="n">2</div><div><h3>Nilai Tengah Semester (opsional)</h3>
+<p>Menu <b>Nilai Tengah Semester</b> → pilih mapel, lalu kelas. Tab pertama untuk mengisi <b>Nilai</b> dan <b>Catatan Selama KBM</b> tiap siswa. Tab <b>Konversi Nilai</b> menarik nilai ke rentang yang kamu tentukan (bawaan: KKM sampai 100) lalu tombol <b>Kirim ke Input Nilai Semester (PTS)</b> memasukkannya sebagai nilai PTS, jadi tidak perlu mengetik ulang. Klik <b>Simpan Semua</b> untuk tab pertama.</p>
+<p>Rumus konversi: <code>Nilai Minimal + (Nilai ÷ 100) × (Maksimal − Minimal)</code>. Nilai PTS lama di Input Nilai Mapel akan tertimpa.</p></div></div>
+
+<div class="step"><div class="n">3</div><div><h3>Atur bobot, lalu isi nilai</h3>
+<p>Menu <b>Input Nilai Mapel</b> → pilih mapel → pilih kelas. Di bagian <b>Pembobotan & Capaian</b> isi Bobot TP, Tengah Semester, Akhir Semester (bawaan 1 : 2 : 3), <b>KKM</b>, dan mode capaian, lalu klik <b>Simpan Pengaturan</b>. Pengaturan ini berlaku untuk mapel dan kelas itu saja.</p>
+<div class="mock"><div class="bar">Input Nilai — contoh tampilan (KKM 75, bobot 1 : 2 : 3)</div><div class="tw"><table>
+<tr><th>Nama</th><th>TP1</th><th>TP2</th><th>TP3</th><th>Rata TP</th><th>Tengah Smt</th><th>Akhir Smt</th><th>Nilai Rapor</th></tr>
+<tr><td>Siswa A</td><td><span class="in">80</span></td><td><span class="in">85</span></td><td><span class="in">75</span></td><td>80</td><td><span class="in">70</span></td><td><span class="in">90</span></td><td class="hl">82</td></tr>
+<tr><td>Siswa B</td><td><span class="in">90</span></td><td><span class="in lo">60</span></td><td><span class="in">85</span></td><td>78.33</td><td><span class="in">80</span></td><td><span class="in">85</span></td><td class="hl">82</td></tr></table></div></div>
+<p>Ketik nilai 0–100, kolom abu-abu (Rata TP, Nilai Rapor) terisi sendiri. Nilai Rapor hijau berarti tuntas, merah berarti di bawah KKM. Coba hitung sendiri di bawah ini:</p>
+<div class="card"><div class="calc">
+<div><label>Rata TP</label><input id="a" type="number" value="80"></div><div><label>Tengah Smt</label><input id="b" type="number" value="70"></div><div><label>Akhir Smt</label><input id="c" type="number" value="90"></div>
+<div><label>Bobot TP</label><input id="x" type="number" value="1"></div><div><label>Bobot Tengah</label><input id="y" type="number" value="2"></div><div><label>Bobot Akhir</label><input id="z" type="number" value="3"></div></div>
+<div class="bar3"><span id="s1" style="background:#2563eb"></span><span id="s2" style="background:#0891b2"></span><span id="s3" style="background:#059669"></span></div>
+<div class="res" id="out"></div><p style="font-size:14px;color:var(--soft)">Komponen yang dikosongkan tidak ikut dihitung dan bobotnya tidak ikut dibagi. Hasil dibulatkan ke bilangan bulat.</p></div>
+<h3>Capaian Pembelajaran otomatis</h3>
+<ul><li>TP dengan nilai tertinggi dikutip sebagai capaian baik.</li><li>Kalau modenya <b>Capaian baik dan kurang</b>, satu TP dengan nilai terendah di bawah KKM ikut dikutip. Pada contoh, TP2 Siswa B (60) yang muncul. Siswa A tidak punya TP di bawah 75, jadi kalimat kurang tidak dimunculkan.</li><li>Teks yang sudah kamu sunting tidak tertimpa saat bobot atau KKM berubah. Klik <b>↺ Susun Ulang</b> untuk mengembalikan ke teks otomatis.</li></ul>
+<div class="ok"><b>Terakhir, klik Simpan Semua Nilai</b> (tombol ada di atas dan di atas tabel). Kalau pindah menu sebelum menyimpan, muncul peringatan "Perubahan Belum Disimpan".</div>
+<h3>Isi lewat Excel</h3>
+<p><b>⬇ Unduh Template Excel</b> → isi di Excel → <b>⬆ Import dari Excel</b>. Siswa dicocokkan lewat <b>NIS</b>; baris yang gagal dilewati dan alasannya ditampilkan. Import hanya mengisi layar, jadi periksa dulu lalu tetap klik <b>Simpan Semua Nilai</b>. Ada juga <b>Unduh Data (Excel)</b> dan <b>Kosongkan Semua</b> (baru terhapus setelah disimpan).</p></div></div>
+
+<h2 id="wali">Untuk wali kelas</h2>
+<p>Semua menu wali kelas ada di bagian <b>Wali Kelas</b> dan <b>Cetak</b>, khusus untuk kelas yang kamu ampu.</p>
+<div class="step"><div class="n">1</div><div><h3>Presensi Kelas</h3><p>Isi <b>jumlah total</b> Sakit, Izin, dan Tanpa Keterangan tiap siswa selama tahun ajaran (bukan absen harian), lalu <b>Simpan Presensi</b>. Bisa juga dengan template Excel; siswa dicocokkan lewat NIS dulu, baru nama. Isi ini lebih dulu karena dipakai untuk catatan otomatis.</p></div></div>
+<div class="step"><div class="n">2</div><div><h3>Periksa rekap sebelum mencetak</h3><ul><li><b>Rekap Nilai Kelas</b>: semua mapel kelasmu. Tanda <code>—</code> berarti nilai belum diisi guru mapel, <code>–</code> berarti mapel agama lain. Arahkan kursor ke kode mapel untuk melihat nama lengkap. Bisa diunduh ke Excel.</li><li><b>Rekap Ekstrakurikuler</b> dan <b>Kokurikuler</b>: tampilan baca saja untuk memastikan pembina/PJ sudah mengisi.</li><li><b>Rekap Leger (6 Semester)</b>: klik <b>Lihat Leger</b> pada nama siswa untuk nilai semester 1–6, bisa diunduh.</li></ul>
+<div class="warn">Nilai yang kosong bukan salah kamu: hubungi guru mapel yang bersangkutan agar menekan Simpan Semua Nilai.</div></div></div>
+<div class="step"><div class="n">3</div><div><h3>Catatan Wali Kelas</h3><p>Di menu <b>Catatan Wali Kelas</b>, tiap siswa punya ringkasan nilai dan kehadiran serta kotak catatan. Centang isi yang diinginkan (nilai & mapel, kutipan capaian, kehadiran, kalimat penyemangat), lalu:</p>
+<ul><li><b>✨ Susun Otomatis (Semua Siswa)</b>: menimpa semua catatan.</li><li><b>✨ Susun Hanya yang Masih Kosong</b>: catatan yang sudah ada aman.</li><li>Tombol <b>✨ Susun Otomatis</b> per baris untuk satu siswa.</li></ul>
+<p>Hasilnya bebas disunting. Klik <b>Simpan Semua</b> setelah selesai.</p></div></div>
+<div class="step"><div class="n">4</div><div><h3>Cetak</h3>
+<div class="grid2"><div class="card"><b>Cetak Identitas</b><br>Biodata siswa. Data diisi admin di Data Siswa.</div><div class="card"><b>Cetak Nilai Tengah Semester</b><br>Nilai asli (tanpa konversi) dan Catatan Selama KBM per mapel.</div><div class="card"><b>Cetak Rapor</b><br>Nilai dan capaian per mapel, kokurikuler, ekskul, ketidakhadiran, catatan wali kelas, tanda tangan.</div></div>
+<p>Pilih menu cetak. Di daftar siswa: <b>Preview</b> untuk melihat di layar, <b>Cetak</b> untuk satu siswa, atau centang beberapa lalu <b>Cetak Terpilih</b>, atau <b>Cetak Semua</b>. Jendela cetak browser terbuka; pilih printer, atau <b>Simpan sebagai PDF</b>. Nama file otomatis berisi nama siswa, semester, dan kelas.</p>
+<div class="note">Kepala sekolah, kota, dan tanggal rapor diambil dari Profil Sekolah yang diisi admin. Kalau tanggal masih titik-titik atau nama kepala sekolah "—", minta admin melengkapinya sebelum cetak massal.</div>
+<div class="ok"><b>Cek cepat sebelum cetak:</b> presensi terisi, tidak ada nilai <code>—</code> di rekap, catatan wali kelas tersimpan, lalu Preview satu siswa.</div></div></div>
+
+<h2 id="lain">Peran tambahan</h2>
+<div class="grid2">
+<div class="card"><b>Pembina Ekstrakurikuler</b><p>Menu <b>Nilai Ekstrakurikuler</b>: pilih <b>Predikat</b> (Sangat Baik, Baik, Cukup, Kurang) dan tulis Deskripsi tiap peserta. Simpan Semua Nilai. Peserta ditetapkan admin. Ada template Excel.</p></div>
+<div class="card"><b>PJ Kokurikuler</b><p>Menu <b>Nilai Kokurikuler</b> (nama kegiatan dan kelas tertera): tulis Deskripsi capaian tiap siswa, lalu Simpan Semua Nilai. Ada template Excel.</p></div>
+<div class="card"><b>Pembimbing PKL</b><p>Menu <b>Input Pembimbing</b>, 4 langkah berurutan: 1 Identitas DUDI, 2 Nilai DUDI (TP1–TP4, deskripsi tersusun dari rubrik), 3 Catatan & Presensi, 4 Cetak Nilai PKL.</p></div>
+<div class="card"><b>Penguji PKL</b><p>Menu <b>Input Penguji</b>: isi nilai TP1–TP4 dari sisi penguji. Nilai akhir PKL adalah rata-rata nilai pembimbing DUDI dan penguji.</p></div>
+</div>
+
+<h2 id="faq">Kendala yang sering muncul</h2>
+<details><summary>Menu mapel kosong / "Belum ada penugasan mengajar"</summary><p>Admin belum menugaskan kamu ke mapel dan kelas di tahun ajaran aktif. Minta admin mengeceknya.</p></details>
+<details><summary>Kolom TP tidak muncul di Input Nilai</summary><p>Belum ada TP berstatus Aktif untuk semester yang sedang berjalan. Buka Tujuan Pembelajaran, cek nomor Semester dan Status.</p></details>
+<details><summary>Import Excel ada baris yang dilewati</summary><p>Biasanya NIS kosong atau tidak terdaftar di kelas itu. Baca ringkasan hasil import di layar, perbaiki, ulangi. Ingat tetap klik Simpan.</p></details>
+<details><summary>Nilai tidak muncul di rekap atau rapor</summary><p>Kemungkinan Simpan Semua Nilai belum diklik, atau nilai rapor memang belum ada karena semua komponen kosong.</p></details>
+<details><summary>Siswa agama lain tidak tampil di mapel agama</summary><p>Memang disaring: mapel agama tertentu hanya menampilkan siswa seagama. Jika agama siswa belum diisi, minta admin melengkapi Data Siswa.</p></details>
+<details><summary>Ada tulisan "Perlu migrasi database"</summary><p>Ini urusan admin/pengembang: file migrasi SQL yang disebut di pesan belum dijalankan. Laporkan ke admin.</p></details>
+</main>
+<script>
+function h(){var g=function(i){var v=document.getElementById(i).value;return v===''?null:parseFloat(v)},v=[g('a'),g('b'),g('c')],w=[g('x'),g('y'),g('z')],j=0,t=0,p=[];
+for(var i=0;i<3;i++){var b=Math.max(0,w[i]||0);if(v[i]!==null&&b>0){j+=v[i]*b;t+=b}p.push(v[i]!==null&&b>0?b:0)}
+for(i=0;i<3;i++){var e=document.getElementById('s'+(i+1));e.style.width=(t?p[i]/t*100:0)+'%';e.textContent=p[i]?['TP','Tengah','Akhir'][i]+' ×'+p[i]:''}
+document.getElementById('out').textContent=t?'Nilai Rapor = '+Math.round(j/t):'Isi minimal satu nilai dan bobot'}
+document.querySelectorAll('.calc input').forEach(function(e){e.addEventListener('input',h)});h();
+</script>
+</body>
+</html>
