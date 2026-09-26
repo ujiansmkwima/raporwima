@@ -454,9 +454,9 @@ a { color: inherit; text-decoration: none; }
    di atas — jadi tidak pernah benar-benar menempel ke tepi layar. ---- */
 .login-slideshow {
   position: relative;
-  flex: 1 1 640px;
+  flex: 1 1 1280px;
   width: 100%;
-  max-width: 720px;
+  max-width: 1440px;
   aspect-ratio: 16 / 9;
   max-height: calc(100vh - 48px);
   border-radius: var(--radius-lg);
