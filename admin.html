@@ -35,6 +35,7 @@
     <nav class="menu-list" id="menuAdmin">
       <a href="#" class="menu-item" data-view="dashboard"><i data-lucide="layout-dashboard" class="menu-icon"></i><span class="menu-item__title">Dashboard</span></a>
       <a href="#" class="menu-item" data-view="profilSekolah"><i data-lucide="school" class="menu-icon"></i><span class="menu-item__title">Profil Sekolah</span></a>
+      <a href="#" class="menu-item" data-view="slideshowLogin"><i data-lucide="images" class="menu-icon"></i><span class="menu-item__title">Slideshow Login</span></a>
       <a href="#" class="menu-item" data-view="tahunAjaran"><i data-lucide="calendar-clock" class="menu-icon"></i><span class="menu-item__title">Tahun Ajaran</span></a>
       <a href="#" class="menu-item" data-view="kelas"><i data-lucide="door-open" class="menu-icon"></i><span class="menu-item__title">Kelas</span></a>
       <a href="#" class="menu-item" data-view="siswa"><i data-lucide="users" class="menu-icon"></i><span class="menu-item__title">Siswa</span></a>
@@ -507,6 +508,143 @@
         msg.textContent = 'Tersimpan.';
       }
     });
+  }
+
+  // ================= Slideshow Login =================
+  // Kumpulan gambar yang tampil bergantian (slideshow) di panel kiri
+  // halaman Masuk (index.html), sebelum user login. Disimpan di tabel
+  // public.login_slideshow, tiap baris 1 gambar (data URL base64,
+  // sama seperti tanda tangan Kepala Sekolah — tidak perlu Supabase
+  // Storage terpisah) + kolom `urutan` untuk mengatur giliran tampil.
+  // Tabel ini boleh dibaca siapa saja (termasuk yang belum login,
+  // lewat anon key) supaya slideshow bisa muncul di halaman Masuk,
+  // tapi cuma admin yang boleh menambah/mengurutkan/menghapus.
+  async function renderSlideshowLogin() {
+    content.innerHTML = '<div class="panel-head"><div><div class="panel-head__title">Slideshow Login</div>' +
+      '<div class="panel-head__desc">Memuat daftar gambar...</div></div></div>';
+
+    async function muatDanGambar() {
+      var res = await supabaseClient.from('login_slideshow').select('*').order('urutan', { ascending: true });
+      var list = res.data || [];
+
+      var listHtml = !list.length
+        ? '<div class="panel-note">Belum ada gambar. Tambahkan gambar lewat tombol di bawah supaya slideshow muncul di halaman Masuk. Kalau kosong, halaman Masuk tampil seperti biasa (tanpa slideshow).</div>'
+        : '<div id="slideshowList" style="display:flex;flex-direction:column;gap:10px;max-width:640px;">' +
+          list.map(function (s, i) {
+            return '<div class="slideshow-item" style="display:flex;align-items:center;gap:12px;border:1px solid var(--border,#e5e7eb);border-radius:8px;padding:8px 10px;">' +
+              '<img src="' + s.gambar + '" alt="" style="width:90px;height:56px;object-fit:cover;border-radius:6px;flex-shrink:0;">' +
+              '<div style="flex:1;font-size:12.5px;color:var(--ink-soft);">Urutan ke-' + (i + 1) + '</div>' +
+              '<button type="button" class="btn-small btn-slide-naik" data-id="' + s.id + '"' + (i === 0 ? ' disabled' : '') + ' title="Pindah ke atas"><i data-lucide="chevron-up" style="width:14px;height:14px;"></i></button>' +
+              '<button type="button" class="btn-small btn-slide-turun" data-id="' + s.id + '"' + (i === list.length - 1 ? ' disabled' : '') + ' title="Pindah ke bawah"><i data-lucide="chevron-down" style="width:14px;height:14px;"></i></button>' +
+              '<button type="button" class="btn-small btn-slide-hapus" data-id="' + s.id + '" title="Hapus"><i data-lucide="trash-2" style="width:14px;height:14px;"></i></button>' +
+              '</div>';
+          }).join('') +
+          '</div>';
+
+      content.innerHTML =
+        '<div class="panel-head"><div><div class="panel-head__title">Slideshow Login</div>' +
+        '<div class="panel-head__desc">Gambar-gambar ini tampil bergantian (auto-geser) di panel kiri halaman Masuk, sebagai galeri/promosi sekolah. Urutan tampil bisa diatur lewat tombol naik/turun.</div></div></div>' +
+        listHtml +
+        '<div style="margin-top:16px;max-width:640px;">' +
+          '<label class="btn-small btn-small--primary" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;">' +
+            '<i data-lucide="upload" style="width:14px;height:14px;"></i> Tambah Gambar' +
+            '<input type="file" id="slideshowFile" accept="image/png,image/jpeg,image/webp" style="display:none;">' +
+          '</label>' +
+          '<div class="panel-note" style="margin:8px 0 0;padding:0;">Gunakan foto berorientasi potret/vertikal untuk hasil terbaik (kegiatan sekolah, prestasi siswa, dll). Gambar otomatis dikecilkan &amp; dikompres saat diupload.</div>' +
+        '</div>' +
+        '<div id="slideshowMsg" style="margin-top:10px;"></div>';
+
+      lucide.createIcons();
+
+      document.querySelectorAll('.btn-slide-naik').forEach(function (btn) {
+        btn.addEventListener('click', function () { tukarUrutan(btn.dataset.id, -1, list); });
+      });
+      document.querySelectorAll('.btn-slide-turun').forEach(function (btn) {
+        btn.addEventListener('click', function () { tukarUrutan(btn.dataset.id, 1, list); });
+      });
+      document.querySelectorAll('.btn-slide-hapus').forEach(function (btn) {
+        btn.addEventListener('click', async function () {
+          if (!confirm('Hapus gambar ini dari slideshow?')) return;
+          var msg = document.getElementById('slideshowMsg');
+          msg.textContent = 'Menghapus...';
+          var del = await supabaseClient.from('login_slideshow').delete().eq('id', btn.dataset.id);
+          if (del.error) { msg.textContent = 'Gagal menghapus: ' + del.error.message; return; }
+          muatDanGambar();
+        });
+      });
+
+      document.getElementById('slideshowFile').addEventListener('change', async function (e) {
+        var file = e.target.files && e.target.files[0];
+        if (!file) return;
+        var msg = document.getElementById('slideshowMsg');
+        try {
+          msg.textContent = 'Memproses & mengunggah gambar...';
+          var dataUrl = await kecilkanGambarSlideshow(file);
+          var urutanBaru = list.length ? (Math.max.apply(null, list.map(function (s) { return s.urutan; })) + 1) : 0;
+          var ins = await supabaseClient.from('login_slideshow').insert({ gambar: dataUrl, urutan: urutanBaru });
+          if (ins.error) { msg.textContent = 'Gagal menyimpan: ' + ins.error.message; return; }
+          muatDanGambar();
+        } catch (err) {
+          msg.textContent = 'Gagal memproses gambar: ' + (err && err.message ? err.message : err);
+        } finally {
+          e.target.value = '';
+        }
+      });
+    }
+
+    // Tukar nilai `urutan` gambar ini dengan tetangganya (arah -1 = naik,
+    // +1 = turun), lalu simpan keduanya. Konsep sama seperti geser baris
+    // di menu lain yang punya urutan manual (mis. Urutan Mapel Leger).
+    async function tukarUrutan(id, arah, list) {
+      var idx = list.findIndex(function (s) { return s.id === id; });
+      var idxLawan = idx + arah;
+      if (idx < 0 || idxLawan < 0 || idxLawan >= list.length) return;
+      var a = list[idx], b = list[idxLawan];
+      var msg = document.getElementById('slideshowMsg');
+      msg.textContent = 'Menyimpan urutan...';
+      var hasil = await Promise.all([
+        supabaseClient.from('login_slideshow').update({ urutan: b.urutan }).eq('id', a.id),
+        supabaseClient.from('login_slideshow').update({ urutan: a.urutan }).eq('id', b.id)
+      ]);
+      if (hasil[0].error || hasil[1].error) {
+        msg.textContent = 'Gagal menyimpan urutan: ' + (hasil[0].error || hasil[1].error).message;
+        return;
+      }
+      muatDanGambar();
+    }
+
+    // Mengecilkan & mengompres gambar slideshow di sisi browser sebelum
+    // disimpan sebagai data URL base64 (lebar dibatasi maks 1280px,
+    // diekspor sebagai JPEG kualitas 0.82 supaya ukurannya wajar untuk
+    // disimpan di kolom teks, walau foto asli dari kamera/HP besar).
+    function kecilkanGambarSlideshow(file) {
+      return new Promise(function (resolve, reject) {
+        var reader = new FileReader();
+        reader.onerror = function () { reject(new Error('Gagal membaca file.')); };
+        reader.onload = function () {
+          var img = new Image();
+          img.onerror = function () { reject(new Error('File bukan gambar yang valid.')); };
+          img.onload = function () {
+            var LEBAR_MAKS = 1280;
+            var skala = img.width > LEBAR_MAKS ? (LEBAR_MAKS / img.width) : 1;
+            var w = Math.round(img.width * skala);
+            var h = Math.round(img.height * skala);
+            var canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            var ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(0, 0, w, h);
+            ctx.drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL('image/jpeg', 0.82));
+          };
+          img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    await muatDanGambar();
   }
 
   async function renderTahunAjaran() {
@@ -5589,7 +5727,7 @@
     });
   }
 
-  var views = { dashboard: renderDashboard, profilSekolah: renderProfilSekolah, tahunAjaran: renderTahunAjaran, siswa: renderSiswa, rekapNilai: renderRekapNilai, leger: renderLeger, urutanLeger: renderUrutanLeger, kelas: renderKelas, mapel: renderMapel, mapelTingkat: renderMapelTingkat, penugasan: renderPenugasan, tujuanPembelajaran: renderTujuanPembelajaran, guru: renderGuru, ekskul: renderEkstrakurikuler, pkl: renderPkl };
+  var views = { dashboard: renderDashboard, profilSekolah: renderProfilSekolah, slideshowLogin: renderSlideshowLogin, tahunAjaran: renderTahunAjaran, siswa: renderSiswa, rekapNilai: renderRekapNilai, leger: renderLeger, urutanLeger: renderUrutanLeger, kelas: renderKelas, mapel: renderMapel, mapelTingkat: renderMapelTingkat, penugasan: renderPenugasan, tujuanPembelajaran: renderTujuanPembelajaran, guru: renderGuru, ekskul: renderEkstrakurikuler, pkl: renderPkl };
 
   document.querySelectorAll('#menuAdmin .menu-item').forEach(function (item) {
     item.addEventListener('click', function (e) {

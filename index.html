@@ -13,7 +13,12 @@
 </head>
 <body>
 
-<div class="login-shell">
+<div class="login-shell" id="loginShell">
+
+  <div class="login-slideshow" id="loginSlideshow" style="display:none;">
+    <div class="login-slideshow__track" id="loginSlideshowTrack"></div>
+    <div class="login-slideshow__dots" id="loginSlideshowDots"></div>
+  </div>
 
   <form class="login-card" id="loginForm">
 
@@ -51,6 +56,67 @@
 
 <script>
   lucide.createIcons();
+
+  // ================= Slideshow Login =================
+  // Ambil gambar dari tabel public.login_slideshow (diatur Admin lewat
+  // menu Admin → "Slideshow Login"), urut sesuai kolom `urutan`. Tabel
+  // ini boleh dibaca siapa saja (termasuk belum login) — lihat catatan
+  // RLS di migrasi_slideshow_login.sql. Kalau belum ada gambar sama
+  // sekali (atau gagal diambil), panel slideshow tetap disembunyikan
+  // dan halaman Masuk tampil seperti biasa (form login di tengah).
+  (async function initLoginSlideshow() {
+    try {
+      var res = await supabaseClient.from('login_slideshow').select('*').order('urutan', { ascending: true });
+      var slides = res.data || [];
+      if (!slides.length) return;
+
+      var wrap = document.getElementById('loginSlideshow');
+      var track = document.getElementById('loginSlideshowTrack');
+      var dots = document.getElementById('loginSlideshowDots');
+
+      track.innerHTML = slides.map(function (s, i) {
+        return '<div class="login-slideshow__slide' + (i === 0 ? ' is-active' : '') + '"><img src="' + s.gambar + '" alt=""></div>';
+      }).join('');
+
+      if (slides.length > 1) {
+        dots.innerHTML = slides.map(function (s, i) {
+          return '<span class="login-slideshow__dot' + (i === 0 ? ' is-active' : '') + '" data-i="' + i + '"></span>';
+        }).join('');
+      }
+
+      wrap.style.display = '';
+      document.getElementById('loginShell').classList.add('login-shell--with-slideshow');
+
+      var slideEls = track.querySelectorAll('.login-slideshow__slide');
+      var dotEls = dots.querySelectorAll('.login-slideshow__dot');
+      var aktif = 0;
+      var timer = null;
+
+      function tampilkan(i) {
+        aktif = (i + slideEls.length) % slideEls.length;
+        slideEls.forEach(function (el, idx) { el.classList.toggle('is-active', idx === aktif); });
+        dotEls.forEach(function (el, idx) { el.classList.toggle('is-active', idx === aktif); });
+      }
+
+      function mulaiAutoGeser() {
+        if (timer) clearInterval(timer);
+        if (slideEls.length < 2) return;
+        timer = setInterval(function () { tampilkan(aktif + 1); }, 5000);
+      }
+
+      dotEls.forEach(function (el) {
+        el.addEventListener('click', function () {
+          tampilkan(parseInt(el.dataset.i, 10));
+          mulaiAutoGeser();
+        });
+      });
+
+      mulaiAutoGeser();
+    } catch (err) {
+      // Diamkan — slideshow bersifat dekoratif, kegagalan di sini
+      // tidak boleh mengganggu proses login.
+    }
+  })();
 
   function togglePassword() {
     var input = document.getElementById('password');

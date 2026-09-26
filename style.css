@@ -429,15 +429,93 @@ a { color: inherit; text-decoration: none; }
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 48px;
   padding: 24px;
   background-color: var(--bg);
   background-image: radial-gradient(#e2e8f0 1px, transparent 1px);
   background-size: 20px 20px;
 }
 
+.login-shell--with-slideshow {
+  max-width: 1080px;
+  margin: 0 auto;
+}
+
+/* ---- Slideshow (panel kiri, diatur Admin lewat menu "Slideshow
+   Login") — hanya tampil kalau minimal ada 1 gambar diupload. Form
+   login otomatis bergeser ke kanan karena slideshow ikut flex di
+   .login-shell. ---- */
+.login-slideshow {
+  position: relative;
+  flex: 1 1 480px;
+  max-width: 560px;
+  height: min(640px, calc(100vh - 48px));
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+  background: #0f172a;
+}
+
+.login-slideshow__track {
+  position: absolute;
+  inset: 0;
+}
+
+.login-slideshow__slide {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 1.1s ease;
+}
+
+.login-slideshow__slide.is-active {
+  opacity: 1;
+}
+
+.login-slideshow__slide img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.login-slideshow__dots {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 18px;
+  display: flex;
+  justify-content: center;
+  gap: 7px;
+  z-index: 2;
+}
+
+.login-slideshow__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  transition: width 0.2s ease, background 0.2s ease;
+}
+
+.login-slideshow__dot.is-active {
+  width: 22px;
+  background: #fff;
+}
+
+@media (max-width: 900px) {
+  .login-slideshow {
+    display: none !important;
+  }
+  .login-shell--with-slideshow {
+    max-width: none;
+  }
+}
+
 .login-card {
   width: 100%;
   max-width: 400px;
+  flex: 0 1 400px;
   background: rgba(255, 255, 255, 0.97);
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.5);
