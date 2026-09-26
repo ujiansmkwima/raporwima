@@ -57,13 +57,21 @@
 <script>
   lucide.createIcons();
 
+  function escapeHtml(s) {
+    if (s === null || s === undefined) return '';
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
   // ================= Slideshow Login =================
-  // Ambil gambar dari tabel public.login_slideshow (diatur Admin lewat
-  // menu Admin → "Slideshow Login"), urut sesuai kolom `urutan`. Tabel
-  // ini boleh dibaca siapa saja (termasuk belum login) — lihat catatan
-  // RLS di migrasi_slideshow_login.sql. Kalau belum ada gambar sama
-  // sekali (atau gagal diambil), panel slideshow tetap disembunyikan
-  // dan halaman Masuk tampil seperti biasa (form login di tengah).
+  // Ambil gambar (+ Judul/Deskripsi opsional) dari tabel
+  // public.login_slideshow (diatur Admin lewat menu Admin →
+  // "Slideshow Login"), urut sesuai kolom `urutan`. Tabel ini boleh
+  // dibaca siapa saja (termasuk belum login) — lihat catatan RLS di
+  // migrasi_slideshow_login.sql. Kalau belum ada gambar sama sekali
+  // (atau gagal diambil), panel slideshow tetap disembunyikan dan
+  // halaman Masuk tampil seperti biasa (form login di tengah).
   (async function initLoginSlideshow() {
     try {
       var res = await supabaseClient.from('login_slideshow').select('*').order('urutan', { ascending: true });
@@ -75,7 +83,14 @@
       var dots = document.getElementById('loginSlideshowDots');
 
       track.innerHTML = slides.map(function (s, i) {
-        return '<div class="login-slideshow__slide' + (i === 0 ? ' is-active' : '') + '"><img src="' + s.gambar + '" alt=""></div>';
+        var caption = '';
+        if (s.judul || s.deskripsi) {
+          caption = '<div class="login-slideshow__caption">' +
+            (s.judul ? '<div class="login-slideshow__caption-title">' + escapeHtml(s.judul) + '</div>' : '') +
+            (s.deskripsi ? '<div class="login-slideshow__caption-desc">' + escapeHtml(s.deskripsi) + '</div>' : '') +
+            '</div>';
+        }
+        return '<div class="login-slideshow__slide' + (i === 0 ? ' is-active' : '') + '"><img src="' + s.gambar + '" alt="">' + caption + '</div>';
       }).join('');
 
       if (slides.length > 1) {

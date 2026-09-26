@@ -437,19 +437,28 @@ a { color: inherit; text-decoration: none; }
 }
 
 .login-shell--with-slideshow {
-  max-width: 1080px;
-  margin: 0 auto;
+  max-width: none;
+  width: 100%;
+  justify-content: space-between;
+  padding-left: 6vw;
+  padding-right: 6vw;
 }
 
 /* ---- Slideshow (panel kiri, diatur Admin lewat menu "Slideshow
-   Login") — hanya tampil kalau minimal ada 1 gambar diupload. Form
-   login otomatis bergeser ke kanan karena slideshow ikut flex di
-   .login-shell. ---- */
+   Login") — hanya tampil kalau minimal ada 1 gambar diupload. Bentuk
+   landscape/mendatar (rasio 16:9) supaya cocok untuk foto kegiatan
+   sekolah biasa. Form login "mepet" ke kanan karena
+   .login-shell--with-slideshow memakai justify-content: space-between
+   (slideshow dekat sisi kiri, form dekat sisi kanan), tapi margin luar
+   tetap terjaga lewat padding kiri/kanan di .login-shell--with-slideshow
+   di atas — jadi tidak pernah benar-benar menempel ke tepi layar. ---- */
 .login-slideshow {
   position: relative;
-  flex: 1 1 480px;
-  max-width: 560px;
-  height: min(640px, calc(100vh - 48px));
+  flex: 1 1 640px;
+  width: 100%;
+  max-width: 720px;
+  aspect-ratio: 16 / 9;
+  max-height: calc(100vh - 48px);
   border-radius: var(--radius-lg);
   overflow: hidden;
   box-shadow: var(--shadow-lg);
@@ -476,6 +485,38 @@ a { color: inherit; text-decoration: none; }
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+/* Judul & Deskripsi (diisi Admin, opsional per gambar) — ditaruh di
+   atas gradasi gelap di bagian bawah gambar supaya tulisan putih
+   tetap terbaca jelas di atas foto apa pun. */
+.login-slideshow__caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 32px 28px 46px;
+  background: linear-gradient(to top, rgba(2, 6, 23, 0.82) 0%, rgba(2, 6, 23, 0.45) 55%, rgba(2, 6, 23, 0) 100%);
+  color: #fff;
+  z-index: 1;
+}
+
+.login-slideshow__caption-title {
+  font-family: var(--font-display);
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  margin-bottom: 6px;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.55);
+}
+
+.login-slideshow__caption-desc {
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.55);
+  max-width: 92%;
 }
 
 .login-slideshow__dots {
@@ -509,8 +550,12 @@ a { color: inherit; text-decoration: none; }
   }
   .login-shell--with-slideshow {
     max-width: none;
+    padding-left: 24px;
+    padding-right: 24px;
+    justify-content: center;
   }
 }
+
 
 .login-card {
   width: 100%;
