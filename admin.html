@@ -379,19 +379,105 @@
     var res = await supabaseClient.from('profil_sekolah').select('*').maybeSingle();
     var p = res.data || {};
 
+    // Gambar tanda tangan Kepala Sekolah disimpan sebagai data URL
+    // base64 langsung di kolom ttd_kepala_sekolah (bukan Supabase
+    // Storage) supaya tidak perlu setup bucket terpisah. Disimpan di
+    // variabel ini dulu (bukan langsung ke DB) supaya upload/hapus
+    // bisa dibatalkan kalau form belum di-Simpan.
+    var ttdDataUrl = p.ttd_kepala_sekolah || null;
+
     content.innerHTML =
       '<div class="panel-head"><div><div class="panel-head__title">Profil Sekolah</div>' +
-      '<div class="panel-head__desc">Data ini dipakai otomatis di kepala Cetak Rapor dan baris tanda tangan Kepala Sekolah — sekali diisi di sini, semua rapor yang dicetak wali kelas memakai data yang sama.</div></div></div>' +
+      '<div class="panel-head__desc">Data ini dipakai otomatis di kepala Cetak Rapor dan baris tanda tangan Kepala Sekolah — sekali diisi di sini, semua rapor/nilai tengah semester/nilai PKL yang dicetak wali kelas & guru memakai data yang sama.</div></div></div>' +
       '<form class="add-form" id="formProfilSekolah" style="flex-direction:column;align-items:stretch;max-width:520px;">' +
       '<div class="field"><label>Nama Sekolah</label><input type="text" id="psNamaSekolah" value="' + escapeHtml(p.nama_sekolah || '') + '" placeholder="SMK Widya Mandala Tambak" required></div>' +
       '<div class="field"><label>Alamat Sekolah</label><input type="text" id="psAlamatSekolah" value="' + escapeHtml(p.alamat_sekolah || '') + '" placeholder="Jl. ..."></div>' +
       '<div class="field"><label>Nama Kepala Sekolah</label><input type="text" id="psKepalaSekolah" value="' + escapeHtml(p.kepala_sekolah || '') + '" placeholder="Agung Pambudi, S.E., S. Kom., M.M."></div>' +
       '<div class="field"><label>NIP Kepala Sekolah (opsional)</label><input type="text" id="psNipKepalaSekolah" value="' + escapeHtml(p.nip_kepala_sekolah || '') + '"></div>' +
       '<div class="field"><label>Kota (untuk baris tanda tangan, mis. "Tambak, ....... 2026")</label><input type="text" id="psKotaTtd" value="' + escapeHtml(p.kota_ttd || 'Tambak') + '" placeholder="Tambak"></div>' +
-      '<div class="field"><label>Tanggal Rapor (untuk baris tanda tangan, mis. "Tambak, 12 Desember 2026")</label><input type="date" id="psTanggalRapor" value="' + escapeHtml(p.tanggal_rapor || '') + '"></div>' +
+      '<div class="field"><label>Tanggal Rapor (untuk baris tanda tangan Cetak Rapor, mis. "Tambak, 12 Desember 2026")</label><input type="date" id="psTanggalRapor" value="' + escapeHtml(p.tanggal_rapor || '') + '"></div>' +
+      '<div class="field"><label>Tanggal Tengah Semester (untuk baris tanda tangan Cetak Nilai Tengah Semester)</label><input type="date" id="psTanggalTengahSemester" value="' + escapeHtml(p.tanggal_tengah_semester || '') + '"></div>' +
+      '<div class="field"><label>Tanggal Nilai PKL (untuk baris tanda tangan Cetak Nilai PKL)</label><input type="date" id="psTanggalPkl" value="' + escapeHtml(p.tanggal_pkl || '') + '"></div>' +
+      '<div class="field">' +
+        '<label>Tanda Tangan Kepala Sekolah (gambar)</label>' +
+        '<div id="psTtdPreviewWrap" style="margin-bottom:8px;">' + renderTtdPreview(ttdDataUrl) + '</div>' +
+        '<input type="file" id="psTtdFile" accept="image/png,image/jpeg,image/webp">' +
+        '<div style="margin-top:6px;">' +
+          '<button type="button" class="btn-small" id="psTtdHapus"' + (ttdDataUrl ? '' : ' disabled') + '>Hapus Tanda Tangan</button>' +
+        '</div>' +
+        '<div class="panel-note" style="margin:8px 0 0;padding:0;">Pakai foto/scan tanda tangan dengan latar putih atau PNG transparan. Gambar otomatis dikecilkan saat diupload.</div>' +
+      '</div>' +
+      '<div class="field">' +
+        '<label>Tampilkan Tanda Tangan (gambar) di:</label>' +
+        '<div style="display:flex;flex-direction:column;gap:6px;margin-top:4px;">' +
+          '<label style="display:flex;align-items:center;gap:8px;font-weight:400;"><input type="checkbox" id="psTampilRapor"' + (p.tampil_ttd_rapor !== false ? ' checked' : '') + '> Cetak Rapor (+ Cetak Identitas)</label>' +
+          '<label style="display:flex;align-items:center;gap:8px;font-weight:400;"><input type="checkbox" id="psTampilTengahSemester"' + (p.tampil_ttd_tengah_semester !== false ? ' checked' : '') + '> Cetak Nilai Tengah Semester</label>' +
+          '<label style="display:flex;align-items:center;gap:8px;font-weight:400;"><input type="checkbox" id="psTampilPkl"' + (p.tampil_ttd_pkl !== false ? ' checked' : '') + '> Cetak Nilai PKL</label>' +
+        '</div>' +
+        '<div class="panel-note" style="margin:8px 0 0;padding:0;">Centang semua kalau tanda tangan mau dipakai di semua format cetak. Kalau tidak dicentang (atau belum ada gambar), ruang tanda tangan di format itu tetap kosong seperti biasa untuk ditandatangani tulis tangan.</div>' +
+      '</div>' +
       '<button type="submit" class="btn-small btn-small--primary" style="align-self:flex-start;">Simpan</button>' +
       '</form>' +
       '<div id="profilSekolahMsg" style="margin-top:10px;"></div>';
+
+    function renderTtdPreview(dataUrl) {
+      if (!dataUrl) return '<div class="panel-note" style="margin:0;padding:0;">Belum ada tanda tangan diupload.</div>';
+      return '<img src="' + dataUrl + '" alt="Tanda tangan Kepala Sekolah" style="max-height:70px;max-width:220px;object-fit:contain;border:1px solid var(--line,#e5e7eb);border-radius:6px;padding:4px;background:#fff;">';
+    }
+
+    // Mengecilkan gambar tanda tangan di sisi browser (lewat <canvas>)
+    // sebelum disimpan sebagai data URL base64, supaya baris di tabel
+    // profil_sekolah tidak membengkak walau file asli hasil scan/foto
+    // besar. Lebar dibatasi maksimal 500px, tinggi menyesuaikan
+    // (proporsional), diekspor sebagai PNG.
+    function kecilkanGambarTtd(file) {
+      return new Promise(function (resolve, reject) {
+        var reader = new FileReader();
+        reader.onerror = function () { reject(new Error('Gagal membaca file.')); };
+        reader.onload = function () {
+          var img = new Image();
+          img.onerror = function () { reject(new Error('File bukan gambar yang valid.')); };
+          img.onload = function () {
+            var LEBAR_MAKS = 500;
+            var skala = img.width > LEBAR_MAKS ? (LEBAR_MAKS / img.width) : 1;
+            var w = Math.round(img.width * skala);
+            var h = Math.round(img.height * skala);
+            var canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            var ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL('image/png'));
+          };
+          img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    document.getElementById('psTtdFile').addEventListener('change', async function (e) {
+      var file = e.target.files && e.target.files[0];
+      if (!file) return;
+      var msg = document.getElementById('profilSekolahMsg');
+      try {
+        msg.textContent = 'Memproses gambar tanda tangan...';
+        ttdDataUrl = await kecilkanGambarTtd(file);
+        document.getElementById('psTtdPreviewWrap').innerHTML = renderTtdPreview(ttdDataUrl);
+        document.getElementById('psTtdHapus').disabled = false;
+        msg.textContent = 'Gambar siap — klik "Simpan" di bawah untuk menyimpannya.';
+      } catch (err) {
+        msg.textContent = 'Gagal memproses gambar: ' + (err && err.message ? err.message : err);
+      } finally {
+        e.target.value = '';
+      }
+    });
+
+    document.getElementById('psTtdHapus').addEventListener('click', function () {
+      ttdDataUrl = null;
+      document.getElementById('psTtdPreviewWrap').innerHTML = renderTtdPreview(null);
+      document.getElementById('psTtdHapus').disabled = true;
+      document.getElementById('profilSekolahMsg').textContent = 'Tanda tangan akan dihapus — klik "Simpan" di bawah untuk menerapkannya.';
+    });
 
     document.getElementById('formProfilSekolah').addEventListener('submit', async function (e) {
       e.preventDefault();
@@ -406,6 +492,12 @@
         nip_kepala_sekolah: document.getElementById('psNipKepalaSekolah').value.trim() || null,
         kota_ttd: document.getElementById('psKotaTtd').value.trim() || 'Tambak',
         tanggal_rapor: document.getElementById('psTanggalRapor').value || null,
+        tanggal_tengah_semester: document.getElementById('psTanggalTengahSemester').value || null,
+        tanggal_pkl: document.getElementById('psTanggalPkl').value || null,
+        ttd_kepala_sekolah: ttdDataUrl,
+        tampil_ttd_rapor: document.getElementById('psTampilRapor').checked,
+        tampil_ttd_tengah_semester: document.getElementById('psTampilTengahSemester').checked,
+        tampil_ttd_pkl: document.getElementById('psTampilPkl').checked,
         updated_at: new Date().toISOString()
       }, { onConflict: 'singleton' });
 

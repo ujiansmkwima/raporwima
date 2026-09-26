@@ -1641,6 +1641,24 @@ a { color: inherit; text-decoration: none; }
   height: 64px;
 }
 
+/* Ruang tanda tangan yang diisi gambar tanda tangan Kepala Sekolah
+   (diupload Admin lewat menu Profil Sekolah). Gambar dibatasi supaya
+   tetap muat dalam tinggi ruang tanda tangan yang sama seperti versi
+   kosong, dan tidak melebar ke luar kolom. */
+.rapor-cetak__ttd-space--gambar {
+  position: relative;
+  height: 64px;
+}
+
+.rapor-cetak__ttd-space--gambar img {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  max-height: 94px;
+  max-width: 160%;
+  object-fit: contain;
+}
+
 /* ---------- Cetak Identitas ----------
    Kartu cover/identitas peserta didik (biodata siswa, orang tua, wali,
    keterangan penerimaan) — dipakai ulang class .rapor-cetak supaya ikut

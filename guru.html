@@ -232,6 +232,27 @@
     return tanggal + ' ' + NAMA_BULAN_ID[bulan - 1] + ' ' + tahun;
   }
 
+  // ---------- Ruang tanda tangan Kepala Sekolah (di atas nama) ----------
+  // Dipakai di baris tanda tangan Cetak Rapor / Cetak Nilai Tengah
+  // Semester / Cetak Nilai PKL. Kalau Admin sudah upload gambar tanda
+  // tangan (profil_sekolah.ttd_kepala_sekolah) DAN mengaktifkan tampil
+  // untuk konteks terkait (tampil_ttd_rapor / tampil_ttd_tengah_semester
+  // / tampil_ttd_pkl), tampilkan gambarnya di ruang tanda tangan. Kalau
+  // tidak, tetap tampilkan ruang kosong seperti sebelumnya (supaya bisa
+  // ditandatangani tulis tangan di atas kertas cetakan).
+  function ruangTtdKepalaSekolah(profilSekolah, konteks) {
+    var kolomTampil = konteks === 'rapor' ? 'tampil_ttd_rapor'
+      : konteks === 'tengah_semester' ? 'tampil_ttd_tengah_semester'
+      : konteks === 'pkl' ? 'tampil_ttd_pkl'
+      : null;
+    var tampilkan = kolomTampil ? (profilSekolah[kolomTampil] !== false) : true;
+    var gambar = profilSekolah.ttd_kepala_sekolah;
+    if (tampilkan && gambar) {
+      return '<div class="rapor-cetak__ttd-space rapor-cetak__ttd-space--gambar"><img src="' + escapeHtml(gambar) + '" alt="Tanda tangan Kepala Sekolah"></div>';
+    }
+    return '<div class="rapor-cetak__ttd-space"></div>';
+  }
+
   // ---------- Fase (Kurikulum Merdeka) dari Tingkat kelas ----------
   // SMK: Tingkat 10 = Fase E, Tingkat 11-12 = Fase F. Dipakai di
   // kepala Cetak Rapor ("Fase : E"), sesuai format rapor resmi.
@@ -4223,7 +4244,7 @@
           var NAMA_SEKOLAH = profilSekolah.nama_sekolah || 'SMK Widya Mandala Tambak';
           var NAMA_KEPALA_SEKOLAH = profilSekolah.kepala_sekolah || '—';
           var NAMA_KOTA_TTD = profilSekolah.kota_ttd || 'Tambak';
-          var TANGGAL_CETAK = formatTanggalIndonesia(profilSekolah.tanggal_rapor);
+          var TANGGAL_CETAK = formatTanggalIndonesia(profilSekolah.tanggal_pkl);
 
           function skorGabunganTp(n) {
             var vals = [du['tp' + n], pg['tp' + n]].filter(function (v) { return v !== null && v !== undefined; });
@@ -4269,7 +4290,7 @@
             '<div class="rapor-cetak__footer">' +
             '<div class="ident-footer-row" style="justify-content:space-between;">' +
             '<div class="ident-footer-ttd"><div>Guru Pembimbing</div><div class="rapor-cetak__ttd-space"></div><div><strong>' + escapeHtml(nama || '-') + '</strong></div></div>' +
-            '<div class="ident-footer-ttd"><div class="rapor-cetak__footer-date">' + escapeHtml(NAMA_KOTA_TTD) + ', ' + (TANGGAL_CETAK || '…........') + '</div><div>Kepala Sekolah</div><div class="rapor-cetak__ttd-space"></div><div><strong>' + escapeHtml(NAMA_KEPALA_SEKOLAH) + '</strong></div></div>' +
+            '<div class="ident-footer-ttd"><div class="rapor-cetak__footer-date">' + escapeHtml(NAMA_KOTA_TTD) + ', ' + (TANGGAL_CETAK || '…........') + '</div><div>Kepala Sekolah</div>' + ruangTtdKepalaSekolah(profilSekolah, 'pkl') + '<div><strong>' + escapeHtml(NAMA_KEPALA_SEKOLAH) + '</strong></div></div>' +
             '</div>' +
             '</div>' +
             '</div>';
@@ -5765,7 +5786,7 @@
           '<div class="rapor-cetak__footer">' +
           '<div class="rapor-cetak__footer-cols">' +
           '<div class="rapor-cetak__footer-col"><div class="rapor-cetak__footer-col-spacer">&nbsp;</div><div>Orangtua/ Wali</div><div class="rapor-cetak__ttd-space"></div><div>…...........................................</div></div>' +
-          '<div class="rapor-cetak__footer-col"><div class="rapor-cetak__footer-col-spacer">&nbsp;</div><div>Kepala Sekolah</div><div class="rapor-cetak__ttd-space"></div><div><strong>' + escapeHtml(NAMA_KEPALA_SEKOLAH) + '</strong></div></div>' +
+          '<div class="rapor-cetak__footer-col"><div class="rapor-cetak__footer-col-spacer">&nbsp;</div><div>Kepala Sekolah</div>' + ruangTtdKepalaSekolah(profilSekolah, 'rapor') + '<div><strong>' + escapeHtml(NAMA_KEPALA_SEKOLAH) + '</strong></div></div>' +
           '<div class="rapor-cetak__footer-col"><div class="rapor-cetak__footer-date">' + escapeHtml(NAMA_KOTA_TTD) + ', ' + (TANGGAL_RAPOR_CETAK ? escapeHtml(TANGGAL_RAPOR_CETAK) : '…........' + escapeHtml(tahunAkhir)) + '</div><div>Wali Kelas</div><div class="rapor-cetak__ttd-space"></div><div><strong>' + escapeHtml(nama) + '</strong></div></div>' +
           '</div>' +
           '</div>' +
@@ -5806,7 +5827,7 @@
       var ALAMAT_SEKOLAH = profilSekolah.alamat_sekolah || '';
       var NAMA_KEPALA_SEKOLAH = profilSekolah.kepala_sekolah || '—';
       var NAMA_KOTA_TTD = profilSekolah.kota_ttd || 'Tambak';
-      var TANGGAL_NTS_CETAK = formatTanggalIndonesia(profilSekolah.tanggal_rapor);
+      var TANGGAL_NTS_CETAK = formatTanggalIndonesia(profilSekolah.tanggal_tengah_semester);
 
       // Daftar Mata Pelajaran kelas ini — logika & urutan SAMA PERSIS
       // dengan Cetak Rapor, supaya urutan mapel di kedua format konsisten.
@@ -6035,7 +6056,7 @@
           '<div class="rapor-cetak__footer">' +
           '<div class="rapor-cetak__footer-cols">' +
           '<div class="rapor-cetak__footer-col"><div class="rapor-cetak__footer-col-spacer">&nbsp;</div><div>Orangtua/ Wali</div><div class="rapor-cetak__ttd-space"></div><div>…...........................................</div></div>' +
-          '<div class="rapor-cetak__footer-col"><div class="rapor-cetak__footer-col-spacer">&nbsp;</div><div>Kepala Sekolah</div><div class="rapor-cetak__ttd-space"></div><div><strong>' + escapeHtml(NAMA_KEPALA_SEKOLAH) + '</strong></div></div>' +
+          '<div class="rapor-cetak__footer-col"><div class="rapor-cetak__footer-col-spacer">&nbsp;</div><div>Kepala Sekolah</div>' + ruangTtdKepalaSekolah(profilSekolah, 'tengah_semester') + '<div><strong>' + escapeHtml(NAMA_KEPALA_SEKOLAH) + '</strong></div></div>' +
           '<div class="rapor-cetak__footer-col"><div class="rapor-cetak__footer-date">' + escapeHtml(NAMA_KOTA_TTD) + ', ' + (TANGGAL_NTS_CETAK ? escapeHtml(TANGGAL_NTS_CETAK) : '…........' + escapeHtml(tahunAkhir)) + '</div><div>Wali Kelas</div><div class="rapor-cetak__ttd-space"></div><div><strong>' + escapeHtml(nama) + '</strong></div></div>' +
           '</div>' +
           '</div>' +
@@ -6256,7 +6277,7 @@
           '<div class="rapor-cetak__footer">' +
           '<div class="ident-footer-row">' +
           '<div class="ident-photo-box">Foto<br>3&times;4</div>' +
-          '<div class="ident-footer-ttd"><div class="rapor-cetak__footer-date">' + escapeHtml(NAMA_KOTA_TTD) + ', ' + (TANGGAL_IDENTITAS_CETAK ? escapeHtml(TANGGAL_IDENTITAS_CETAK) : '…........' + escapeHtml(tahunAkhir)) + '</div><div>Kepala Sekolah</div><div class="rapor-cetak__ttd-space"></div><div><strong>' + escapeHtml(NAMA_KEPALA_SEKOLAH) + '</strong></div></div>' +
+          '<div class="ident-footer-ttd"><div class="rapor-cetak__footer-date">' + escapeHtml(NAMA_KOTA_TTD) + ', ' + (TANGGAL_IDENTITAS_CETAK ? escapeHtml(TANGGAL_IDENTITAS_CETAK) : '…........' + escapeHtml(tahunAkhir)) + '</div><div>Kepala Sekolah</div>' + ruangTtdKepalaSekolah(profilSekolah, 'rapor') + '<div><strong>' + escapeHtml(NAMA_KEPALA_SEKOLAH) + '</strong></div></div>' +
           '</div>' +
           '</div>' +
 
