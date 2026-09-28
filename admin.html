@@ -1225,7 +1225,7 @@
       var ws = autoFitKolom(XLSX.utils.json_to_sheet(rows, { header: KELAS_EXCEL_COLUMNS.map(function (c) { return c.header; }) }));
       var wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Data Kelas');
-      XLSX.writeFile(wb, 'data_kelas.xlsx');
+      unduhXlsxRapi(wb, 'data_kelas.xlsx');
     });
 
     // ---------- Unduh Template ----------
@@ -1240,7 +1240,7 @@
       var ws = autoFitKolom(XLSX.utils.json_to_sheet([contoh], { header: headers }));
       var wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Template Kelas');
-      XLSX.writeFile(wb, 'template_import_kelas.xlsx');
+      unduhXlsxRapi(wb, 'template_import_kelas.xlsx');
     });
 
     // ---------- Import Excel ----------
@@ -2322,7 +2322,7 @@
       var ws = autoFitKolom(XLSX.utils.json_to_sheet(rows, { header: EXCEL_COLUMNS.map(function (c) { return c.header; }) }));
       var wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Data Siswa');
-      XLSX.writeFile(wb, 'data_siswa_' + tahunAktif.nama.replace(/\//g, '-') + namaFileFilter + '.xlsx');
+      unduhXlsxRapi(wb, 'data_siswa_' + tahunAktif.nama.replace(/\//g, '-') + namaFileFilter + '.xlsx');
     });
 
     // ---------- Unduh Template ----------
@@ -2340,7 +2340,7 @@
       var ws = autoFitKolom(XLSX.utils.json_to_sheet([contoh], { header: headers }));
       var wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Template Siswa');
-      XLSX.writeFile(wb, 'template_import_siswa.xlsx');
+      unduhXlsxRapi(wb, 'template_import_siswa.xlsx');
     });
 
     // ---------- Import Excel ----------
@@ -3695,7 +3695,7 @@
       var ws = autoFitKolom(XLSX.utils.json_to_sheet(rows, { header: headers }));
       var wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, sheetName);
-      XLSX.writeFile(wb, namaFile);
+      unduhXlsxRapi(wb, namaFile);
     }
 
     function bacaExcel(file, onRows) {
@@ -4240,7 +4240,7 @@
       var ws = autoFitKolom(XLSX.utils.json_to_sheet(rows, { header: GURU_EXPORT_COLUMNS.map(function (c) { return c.header; }) }));
       var wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Data Guru');
-      XLSX.writeFile(wb, 'data_guru.xlsx');
+      unduhXlsxRapi(wb, 'data_guru.xlsx');
     });
 
     // ---------- Unduh Template ----------
@@ -4250,7 +4250,7 @@
       var ws = autoFitKolom(XLSX.utils.json_to_sheet([contoh], { header: headers }));
       var wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Template Guru');
-      XLSX.writeFile(wb, 'template_import_guru.xlsx');
+      unduhXlsxRapi(wb, 'template_import_guru.xlsx');
     });
 
     // ---------- Import Excel ----------
@@ -4692,7 +4692,7 @@
       var ws = autoFitKolom(XLSX.utils.json_to_sheet(rows, { header: headers }));
       var wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, sheetName);
-      XLSX.writeFile(wb, namaFile);
+      unduhXlsxRapi(wb, namaFile);
     }
     function bacaExcelEkskul(file, onRows) {
       var reader = new FileReader();
@@ -5058,7 +5058,7 @@
       var ws = autoFitKolom(XLSX.utils.json_to_sheet(rows, { header: headers }));
       var wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, sheetName);
-      XLSX.writeFile(wb, namaFile);
+      unduhXlsxRapi(wb, namaFile);
     }
 
     // ================= Pencocokan nama Guru dengan toleransi (untuk import) =================
@@ -5331,7 +5331,7 @@
         XLSX.utils.book_append_sheet(wb, ws, 'Pembimbing & Penguji PKL');
         XLSX.utils.book_append_sheet(wb, wsGuru, 'Daftar Guru');
         var namaKelasDipilih = (kelasList.filter(function (k) { return k.id === kelasId; })[0] || {}).nama || 'kelas';
-        XLSX.writeFile(wb, 'template_pkl_' + namaKelasDipilih.replace(/[^a-z0-9]/gi, '_') + '.xlsx');
+        unduhXlsxRapi(wb, 'template_pkl_' + namaKelasDipilih.replace(/[^a-z0-9]/gi, '_') + '.xlsx');
       });
 
       document.getElementById('btnImportPklPembimbing').addEventListener('click', function () {

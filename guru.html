@@ -1770,7 +1770,7 @@
         var wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Nilai');
         XLSX.utils.book_append_sheet(wb, sheetKeteranganTp(), 'Keterangan TP');
-        XLSX.writeFile(wb, 'nilai_' + p.mapel.nama.replace(/[^a-z0-9]/gi, '_') + '_' + p.kelas.nama.replace(/[^a-z0-9]/gi, '_') + '.xlsx');
+        unduhXlsxRapi(wb, 'nilai_' + p.mapel.nama.replace(/[^a-z0-9]/gi, '_') + '_' + p.kelas.nama.replace(/[^a-z0-9]/gi, '_') + '.xlsx');
       });
 
       document.getElementById('btnTemplateNilai').addEventListener('click', function () {
@@ -1779,7 +1779,7 @@
         var wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Template Nilai');
         XLSX.utils.book_append_sheet(wb, sheetKeteranganTp(), 'Keterangan TP');
-        XLSX.writeFile(wb, 'template_import_nilai_' + p.mapel.nama.replace(/[^a-z0-9]/gi, '_') + '_' + p.kelas.nama.replace(/[^a-z0-9]/gi, '_') + '.xlsx');
+        unduhXlsxRapi(wb, 'template_import_nilai_' + p.mapel.nama.replace(/[^a-z0-9]/gi, '_') + '_' + p.kelas.nama.replace(/[^a-z0-9]/gi, '_') + '.xlsx');
       });
 
       document.getElementById('btnImportNilai').addEventListener('click', function () {
@@ -2222,7 +2222,7 @@
         var ws = autoFitKolom(XLSX.utils.json_to_sheet(rows, { header: NTS_EXCEL_COLUMNS }), { minCols: [10, 20, 8, 50] });
         var wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Template Nilai Tengah Smt');
-        XLSX.writeFile(wb, 'template_nilai_tengah_semester_' + p.mapel.nama.replace(/[^a-z0-9]/gi, '_') + '_' + p.kelas.nama.replace(/[^a-z0-9]/gi, '_') + '.xlsx');
+        unduhXlsxRapi(wb, 'template_nilai_tengah_semester_' + p.mapel.nama.replace(/[^a-z0-9]/gi, '_') + '_' + p.kelas.nama.replace(/[^a-z0-9]/gi, '_') + '.xlsx');
       });
 
       document.getElementById('btnImportNts').addEventListener('click', function () {
@@ -2517,7 +2517,7 @@
         var ws = autoFitKolom(XLSX.utils.json_to_sheet(rows, { header: TP_EXCEL_COLUMNS.map(function (c) { return c.header; }) }));
         var wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Tujuan Pembelajaran');
-        XLSX.writeFile(wb, 'tujuan_pembelajaran_' + mapel.nama.replace(/[^a-z0-9]/gi, '_') + '.xlsx');
+        unduhXlsxRapi(wb, 'tujuan_pembelajaran_' + mapel.nama.replace(/[^a-z0-9]/gi, '_') + '.xlsx');
       });
 
       // ---------- Unduh Template ----------
@@ -2527,7 +2527,7 @@
         var ws = autoFitKolom(XLSX.utils.json_to_sheet([contoh], { header: headers }));
         var wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Template Tujuan');
-        XLSX.writeFile(wb, 'template_import_tujuan_pembelajaran.xlsx');
+        unduhXlsxRapi(wb, 'template_import_tujuan_pembelajaran.xlsx');
       });
 
       // ---------- Import Excel ----------
@@ -3057,7 +3057,7 @@
         var ws = autoFitKolom(XLSX.utils.json_to_sheet(rows, { header: PRESENSI_HEADERS }));
         var wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Presensi');
-        XLSX.writeFile(wb, (pakaiDataTabel ? 'presensi_' : 'template_presensi_') + namaFileKelas + '.xlsx');
+        unduhXlsxRapi(wb, (pakaiDataTabel ? 'presensi_' : 'template_presensi_') + namaFileKelas + '.xlsx');
       }
 
       document.getElementById('btnExportPresensi').addEventListener('click', function () { unduhPresensi(true); });
@@ -3237,7 +3237,7 @@
       var wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, opts.namaSheet);
       XLSX.utils.book_append_sheet(wb, wsInfo, 'Petunjuk');
-      XLSX.writeFile(wb, opts.namaFile);
+      unduhXlsxRapi(wb, opts.namaFile);
     }
 
     function ringkasPesanImport(pesan, batas) {
@@ -3691,7 +3691,7 @@
           var ws = autoFitKolom(XLSX.utils.json_to_sheet(binaanList.map(baris), { header: KOLOM }));
           var wb = XLSX.utils.book_new();
           XLSX.utils.book_append_sheet(wb, ws, 'Identitas PKL');
-          XLSX.writeFile(wb, 'template_identitas_pkl_' + tahunAktif.nama.replace(/[^a-z0-9]/gi, '_') + '.xlsx');
+          unduhXlsxRapi(wb, 'template_identitas_pkl_' + tahunAktif.nama.replace(/[^a-z0-9]/gi, '_') + '.xlsx');
         });
 
         document.getElementById('btnImportPklId').addEventListener('click', function () {
@@ -3930,7 +3930,7 @@
           var ws = autoFitKolom(XLSX.utils.json_to_sheet(rows, { header: KOLOM }));
           var wb = XLSX.utils.book_new();
           XLSX.utils.book_append_sheet(wb, ws, 'Nilai DUDI');
-          XLSX.writeFile(wb, 'template_nilai_dudi_pkl_' + tahunAktif.nama.replace(/[^a-z0-9]/gi, '_') + '.xlsx');
+          unduhXlsxRapi(wb, 'template_nilai_dudi_pkl_' + tahunAktif.nama.replace(/[^a-z0-9]/gi, '_') + '.xlsx');
         });
 
         document.getElementById('btnImportPklNd').addEventListener('click', function () {
@@ -4068,7 +4068,7 @@
           var ws = autoFitKolom(XLSX.utils.json_to_sheet(rows, { header: KOLOM }));
           var wb = XLSX.utils.book_new();
           XLSX.utils.book_append_sheet(wb, ws, 'Catatan & Presensi');
-          XLSX.writeFile(wb, 'template_catatan_presensi_pkl_' + tahunAktif.nama.replace(/[^a-z0-9]/gi, '_') + '.xlsx');
+          unduhXlsxRapi(wb, 'template_catatan_presensi_pkl_' + tahunAktif.nama.replace(/[^a-z0-9]/gi, '_') + '.xlsx');
         });
 
         document.getElementById('btnImportPklCp').addEventListener('click', function () {
@@ -4495,7 +4495,7 @@
         var ws = autoFitKolom(XLSX.utils.json_to_sheet(rows, { header: PKLU_EXCEL_COLUMNS }));
         var wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Nilai Penguji PKL');
-        XLSX.writeFile(wb, 'nilai_pkl_penguji_' + tahunAktif.nama.replace(/[^a-z0-9]/gi, '_') + '.xlsx');
+        unduhXlsxRapi(wb, 'nilai_pkl_penguji_' + tahunAktif.nama.replace(/[^a-z0-9]/gi, '_') + '.xlsx');
       });
 
       document.getElementById('btnTemplatePklPenguji').addEventListener('click', function () {
@@ -4503,7 +4503,7 @@
         var ws = autoFitKolom(XLSX.utils.json_to_sheet(rows, { header: PKLU_EXCEL_COLUMNS }));
         var wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Template Nilai Penguji PKL');
-        XLSX.writeFile(wb, 'template_import_nilai_pkl_penguji.xlsx');
+        unduhXlsxRapi(wb, 'template_import_nilai_pkl_penguji.xlsx');
       });
 
       document.getElementById('btnImportPklPenguji').addEventListener('click', function () {
