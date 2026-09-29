@@ -47,11 +47,18 @@
 
 <script>
   var content = document.getElementById('content');
-  var guruList = [], mapelList = [], formList = [], profil = null, penugasanList = [];
+  var guruList = [], mapelList = [], formList = [], profil = null, penugasanList = [], penugasanSiap = false;
+  // Mapel yang ditugaskan ke guru (salinan penugasan E-Rapor). Bila salinan belum pernah dimuat, semua mapel ditampilkan.
+  function mapelGuru(guruId, tambah) {
+    if (!penugasanSiap) return mapelList;
+    var ada = {}; penugasanList.forEach(function (p) { if (p.guru_id === guruId) ada[p.mapel_id] = 1; });
+    if (tambah) ada[tambah] = 1;
+    return mapelList.filter(function (m) { return ada[m.id]; });
+  }
   // Kelas otomatis dari Penugasan Guru (tahun ajaran aktif) untuk guru + mapel tsb
   function kelasOtomatis(guruId, mapelId) {
     var k = {};
-    penugasanList.forEach(function (p) { if (p.guru_id === guruId && (!mapelId || p.mapel_id === mapelId) && p.kelas) k[p.kelas.nama] = 1; });
+    penugasanList.forEach(function (p) { if (p.guru_id === guruId && (!mapelId || p.mapel_id === mapelId) && p.kelas) k[p.kelas] = 1; });
     return Object.keys(k).sort().join(', ');
   }
   function unitJenjang() { var u = (profil && profil.nama_sekolah) || ''; return { unit_kerja: u || null, jenjang: u.split(' ')[0] || null }; }
@@ -78,9 +85,10 @@
       supabaseClient.from('supervisi_form').select('*').order('created_at', { ascending: false })
     ]);
     guruList = r[0].data || []; mapelList = r[1].data || []; formList = r[2].data || [];
-    var ta = await supabaseClient.from('tahun_ajaran').select('id').eq('is_aktif', true).maybeSingle();
     profil = (await supabaseClient.from('profil_sekolah').select('nama_sekolah').maybeSingle()).data;
-    penugasanList = ta.data ? ((await supabaseClient.from('penugasan_guru').select('guru_id, mapel_id, kelas:kelas_id(nama)').eq('tahun_ajaran_id', ta.data.id)).data || []) : [];
+    // Salinan penugasan guru (diisi tombol Muat Ulang dari E-Rapor); siap bila tabel ada dan sudah berisi
+    var pn = await supabaseClient.from('supervisi_penugasan').select('guru_id, mapel_id, kelas');
+    penugasanList = pn.error ? [] : (pn.data || []); penugasanSiap = !pn.error && penugasanList.length > 0;
   }
 
   function setMenu(v) {
@@ -104,10 +112,11 @@
       (guruList.length ? guruList.map(function (g) { var t = ttdMap[g.id] || {};
         return '<tr><td>' + esc(g.nama) + '</td><td>' + esc(t.nip || '—') + '</td><td>' + (t.ttd ? '<img src="' + t.ttd + '" alt="ttd" style="max-height:34px;max-width:110px;object-fit:contain;">' : '—') + '</td><td><button class="btn-small" data-ttd="' + g.id + '">Atur</button></td></tr>';
       }).join('') : '<tr><td colspan="4">Belum ada guru. Klik Muat Ulang dari E-Rapor.</td></tr>') + '</tbody></table></div>';
-    content.innerHTML = '<div class="panel-note">Data guru & mata pelajaran diambil dari E-Rapor. Klik <strong>Muat Ulang</strong> setiap ada guru atau mapel baru di E-Rapor.</div>' +
+    content.innerHTML = '<div class="panel-note">Data guru, mata pelajaran, dan penugasan guru (tahun ajaran aktif) diambil dari E-Rapor. Klik <strong>Muat Ulang</strong> setiap ada guru, mapel, atau penugasan baru di E-Rapor.</div>' +
       '<div style="margin:12px 0;"><button class="btn-small btn-small--primary" id="btnReload">Muat Ulang dari E-Rapor</button> <span id="reloadInfo" style="font-size:12.5px;color:var(--ink-soft);"></span></div>' +
       '<div class="stat-grid"><div class="stat-card"><div class="stat-card__label">Guru</div><div class="stat-card__value">' + guruList.length + '</div></div>' +
-      '<div class="stat-card"><div class="stat-card__label">Mata Pelajaran</div><div class="stat-card__value">' + mapelList.length + '</div></div></div>' + tabelTtd;
+      '<div class="stat-card"><div class="stat-card__label">Mata Pelajaran</div><div class="stat-card__value">' + mapelList.length + '</div></div>' +
+      '<div class="stat-card"><div class="stat-card__label">Penugasan Guru</div><div class="stat-card__value">' + penugasanList.length + '</div></div></div>' + tabelTtd;
     content.querySelectorAll('[data-ttd]').forEach(function (b) { b.addEventListener('click', function () { SvTtd.buka(b.dataset.ttd, nm(guruList, b.dataset.ttd), viewData); }); });
     document.getElementById('btnReload').addEventListener('click', async function () {
       var b = this; b.disabled = true; b.textContent = 'Memuat...';
@@ -118,6 +127,26 @@
       var e1 = gr.length ? await supabaseClient.from('supervisi_guru').upsert(gr) : {};
       var e2 = (m.data || []).length ? await supabaseClient.from('supervisi_mapel').upsert(m.data) : {};
       if (e1.error || e2.error) alert('Gagal menyimpan: ' + (e1.error || e2.error).message);
+      else {
+        // Penugasan guru (tahun ajaran aktif) ikut disalin: siapa mengajar mapel apa di kelas mana
+        var ta = await supabaseClient.from('tahun_ajaran').select('id').eq('is_aktif', true).maybeSingle();
+        if (!ta.data) alert('Tidak ada tahun ajaran aktif di E-Rapor, jadi penugasan guru tidak disalin.');
+        else {
+          var pg = await supabaseClient.from('penugasan_guru').select('guru_id, mapel_id, kelas:kelas_id(nama)').eq('tahun_ajaran_id', ta.data.id);
+          if (pg.error) alert('Gagal memuat penugasan: ' + pg.error.message);
+          else {
+            var gOk = {}, mOk = {}, seen = {}, baris = [];
+            gr.forEach(function (x) { gOk[x.id] = 1; }); (m.data || []).forEach(function (x) { mOk[x.id] = 1; });
+            (pg.data || []).forEach(function (x) {
+              var kl = x.kelas ? x.kelas.nama : null, kunci = x.guru_id + '|' + x.mapel_id + '|' + kl;
+              if (gOk[x.guru_id] && mOk[x.mapel_id] && !seen[kunci]) { seen[kunci] = 1; baris.push({ guru_id: x.guru_id, mapel_id: x.mapel_id, kelas: kl }); }
+            });
+            var d0 = await supabaseClient.from('supervisi_penugasan').delete().not('id', 'is', null);
+            var e3 = d0.error ? d0 : (baris.length ? await supabaseClient.from('supervisi_penugasan').insert(baris) : {});
+            if (e3.error) alert('Gagal menyimpan penugasan: ' + e3.error.message + '\n\nJalankan migrasi_supervisi_penugasan.sql di Supabase SQL Editor bila belum.');
+          }
+        }
+      }
       viewData();
     });
   }
@@ -196,7 +225,7 @@
       '<div class="field"><label>Tanggal Pelaksanaan</label><input type="date" id="fTgl"></div>' +
       '<div class="field"><label>Guru yang Disupervisi</label><select id="fGuru">' + opts(guruList, j && j.guru_id) + '</select></div>' +
       '<div class="field"><label>Supervisor</label><select id="fSpv">' + opts(guruList, j && j.supervisor_id) + '</select></div>' +
-      '<div class="field"><label>Mata Pelajaran</label><select id="fMapel">' + opts(mapelList, j && j.mapel_id, '— pilih —') + '</select></div>' +
+      '<div class="field"><label>Mata Pelajaran</label><select id="fMapel"></select><div style="font-size:12px;color:var(--ink-soft);margin-top:4px;" id="fMapelInfo"></div></div>' +
       '<div class="field"><label>Form</label><select id="fForm"></select></div>' +
       '<div class="field field--full"><label>Kelas (otomatis dari Penugasan Guru, boleh diubah)</label><input id="fKelas"></div></div>' +
       '<div class="panel-note" id="fHint" style="margin-top:10px;">Pra-Supervisi yang sudah dipaketkan dengan Supervisi tidak perlu dijadwalkan sendiri: jadwalkan form <strong>Supervisi</strong>-nya, Pra-Supervisi ikut otomatis.</div>' +
@@ -211,8 +240,15 @@
     isiForm(); fJenis.addEventListener('change', isiForm);
     var fKelas = o.querySelector('#fKelas'), fG = o.querySelector('#fGuru'), fM = o.querySelector('#fMapel');
     function autoKelas() { fKelas.value = kelasOtomatis(fG.value, fM.value); }
+    // Mapel hanya yang ditugaskan ke guru terpilih
+    function isiMapel(pilih) {
+      var l = mapelGuru(fG.value, pilih);
+      fM.innerHTML = opts(l, pilih, l.length ? '— pilih —' : '— guru ini belum punya penugasan —');
+      o.querySelector('#fMapelInfo').textContent = penugasanSiap ? '' : 'Penugasan belum dimuat: klik Muat Ulang dari E-Rapor (menu Data Guru & Mapel) agar mapel terfilter per guru.';
+    }
+    isiMapel(j && j.mapel_id);
     if (j) fKelas.value = j.kelas || ''; else autoKelas();
-    fG.addEventListener('change', autoKelas); fM.addEventListener('change', autoKelas);
+    fG.addEventListener('change', function () { isiMapel(null); autoKelas(); }); fM.addEventListener('change', autoKelas);
     o.querySelector('#fSimpan').addEventListener('click', async function () {
       var d = { jenis: fJenis.value, tanggal: o.querySelector('#fTgl').value, guru_id: o.querySelector('#fGuru').value, supervisor_id: o.querySelector('#fSpv').value,
         mapel_id: o.querySelector('#fMapel').value || null, form_id: fForm.value || null, kelas: fKelas.value.trim() || null };
@@ -331,7 +367,7 @@
         t = SvXlsx.tgl(A(r, 'Tanggal')), g = cari(guruList, A(r, 'Nama Guru'), 'nama'), s = cari(guruList, A(r, 'Nama Supervisor'), 'nama'),
         mt = A(r, 'Mapel'), m = mt ? cari(mapelList, mt, 'nama') : null, ft = A(r, 'Judul Form'), f = ft ? cari(formList, ft, 'judul') : null, e = [];
       if (!jenis) e.push('Jenis'); if (!t) e.push('Tanggal'); if (!g) e.push('Nama Guru'); if (!s) e.push('Nama Supervisor');
-      if (mt && !m) e.push('Mapel'); if (ft && !f) e.push('Judul Form'); if (g && s && g.id === s.id) e.push('Guru = Supervisor');
+      if (mt && !m) e.push('Mapel'); if (m && g && penugasanSiap && !mapelGuru(g.id).some(function (x) { return x.id === m.id; })) e.push('Mapel tidak ditugaskan ke guru ini'); if (ft && !f) e.push('Judul Form'); if (g && s && g.id === s.id) e.push('Guru = Supervisor');
       if (jenis === 'pra' && f && SvForm.indukDari(f, formList).length) e.push('Form Pra sudah sepaket dgn Supervisi (jadwalkan form Supervisi-nya)');
       if (e.length) err.push('Baris ' + (r.__baris || i + 2) + ': ' + e.join(', ')); else { var uj = unitJenjang(); ok.push({ jenis: jenis, tanggal: t, guru_id: g.id, supervisor_id: s.id, mapel_id: m ? m.id : null, form_id: f ? f.id : null, kelas: String(A(r, 'Kelas')) || kelasOtomatis(g.id, m ? m.id : null) || null, unit_kerja: uj.unit_kerja, jenjang: uj.jenjang }); }
     });
