@@ -12,7 +12,12 @@
 <script src="sticky-nama.js?v=1"></script>
 <script src="supervisi-form.js?v=1"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="supervisi-excel.js?v=1"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="supervisi-excel.js?v=2"></script>
+<script src="supervisi-ttd.js?v=1"></script>
+<script src="supervisi-pdf.js?v=1"></script>
 </head>
 <body>
 <div class="app">
@@ -85,10 +90,20 @@
   // ================= DATA GURU & MAPEL =================
   async function viewData() {
     await muatMaster();
+    var tt = await supabaseClient.from('supervisi_ttd').select('guru_id, nip, ttd'), ttdMap = {};
+    (tt.data || []).forEach(function (x) { ttdMap[x.guru_id] = x; });
+    var tabelTtd = '<div class="form-section-title" style="margin-top:22px;">NIP & Tanda Tangan Guru / Supervisor</div>' +
+      '<div class="panel-note">Dipakai pada blok tanda tangan PDF hasil supervisi. Tanda tangan Kepala Sekolah diatur di E-Rapor → Profil Sekolah.</div>' +
+      (tt.error ? '<div class="panel-note" style="margin-top:8px;">Tabel belum siap — jalankan <strong>migrasi_supervisi_ttd.sql</strong> di Supabase SQL Editor. (' + esc(tt.error.message) + ')</div>' : '') +
+      '<div class="table-wrap" style="margin-top:10px;"><table class="data-table"><thead><tr><th>Nama</th><th>NIP</th><th>Tanda Tangan</th><th></th></tr></thead><tbody>' +
+      (guruList.length ? guruList.map(function (g) { var t = ttdMap[g.id] || {};
+        return '<tr><td>' + esc(g.nama) + '</td><td>' + esc(t.nip || '—') + '</td><td>' + (t.ttd ? '<img src="' + t.ttd + '" alt="ttd" style="max-height:34px;max-width:110px;object-fit:contain;">' : '—') + '</td><td><button class="btn-small" data-ttd="' + g.id + '">Atur</button></td></tr>';
+      }).join('') : '<tr><td colspan="4">Belum ada guru. Klik Muat Ulang dari E-Rapor.</td></tr>') + '</tbody></table></div>';
     content.innerHTML = '<div class="panel-note">Data guru & mata pelajaran diambil dari E-Rapor. Klik <strong>Muat Ulang</strong> setiap ada guru atau mapel baru di E-Rapor.</div>' +
       '<div style="margin:12px 0;"><button class="btn-small btn-small--primary" id="btnReload">Muat Ulang dari E-Rapor</button> <span id="reloadInfo" style="font-size:12.5px;color:var(--ink-soft);"></span></div>' +
       '<div class="stat-grid"><div class="stat-card"><div class="stat-card__label">Guru</div><div class="stat-card__value">' + guruList.length + '</div></div>' +
-      '<div class="stat-card"><div class="stat-card__label">Mata Pelajaran</div><div class="stat-card__value">' + mapelList.length + '</div></div></div>';
+      '<div class="stat-card"><div class="stat-card__label">Mata Pelajaran</div><div class="stat-card__value">' + mapelList.length + '</div></div></div>' + tabelTtd;
+    content.querySelectorAll('[data-ttd]').forEach(function (b) { b.addEventListener('click', function () { SvTtd.buka(b.dataset.ttd, nm(guruList, b.dataset.ttd), viewData); }); });
     document.getElementById('btnReload').addEventListener('click', async function () {
       var b = this; b.disabled = true; b.textContent = 'Memuat...';
       var g = await supabaseClient.from('profiles').select('id, nama').eq('role', 'guru');
@@ -112,13 +127,17 @@
       (rows.length ? rows.map(function (j) {
         return '<tr><td>' + tglId(j.tanggal) + '</td><td>' + JENIS[j.jenis] + '</td><td>' + esc(nm(guruList, j.guru_id)) + '</td><td>' + esc(nm(mapelList, j.mapel_id)) + '</td><td>' + esc(nm(guruList, j.supervisor_id)) + '</td><td>' + esc(nm(formList, j.form_id)) + '</td>' +
           '<td><span class="chip ' + (j.status === 'selesai' ? 'chip--aktif' : 'chip--muted') + '">' + j.status + '</span></td>' +
-          '<td>' + (j.status === 'selesai' ? '<button class="btn-small" data-lihat="' + j.id + '">Lihat Hasil</button> ' : '') +
+          '<td>' + (j.status === 'selesai' ? '<button class="btn-small" data-lihat="' + j.id + '">Lihat Hasil</button> <button class="btn-small" data-pdf="' + j.id + '">Unduh PDF</button> ' : '') +
           '<button class="btn-small" data-edit="' + j.id + '">Ubah</button> <button class="btn-small" data-hapus="' + j.id + '">Hapus</button></td></tr>';
       }).join('') : '<tr><td colspan="8">Belum ada jadwal.</td></tr>') + '</tbody></table></div>';
     document.getElementById('btnTambah').addEventListener('click', function () { modalJadwal(null); });
     document.getElementById('btnTplJadwal').addEventListener('click', tplJadwal);
-    document.getElementById('btnImpJadwal').addEventListener('click', function () { SvXlsx.pilihFile(importJadwal); });
+    document.getElementById('btnImpJadwal').addEventListener('click', function () { SvXlsx.pilihFile(importJadwal, 'jenis (pra'); });
     content.querySelectorAll('[data-edit]').forEach(function (b) { b.addEventListener('click', function () { modalJadwal(rows.find(function (x) { return x.id === b.dataset.edit; })); }); });
+    content.querySelectorAll('[data-pdf]').forEach(function (b) { b.addEventListener('click', function () {
+      var j = rows.find(function (x) { return x.id === b.dataset.pdf; });
+      SvPdf.unduhAman(j, formList.find(function (x) { return x.id === j.form_id; }), idn(j), {}, b);
+    }); });
     content.querySelectorAll('[data-lihat]').forEach(function (b) { b.addEventListener('click', function () { modalHasil(rows.find(function (x) { return x.id === b.dataset.lihat; })); }); });
     content.querySelectorAll('[data-hapus]').forEach(function (b) { b.addEventListener('click', async function () {
       if (!confirm('Hapus jadwal ini?')) return;
@@ -169,9 +188,10 @@
   function modalHasil(j) {
     var f = formList.find(function (x) { return x.id === j.form_id; });
     var jw = j.jawaban || {};
-    modal('Hasil ' + JENIS[j.jenis], SvForm.identitas(idn(j)) +
+    var o = modal('Hasil ' + JENIS[j.jenis], '<div style="margin-bottom:10px;"><button class="btn-small btn-small--primary" id="hsPdf">Unduh PDF</button></div>' + SvForm.identitas(idn(j)) +
       (f ? SvForm.hasil(f, jw) : '<div class="panel-note">Form sudah tidak tersedia.</div>') +
       '<div class="sv-q"><div class="sv-q__t">Catatan</div><div>' + esc(j.catatan || '—') + '</div></div>');
+    o.querySelector('#hsPdf').addEventListener('click', function () { SvPdf.unduhAman(j, f, idn(j), {}, this); });
   }
 
   // ================= FORM BUILDER =================
@@ -182,7 +202,7 @@
       (formList.length ? formList.map(function (f) { return '<tr><td>' + esc(f.judul) + '</td><td>' + JENIS[f.jenis] + '</td><td>' + f.pertanyaan.length + '</td><td><button class="btn-small" data-ef="' + f.id + '">Ubah</button> <button class="btn-small" data-hf="' + f.id + '">Hapus</button></td></tr>'; }).join('') : '<tr><td colspan="4">Belum ada form.</td></tr>') + '</tbody></table></div>';
     document.getElementById('btnForm').addEventListener('click', function () { modalForm(null); });
     document.getElementById('btnTplForm').addEventListener('click', tplForm);
-    document.getElementById('btnImpForm').addEventListener('click', function () { SvXlsx.pilihFile(importForm); });
+    document.getElementById('btnImpForm').addEventListener('click', function () { SvXlsx.pilihFile(importForm, 'judul form'); });
     content.querySelectorAll('[data-ef]').forEach(function (b) { b.addEventListener('click', function () { modalForm(formList.find(function (x) { return x.id === b.dataset.ef; })); }); });
     content.querySelectorAll('[data-hf]').forEach(function (b) { b.addEventListener('click', async function () {
       if (!confirm('Hapus form ini? Jadwal yang memakainya akan kehilangan form.')) return;
@@ -230,12 +250,8 @@
   // ================= EXCEL: JADWAL =================
   function cari(list, teks, f) { teks = String(teks || '').trim().toLowerCase(); return list.filter(function (x) { return String(x[f] || '').trim().toLowerCase() === teks; })[0]; }
   function tplJadwal() {
-    var n = Math.max(guruList.length, mapelList.length, formList.length);
-    var ref = [['Nama Guru', 'Mapel', 'Judul Form']];
-    for (var i = 0; i < n; i++) ref.push([(guruList[i] || {}).nama || '', (mapelList[i] || {}).nama || '', (formList[i] || {}).judul || '']);
-    SvXlsx.unduh('template_jadwal_supervisi', [
-      { nama: 'Jadwal', rows: [['Jenis (pra / supervisi)', 'Tanggal (YYYY-MM-DD)', 'Nama Guru', 'Nama Supervisor', 'Mapel (opsional)', 'Judul Form (opsional)', 'Kelas (opsional, otomatis bila kosong)']] },
-      { nama: 'Daftar Nama', rows: ref }]);
+    SvXlsx.templateJadwal({ guru: guruList, mapel: mapelList, form: formList, sekolah: profil && profil.nama_sekolah })
+      .catch(function (e) { alert('Gagal membuat template: ' + e.message); });
   }
   async function importJadwal(rows) {
     await muatMaster();
@@ -247,7 +263,7 @@
         mt = A(r, 'Mapel'), m = mt ? cari(mapelList, mt, 'nama') : null, ft = A(r, 'Judul Form'), f = ft ? cari(formList, ft, 'judul') : null, e = [];
       if (!jenis) e.push('Jenis'); if (!t) e.push('Tanggal'); if (!g) e.push('Nama Guru'); if (!s) e.push('Nama Supervisor');
       if (mt && !m) e.push('Mapel'); if (ft && !f) e.push('Judul Form'); if (g && s && g.id === s.id) e.push('Guru = Supervisor');
-      if (e.length) err.push('Baris ' + (i + 2) + ': ' + e.join(', ')); else { var uj = unitJenjang(); ok.push({ jenis: jenis, tanggal: t, guru_id: g.id, supervisor_id: s.id, mapel_id: m ? m.id : null, form_id: f ? f.id : null, kelas: String(A(r, 'Kelas')) || kelasOtomatis(g.id, m ? m.id : null) || null, unit_kerja: uj.unit_kerja, jenjang: uj.jenjang }); }
+      if (e.length) err.push('Baris ' + (r.__baris || i + 2) + ': ' + e.join(', ')); else { var uj = unitJenjang(); ok.push({ jenis: jenis, tanggal: t, guru_id: g.id, supervisor_id: s.id, mapel_id: m ? m.id : null, form_id: f ? f.id : null, kelas: String(A(r, 'Kelas')) || kelasOtomatis(g.id, m ? m.id : null) || null, unit_kerja: uj.unit_kerja, jenjang: uj.jenjang }); }
     });
     if (!ok.length) { alert('Tidak ada baris valid.' + (err.length ? '\n\n' + err.join('\n') : '')); return; }
     if (!confirm(ok.length + ' jadwal akan ditambahkan.' + (err.length ? '\n\n' + err.length + ' baris dilewati:\n' + err.slice(0, 10).join('\n') : '') + '\n\nLanjutkan?')) return;
@@ -259,11 +275,8 @@
   // ================= EXCEL: FORM =================
   var TIPE_FORM = ['skala', 'ya_tidak', 'teks', 'bukti_catatan', 'info', 'bagian'];
   function tplForm() {
-    var rows = [['Judul Form', 'Jenis (pra / supervisi)', 'Tipe', 'Teks', 'Keterangan (khusus bagian)', 'Kolom Komentar (Ya / kosong, khusus skala)', 'Opsi Skala (pisahkan dengan |)']];
-    formList.forEach(function (f) { f.pertanyaan.forEach(function (q) { rows.push([f.judul, f.jenis, q.tipe, q.teks, q.keterangan || '', q.komentar ? 'Ya' : '', (q.opsi || []).join('|')]); }); });
-    if (rows.length === 1) rows.push(['Contoh Form', 'pra', 'bagian', 'Keselarasan', '', '', ''], ['Contoh Form', 'pra', 'skala', 'Contoh indikator', '', 'Ya', '1 — Kurang|2 — Cukup|3 — Baik|4 — Sangat baik']);
-    SvXlsx.unduh('template_form_supervisi', [{ nama: 'Form', rows: rows },
-      { nama: 'Petunjuk', rows: [['Tipe yang tersedia'], ['skala'], ['ya_tidak'], ['teks'], ['bukti_catatan'], ['info'], ['bagian'], [''], ['Baris dengan Judul Form yang sama digabung jadi satu form. Judul yang sudah ada akan DIPERBARUI, judul baru dibuat sebagai form baru.']] }]);
+    SvXlsx.templateForm({ forms: formList, sekolah: profil && profil.nama_sekolah })
+      .catch(function (e) { alert('Gagal membuat template: ' + e.message); });
   }
   async function importForm(rows) {
     await muatMaster();
@@ -271,7 +284,7 @@
     rows.forEach(function (r, i) {
       var j = String(A(r, 'Judul Form')), tp = String(A(r, 'Tipe')).toLowerCase(), tx = String(A(r, 'Teks'));
       if (!j && !tx) return;
-      if (!j || !tx || TIPE_FORM.indexOf(tp) < 0) { err.push('Baris ' + (i + 2) + ': Judul Form / Tipe / Teks tidak valid'); return; }
+      if (!j || !tx || TIPE_FORM.indexOf(tp) < 0) { err.push('Baris ' + (r.__baris || i + 2) + ': Judul Form / Tipe / Teks tidak valid'); return; }
       var jt = String(A(r, 'Jenis')).toLowerCase(), jenis = jt.indexOf('pra') === 0 ? 'pra' : (jt.indexOf('supervisi') === 0 ? 'supervisi' : null);
       if (!grup[j]) { grup[j] = { jenis: jenis, q: [] }; urut.push(j); }
       if (!grup[j].jenis) grup[j].jenis = jenis;

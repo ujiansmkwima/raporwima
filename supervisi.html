@@ -12,8 +12,13 @@
 <script src="sticky-nama.js?v=1"></script>
 <script src="supervisi-form.js?v=1"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="supervisi-excel.js?v=1"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="supervisi-excel.js?v=2"></script>
 <script src="supervisi-otomatis.js?v=1"></script>
+<script src="supervisi-ttd.js?v=1"></script>
+<script src="supervisi-pdf.js?v=1"></script>
 </head>
 <body>
 <div class="app">
@@ -27,6 +32,7 @@
     <nav class="menu-list">
       <a href="#" class="menu-item menu-item--active" data-view="jadwal"><i data-lucide="calendar-check" class="menu-icon"></i><span class="menu-item__title">Jadwal Saya</span></a>
       <a href="#" class="menu-item" data-view="isi"><i data-lucide="wand-sparkles" class="menu-icon"></i><span class="menu-item__title">Isi Jawaban</span></a>
+      <a href="#" class="menu-item" data-view="ttd"><i data-lucide="pen-line" class="menu-icon"></i><span class="menu-item__title">Tanda Tangan Saya</span></a>
       <a href="guru.html" class="menu-item"><i data-lucide="arrow-left" class="menu-icon"></i><span class="menu-item__title">Ke E-Rapor</span></a>
     </nav>
   </aside>
@@ -43,7 +49,7 @@
 <script>
   var content = document.getElementById('content');
   var JENIS = { pra: 'Pra-Supervisi Akademik', supervisi: 'Supervisi' };
-  var guruList = [], mapelList = [], formList = [], rows = [], profil = null;
+  var guruList = [], mapelList = [], formList = [], rows = [], profil = null, meId = null, meNama = '';
   function idn(j) {
     var unit = j.unit_kerja || (profil && profil.nama_sekolah) || '';
     return { jenis: JENIS[j.jenis], guru: nm(guruList, j.guru_id), spv: nm(guruList, j.supervisor_id), unit: unit, mapel: nm(mapelList, j.mapel_id), kelas: j.kelas || '', jenjang: j.jenjang || unit.split(' ')[0] || '', tanggal: tglId(j.tanggal) };
@@ -54,6 +60,7 @@
   function hariIni() { var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
 
   async function muat() {
+    if (tampilan === 'ttd') return renderTtd();
     var r = await Promise.all([
       supabaseClient.from('supervisi_jadwal').select('*').order('tanggal'),
       supabaseClient.from('supervisi_guru').select('*'),
@@ -70,9 +77,13 @@
         var kunci = j.status !== 'selesai' && j.tanggal > today;
         return '<tr><td>' + tglId(j.tanggal) + '</td><td>' + JENIS[j.jenis] + '</td><td>' + esc(nm(guruList, j.guru_id)) + '</td><td>' + esc(nm(mapelList, j.mapel_id)) + '</td>' +
           '<td><span class="chip ' + (j.status === 'selesai' ? 'chip--aktif' : 'chip--muted') + '">' + j.status + '</span></td>' +
-          '<td><button class="btn-small ' + (kunci ? '' : 'btn-small--primary') + '" data-isi="' + j.id + '"' + (kunci ? ' disabled' : '') + '>' + tombol + '</button></td></tr>';
+          '<td><button class="btn-small ' + (kunci ? '' : 'btn-small--primary') + '" data-isi="' + j.id + '"' + (kunci ? ' disabled' : '') + '>' + tombol + '</button>' + (j.status === 'selesai' ? ' <button class="btn-small" data-pdf="' + j.id + '">Unduh PDF</button>' : '') + '</td></tr>';
       }).join('') : '<tr><td colspan="6">Belum ada jadwal supervisi untuk kamu.</td></tr>') + '</tbody></table></div>';
     content.querySelectorAll('[data-isi]').forEach(function (b) { b.addEventListener('click', function () { isiForm(rows.find(function (x) { return x.id === b.dataset.isi; })); }); });
+    content.querySelectorAll('[data-pdf]').forEach(function (b) { b.addEventListener('click', function () {
+      var j = rows.find(function (x) { return x.id === b.dataset.pdf; });
+      SvPdf.unduhAman(j, formList.find(function (x) { return x.id === j.form_id; }), idn(j), {}, b);
+    }); });
   }
 
   function isiForm(j, target) {
@@ -82,7 +93,7 @@
     var o = document.createElement('div'); o.className = 'modal-overlay';
     o.innerHTML = '<div class="modal-box"><div class="modal-box__head"><div class="modal-box__title">' + esc(f.judul) + '</div><button class="modal-box__close">×</button></div>' +
       SvForm.identitas(idn(j)) +
-      '<div style="margin-bottom:8px;"><button class="btn-small" id="svTpl">Unduh Template Excel</button> <button class="btn-small" id="svImp">Import dari Excel</button></div>' +
+      '<div style="margin-bottom:8px;"><button class="btn-small" id="svTpl">Unduh Template Excel</button> <button class="btn-small" id="svImp">Import dari Excel</button> <button class="btn-small" id="svPdf">Unduh PDF</button></div>' +
       '<div class="panel-note" style="margin-bottom:10px;"><strong>Isi Otomatis</strong> — pilih target nilai dulu: <select id="svTarget"><option value="">— target nilai —</option><option value="BAIK">BAIK</option><option value="SANGAT BAIK">SANGAT BAIK</option></select> <button class="btn-small btn-small--primary" id="svOto" disabled>Isi Otomatis</button> <strong id="svSkor"></strong><br>Hasilnya berupa draft: periksa dan sesuaikan dengan hasil pengamatan sebelum disimpan.</div>' +
       '<div id="svBody">' + SvForm.render(f, jw, idn(j)) + '</div>' +
       '<div class="sv-q"><div class="sv-q__t">Catatan / Tindak Lanjut</div><textarea id="svCatatan" rows="3" style="width:100%;">' + esc(j.catatan || '') + '</textarea></div>' +
@@ -102,7 +113,11 @@
     btnO.addEventListener('click', function () { oto(true); });
     if (target) { selT.value = target; btnO.disabled = false; oto(false); }
     o.querySelector('#svTpl').addEventListener('click', function () {
-      SvXlsx.unduh('isian_' + j.jenis + '_' + nm(guruList, j.guru_id).replace(/\W+/g, '_'), [{ nama: 'Isian', rows: SvXlsx.isianRows(f, SvForm.baca(o), o.querySelector('#svCatatan').value) }]);
+      SvXlsx.templateIsian(f, SvForm.baca(o), o.querySelector('#svCatatan').value, idn(j), { sekolah: profil && profil.nama_sekolah, namaFile: 'isian_' + j.jenis + '_' + nm(guruList, j.guru_id).replace(/\W+/g, '_') })
+        .catch(function (e) { alert('Gagal membuat template: ' + e.message); });
+    });
+    o.querySelector('#svPdf').addEventListener('click', function () {
+      SvPdf.unduhAman(j, f, idn(j), { jawaban: SvForm.baca(o), catatan: o.querySelector('#svCatatan').value }, this);
     });
     o.querySelector('#svImp').addEventListener('click', function () {
       SvXlsx.pilihFile(function (rows) {
@@ -110,7 +125,7 @@
         o.querySelector('#svBody').innerHTML = SvForm.render(f, Object.assign(cur, r.jawaban), idn(j));
         if (r.catatan !== null) o.querySelector('#svCatatan').value = r.catatan;
         alert(r.n + ' isian diimpor.' + (r.err.length ? '\n\nDilewati:\n' + r.err.join('\n') : '') + '\n\nPeriksa dulu, lalu klik Simpan.');
-      });
+      }, 'kode');
     });
     o.querySelector('#svSimpan').addEventListener('click', async function () {
       var jawaban = SvForm.baca(o);
@@ -121,6 +136,16 @@
   }
 
   var tampilan = 'jadwal';
+  async function renderTtd() {
+    var r = await supabaseClient.from('supervisi_ttd').select('nip, ttd').eq('guru_id', meId).maybeSingle(), d = r.data || {};
+    content.innerHTML = '<div class="panel-note">NIP dan tanda tangan ini dipakai pada blok <strong>Supervisor</strong> di PDF hasil supervisi. Hanya kamu dan admin yang dapat melihatnya.</div>' +
+      (r.error ? '<div class="panel-note" style="margin-top:10px;">Tabel belum siap — minta admin menjalankan <strong>migrasi_supervisi_ttd.sql</strong> di Supabase. (' + esc(r.error.message) + ')</div>' : '') +
+      '<div class="sv-ident" style="margin-top:14px;"><div class="sv-ident__k">Nama</div><div class="sv-ident__v">' + esc(meNama) + '</div>' +
+      '<div class="sv-ident__k">NIP</div><div class="sv-ident__v">' + esc(d.nip || '—') + '</div>' +
+      '<div class="sv-ident__k">Tanda tangan</div><div class="sv-ident__v">' + (d.ttd ? '<img src="' + d.ttd + '" alt="Tanda tangan" style="max-height:80px;max-width:240px;object-fit:contain;">' : 'Belum diunggah') + '</div></div>' +
+      '<button class="btn-small btn-small--primary" id="btnTtd">Atur NIP & Tanda Tangan</button>';
+    document.getElementById('btnTtd').addEventListener('click', function () { SvTtd.buka(meId, meNama, renderTtd); });
+  }
   function renderIsi(today) {
     var siap = rows.filter(function (j) { return j.status !== 'selesai' && j.tanggal <= today; });
     content.innerHTML = '<div class="panel-note">Pilih <strong>target nilai</strong> (Baik / Sangat Baik) lebih dulu, lalu klik <strong>Isi Otomatis</strong>. Jawaban terisi sebagai draft di formulir — periksa, ubah bila perlu, lalu simpan.</div>' +
@@ -140,7 +165,7 @@
     a.addEventListener('click', function (e) {
       e.preventDefault(); tampilan = a.dataset.view;
       document.querySelectorAll('.menu-list .menu-item[data-view]').forEach(function (x) { x.classList.toggle('menu-item--active', x === a); });
-      document.getElementById('judul').textContent = tampilan === 'isi' ? 'Isi Jawaban' : 'Jadwal Supervisi Saya';
+      document.getElementById('judul').textContent = { isi: 'Isi Jawaban', ttd: 'Tanda Tangan Saya' }[tampilan] || 'Jadwal Supervisi Saya';
       muat();
     });
   });
@@ -150,7 +175,8 @@
     if (!s) { location.href = 'index.html'; return; }
     var p = await supabaseClient.from('profiles').select('nama, role').eq('id', s.user.id).single();
     if (p.data && p.data.role === 'admin') { location.href = 'supervisi-admin.html'; return; }
-    document.getElementById('userName').textContent = (p.data && p.data.nama) || s.user.email;
+    meId = s.user.id; meNama = (p.data && p.data.nama) || s.user.email;
+    document.getElementById('userName').textContent = meNama;
     lucide.createIcons();
     muat();
   })();
