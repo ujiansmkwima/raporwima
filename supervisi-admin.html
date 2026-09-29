@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Supervisi — SMK Widya Mandala Tambak</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=7">
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-client.js"></script>
+<script src="sticky-nama.js?v=1"></script>
+<script src="supervisi-form.js?v=1"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="supervisi-excel.js?v=1"></script>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="sidebar__brand">
+      <img class="sidebar__brand-logo" src="assets/logo.png" alt="Logo">
+      <div class="sidebar__brand-text"><span class="sidebar__brand-mark">Supervisi</span><span class="sidebar__brand-school">SMK Widya Mandala Tambak</span></div>
+    </div>
+    <div class="sidebar__role"><i data-lucide="shield-check" style="width:13px;height:13px;"></i> Admin Supervisi</div>
+    <div class="sidebar__section-label">Menu</div>
+    <nav class="menu-list" id="menu">
+      <a href="#" class="menu-item" data-view="jadwal"><i data-lucide="calendar-check" class="menu-icon"></i><span class="menu-item__title">Jadwal Supervisi</span></a>
+      <a href="#" class="menu-item" data-view="form"><i data-lucide="clipboard-list" class="menu-icon"></i><span class="menu-item__title">Form Pra & Supervisi</span></a>
+      <a href="#" class="menu-item" data-view="data"><i data-lucide="refresh-cw" class="menu-icon"></i><span class="menu-item__title">Data Guru & Mapel</span></a>
+      <a href="admin.html" class="menu-item"><i data-lucide="arrow-left" class="menu-icon"></i><span class="menu-item__title">Ke Panel E-Rapor</span></a>
+    </nav>
+  </aside>
+  <div class="main">
+    <div class="topbar">
+      <div><div class="topbar__title" id="judul">Jadwal Supervisi</div><div class="topbar__meta">Pra-Supervisi Akademik & Supervisi</div></div>
+      <div class="user-chip"><div class="user-chip__text"><div class="user-chip__name" id="userName">Memuat...</div><div class="user-chip__role">Admin</div>
+        <a href="#" id="logoutBtn" class="user-chip__logout"><i data-lucide="log-out" style="width:13px;height:13px;"></i> Keluar</a></div></div>
+    </div>
+    <div class="content" id="content"></div>
+  </div>
+</div>
+
+<script>
+  var content = document.getElementById('content');
+  var guruList = [], mapelList = [], formList = [], profil = null, penugasanList = [];
+  // Kelas otomatis dari Penugasan Guru (tahun ajaran aktif) untuk guru + mapel tsb
+  function kelasOtomatis(guruId, mapelId) {
+    var k = {};
+    penugasanList.forEach(function (p) { if (p.guru_id === guruId && (!mapelId || p.mapel_id === mapelId) && p.kelas) k[p.kelas.nama] = 1; });
+    return Object.keys(k).sort().join(', ');
+  }
+  function unitJenjang() { var u = (profil && profil.nama_sekolah) || ''; return { unit_kerja: u || null, jenjang: u.split(' ')[0] || null }; }
+  function idn(j) {
+    var uj = { unit: j.unit_kerja || (profil && profil.nama_sekolah) || '' };
+    return { jenis: JENIS[j.jenis], guru: nm(guruList, j.guru_id), spv: nm(guruList, j.supervisor_id), unit: uj.unit, mapel: nm(mapelList, j.mapel_id), kelas: j.kelas || '', jenjang: j.jenjang || uj.unit.split(' ')[0] || '', tanggal: tglId(j.tanggal) };
+  }
+  var JENIS = { pra: 'Pra-Supervisi Akademik', supervisi: 'Supervisi' };
+
+  function esc(s) { return (s === null || s === undefined) ? '' : String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function nm(list, id) { var x = list.find(function (i) { return i.id === id; }); return x ? x.nama : '—'; }
+  function opts(list, sel, kosong) { return (kosong ? '<option value="">' + kosong + '</option>' : '') + list.map(function (i) { return '<option value="' + i.id + '"' + (i.id === sel ? ' selected' : '') + '>' + esc(i.nama || i.judul) + '</option>'; }).join(''); }
+  function tglId(d) { return d ? new Date(d + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '—'; }
+
+  async function muatMaster() {
+    var r = await Promise.all([
+      supabaseClient.from('supervisi_guru').select('*').order('nama'),
+      supabaseClient.from('supervisi_mapel').select('*').order('nama'),
+      supabaseClient.from('supervisi_form').select('*').order('created_at', { ascending: false })
+    ]);
+    guruList = r[0].data || []; mapelList = r[1].data || []; formList = r[2].data || [];
+    var ta = await supabaseClient.from('tahun_ajaran').select('id').eq('is_aktif', true).maybeSingle();
+    profil = (await supabaseClient.from('profil_sekolah').select('nama_sekolah').maybeSingle()).data;
+    penugasanList = ta.data ? ((await supabaseClient.from('penugasan_guru').select('guru_id, mapel_id, kelas:kelas_id(nama)').eq('tahun_ajaran_id', ta.data.id)).data || []) : [];
+  }
+
+  function setMenu(v) {
+    document.querySelectorAll('#menu .menu-item[data-view]').forEach(function (a) { a.classList.toggle('menu-item--active', a.dataset.view === v); });
+    document.getElementById('judul').textContent = { jadwal: 'Jadwal Supervisi', form: 'Form Pra & Supervisi', data: 'Data Guru & Mapel' }[v];
+  }
+  document.querySelectorAll('#menu .menu-item[data-view]').forEach(function (a) {
+    a.addEventListener('click', function (e) { e.preventDefault(); buka(a.dataset.view); });
+  });
+  function buka(v) { setMenu(v); ({ jadwal: viewJadwal, form: viewForm, data: viewData })[v](); }
+
+  // ================= DATA GURU & MAPEL =================
+  async function viewData() {
+    await muatMaster();
+    content.innerHTML = '<div class="panel-note">Data guru & mata pelajaran diambil dari E-Rapor. Klik <strong>Muat Ulang</strong> setiap ada guru atau mapel baru di E-Rapor.</div>' +
+      '<div style="margin:12px 0;"><button class="btn-small btn-small--primary" id="btnReload">Muat Ulang dari E-Rapor</button> <span id="reloadInfo" style="font-size:12.5px;color:var(--ink-soft);"></span></div>' +
+      '<div class="stat-grid"><div class="stat-card"><div class="stat-card__label">Guru</div><div class="stat-card__value">' + guruList.length + '</div></div>' +
+      '<div class="stat-card"><div class="stat-card__label">Mata Pelajaran</div><div class="stat-card__value">' + mapelList.length + '</div></div></div>';
+    document.getElementById('btnReload').addEventListener('click', async function () {
+      var b = this; b.disabled = true; b.textContent = 'Memuat...';
+      var g = await supabaseClient.from('profiles').select('id, nama').eq('role', 'guru');
+      var m = await supabaseClient.from('mata_pelajaran').select('id, kode, nama');
+      if (g.error || m.error) { alert('Gagal memuat: ' + (g.error || m.error).message); b.disabled = false; b.textContent = 'Muat Ulang dari E-Rapor'; return; }
+      var gr = (g.data || []).filter(function (x) { return x.nama; }).map(function (x) { return { id: x.id, nama: x.nama }; });
+      var e1 = gr.length ? await supabaseClient.from('supervisi_guru').upsert(gr) : {};
+      var e2 = (m.data || []).length ? await supabaseClient.from('supervisi_mapel').upsert(m.data) : {};
+      if (e1.error || e2.error) alert('Gagal menyimpan: ' + (e1.error || e2.error).message);
+      viewData();
+    });
+  }
+
+  // ================= JADWAL =================
+  async function viewJadwal() {
+    await muatMaster();
+    var r = await supabaseClient.from('supervisi_jadwal').select('*').order('tanggal', { ascending: false });
+    var rows = r.data || [];
+    content.innerHTML = '<div style="margin-bottom:14px;"><button class="btn-small btn-small--primary" id="btnTambah">+ Tambah Jadwal</button> <button class="btn-small" id="btnTplJadwal">Unduh Template</button> <button class="btn-small" id="btnImpJadwal">Import Excel</button></div>' +
+      '<div class="table-wrap"><table class="data-table"><thead><tr><th>Tanggal</th><th>Jenis</th><th>Nama Guru Disupervisi</th><th>Mapel</th><th>Supervisor</th><th>Form</th><th>Status</th><th></th></tr></thead><tbody>' +
+      (rows.length ? rows.map(function (j) {
+        return '<tr><td>' + tglId(j.tanggal) + '</td><td>' + JENIS[j.jenis] + '</td><td>' + esc(nm(guruList, j.guru_id)) + '</td><td>' + esc(nm(mapelList, j.mapel_id)) + '</td><td>' + esc(nm(guruList, j.supervisor_id)) + '</td><td>' + esc(nm(formList, j.form_id)) + '</td>' +
+          '<td><span class="chip ' + (j.status === 'selesai' ? 'chip--aktif' : 'chip--muted') + '">' + j.status + '</span></td>' +
+          '<td>' + (j.status === 'selesai' ? '<button class="btn-small" data-lihat="' + j.id + '">Lihat Hasil</button> ' : '') +
+          '<button class="btn-small" data-edit="' + j.id + '">Ubah</button> <button class="btn-small" data-hapus="' + j.id + '">Hapus</button></td></tr>';
+      }).join('') : '<tr><td colspan="8">Belum ada jadwal.</td></tr>') + '</tbody></table></div>';
+    document.getElementById('btnTambah').addEventListener('click', function () { modalJadwal(null); });
+    document.getElementById('btnTplJadwal').addEventListener('click', tplJadwal);
+    document.getElementById('btnImpJadwal').addEventListener('click', function () { SvXlsx.pilihFile(importJadwal); });
+    content.querySelectorAll('[data-edit]').forEach(function (b) { b.addEventListener('click', function () { modalJadwal(rows.find(function (x) { return x.id === b.dataset.edit; })); }); });
+    content.querySelectorAll('[data-lihat]').forEach(function (b) { b.addEventListener('click', function () { modalHasil(rows.find(function (x) { return x.id === b.dataset.lihat; })); }); });
+    content.querySelectorAll('[data-hapus]').forEach(function (b) { b.addEventListener('click', async function () {
+      if (!confirm('Hapus jadwal ini?')) return;
+      await supabaseClient.from('supervisi_jadwal').delete().eq('id', b.dataset.hapus); viewJadwal();
+    }); });
+  }
+
+  function modal(judul, html) {
+    var o = document.createElement('div'); o.className = 'modal-overlay';
+    o.innerHTML = '<div class="modal-box"><div class="modal-box__head"><div class="modal-box__title">' + judul + '</div><button class="modal-box__close">×</button></div>' + html + '</div>';
+    document.body.appendChild(o);
+    o.querySelector('.modal-box__close').addEventListener('click', function () { o.remove(); });
+    return o;
+  }
+
+  function modalJadwal(j) {
+    if (!guruList.length) { alert('Data guru masih kosong. Buka menu "Data Guru & Mapel" lalu klik Muat Ulang.'); return; }
+    var o = modal(j ? 'Ubah Jadwal' : 'Tambah Jadwal',
+      '<div class="form-grid">' +
+      '<div class="field"><label>Jenis</label><select id="fJenis"><option value="pra">Pra-Supervisi Akademik</option><option value="supervisi">Supervisi</option></select></div>' +
+      '<div class="field"><label>Tanggal Pelaksanaan</label><input type="date" id="fTgl"></div>' +
+      '<div class="field"><label>Guru yang Disupervisi</label><select id="fGuru">' + opts(guruList, j && j.guru_id) + '</select></div>' +
+      '<div class="field"><label>Supervisor</label><select id="fSpv">' + opts(guruList, j && j.supervisor_id) + '</select></div>' +
+      '<div class="field"><label>Mata Pelajaran</label><select id="fMapel">' + opts(mapelList, j && j.mapel_id, '— pilih —') + '</select></div>' +
+      '<div class="field"><label>Form</label><select id="fForm"></select></div>' +
+      '<div class="field field--full"><label>Kelas (otomatis dari Penugasan Guru, boleh diubah)</label><input id="fKelas"></div></div>' +
+      '<div style="margin-top:18px;"><button class="btn-small btn-small--primary" id="fSimpan">Simpan</button></div>');
+    var fJenis = o.querySelector('#fJenis'), fForm = o.querySelector('#fForm');
+    function isiForm() { fForm.innerHTML = opts(formList.filter(function (f) { return f.jenis === fJenis.value; }), j && j.form_id, '— pilih form —'); }
+    if (j) { fJenis.value = j.jenis; o.querySelector('#fTgl').value = j.tanggal; }
+    isiForm(); fJenis.addEventListener('change', isiForm);
+    var fKelas = o.querySelector('#fKelas'), fG = o.querySelector('#fGuru'), fM = o.querySelector('#fMapel');
+    function autoKelas() { fKelas.value = kelasOtomatis(fG.value, fM.value); }
+    if (j) fKelas.value = j.kelas || ''; else autoKelas();
+    fG.addEventListener('change', autoKelas); fM.addEventListener('change', autoKelas);
+    o.querySelector('#fSimpan').addEventListener('click', async function () {
+      var d = { jenis: fJenis.value, tanggal: o.querySelector('#fTgl').value, guru_id: o.querySelector('#fGuru').value, supervisor_id: o.querySelector('#fSpv').value,
+        mapel_id: o.querySelector('#fMapel').value || null, form_id: fForm.value || null, kelas: fKelas.value.trim() || null };
+      var uj = unitJenjang(); d.unit_kerja = uj.unit_kerja; d.jenjang = uj.jenjang;
+      if (!d.tanggal) { alert('Tanggal wajib diisi.'); return; }
+      if (d.guru_id === d.supervisor_id) { alert('Supervisor tidak boleh sama dengan guru yang disupervisi.'); return; }
+      var res = j ? await supabaseClient.from('supervisi_jadwal').update(d).eq('id', j.id) : await supabaseClient.from('supervisi_jadwal').insert(d);
+      if (res.error) { alert('Gagal: ' + res.error.message); return; }
+      o.remove(); viewJadwal();
+    });
+  }
+
+  function modalHasil(j) {
+    var f = formList.find(function (x) { return x.id === j.form_id; });
+    var jw = j.jawaban || {};
+    modal('Hasil ' + JENIS[j.jenis], SvForm.identitas(idn(j)) +
+      (f ? SvForm.hasil(f, jw) : '<div class="panel-note">Form sudah tidak tersedia.</div>') +
+      '<div class="sv-q"><div class="sv-q__t">Catatan</div><div>' + esc(j.catatan || '—') + '</div></div>');
+  }
+
+  // ================= FORM BUILDER =================
+  async function viewForm() {
+    await muatMaster();
+    content.innerHTML = '<div style="margin-bottom:14px;"><button class="btn-small btn-small--primary" id="btnForm">+ Buat Form</button> <button class="btn-small" id="btnTplForm">Unduh Template</button> <button class="btn-small" id="btnImpForm">Import Excel</button></div>' +
+      '<div class="table-wrap"><table class="data-table"><thead><tr><th>Judul</th><th>Jenis</th><th>Jumlah Pertanyaan</th><th></th></tr></thead><tbody>' +
+      (formList.length ? formList.map(function (f) { return '<tr><td>' + esc(f.judul) + '</td><td>' + JENIS[f.jenis] + '</td><td>' + f.pertanyaan.length + '</td><td><button class="btn-small" data-ef="' + f.id + '">Ubah</button> <button class="btn-small" data-hf="' + f.id + '">Hapus</button></td></tr>'; }).join('') : '<tr><td colspan="4">Belum ada form.</td></tr>') + '</tbody></table></div>';
+    document.getElementById('btnForm').addEventListener('click', function () { modalForm(null); });
+    document.getElementById('btnTplForm').addEventListener('click', tplForm);
+    document.getElementById('btnImpForm').addEventListener('click', function () { SvXlsx.pilihFile(importForm); });
+    content.querySelectorAll('[data-ef]').forEach(function (b) { b.addEventListener('click', function () { modalForm(formList.find(function (x) { return x.id === b.dataset.ef; })); }); });
+    content.querySelectorAll('[data-hf]').forEach(function (b) { b.addEventListener('click', async function () {
+      if (!confirm('Hapus form ini? Jadwal yang memakainya akan kehilangan form.')) return;
+      await supabaseClient.from('supervisi_form').delete().eq('id', b.dataset.hf); viewForm();
+    }); });
+  }
+
+  function modalForm(f) {
+    var qs = f ? JSON.parse(JSON.stringify(f.pertanyaan)) : [{ id: 'q1', teks: '', tipe: 'skala' }];
+    var o = modal(f ? 'Ubah Form' : 'Buat Form',
+      '<div class="form-grid"><div class="field field--full"><label>Judul Form</label><input id="fmJudul"></div>' +
+      '<div class="field"><label>Jenis</label><select id="fmJenis"><option value="pra">Pra-Supervisi Akademik</option><option value="supervisi">Supervisi</option></select></div></div>' +
+      '<div class="form-section-title">Pertanyaan / Indikator</div><div id="fmQ"></div>' +
+      '<div style="margin-top:12px;"><button class="btn-small" id="fmAdd">+ Tambah Pertanyaan</button></div>' +
+      '<div style="margin-top:18px;"><button class="btn-small btn-small--primary" id="fmSimpan">Simpan Form</button></div>');
+    if (f) { o.querySelector('#fmJudul').value = f.judul; o.querySelector('#fmJenis').value = f.jenis; }
+    function gambar() {
+      var T = { skala: 'Skala 1–4', ya_tidak: 'Ya / Tidak', teks: 'Isian teks', bukti_catatan: 'Bukti + Catatan', info: 'Data isian singkat', bagian: 'Judul bagian' };
+      o.querySelector('#fmQ').innerHTML = qs.map(function (q, i) {
+        var extra = q.tipe === 'bagian' ? '<div class="field" style="flex-basis:100%;"><input data-ket="' + i + '" placeholder="Keterangan (opsional)" value="' + esc(q.keterangan || '') + '"></div>'
+          : (q.tipe === 'skala' ? '<label style="font-size:12px;flex-basis:100%;"><input type="checkbox" data-kom="' + i + '"' + (q.komentar ? ' checked' : '') + '> Ada kolom komentar</label>' : '');
+        return '<div class="sv-q"><div class="add-form" style="margin:0;"><div class="field" style="flex:3;"><input data-t="' + i + '" placeholder="Teks pertanyaan / indikator" value="' + esc(q.teks) + '"></div>' +
+          '<div class="field"><select data-k="' + i + '">' + Object.keys(T).map(function (k) { return '<option value="' + k + '"' + (q.tipe === k ? ' selected' : '') + '>' + T[k] + '</option>'; }).join('') + '</select></div>' +
+          '<button class="btn-small" data-x="' + i + '">Hapus</button>' + extra + '</div></div>';
+      }).join('');
+      o.querySelectorAll('[data-t]').forEach(function (el) { el.addEventListener('input', function () { qs[el.dataset.t].teks = el.value; }); });
+      o.querySelectorAll('[data-ket]').forEach(function (el) { el.addEventListener('input', function () { qs[el.dataset.ket].keterangan = el.value; }); });
+      o.querySelectorAll('[data-kom]').forEach(function (el) { el.addEventListener('change', function () { qs[el.dataset.kom].komentar = el.checked ? 'Komentar Kritis' : ''; }); });
+      o.querySelectorAll('[data-k]').forEach(function (el) { el.addEventListener('change', function () { qs[el.dataset.k].tipe = el.value; gambar(); }); });
+      o.querySelectorAll('[data-x]').forEach(function (el) { el.addEventListener('click', function () { qs.splice(el.dataset.x, 1); gambar(); }); });
+    }
+    gambar();
+    o.querySelector('#fmAdd').addEventListener('click', function () { qs.push({ id: 'q' + Date.now(), teks: '', tipe: 'skala' }); gambar(); });
+    o.querySelector('#fmSimpan').addEventListener('click', async function () {
+      var judul = o.querySelector('#fmJudul').value.trim();
+      var isi = qs.filter(function (q) { return q.teks.trim(); });
+      if (!judul || !isi.length) { alert('Isi judul dan minimal satu pertanyaan.'); return; }
+      var d = { judul: judul, jenis: o.querySelector('#fmJenis').value, pertanyaan: isi };
+      var res = f ? await supabaseClient.from('supervisi_form').update(d).eq('id', f.id) : await supabaseClient.from('supervisi_form').insert(d);
+      if (res.error) { alert('Gagal: ' + res.error.message); return; }
+      o.remove(); viewForm();
+    });
+  }
+
+  // ================= EXCEL: JADWAL =================
+  function cari(list, teks, f) { teks = String(teks || '').trim().toLowerCase(); return list.filter(function (x) { return String(x[f] || '').trim().toLowerCase() === teks; })[0]; }
+  function tplJadwal() {
+    var n = Math.max(guruList.length, mapelList.length, formList.length);
+    var ref = [['Nama Guru', 'Mapel', 'Judul Form']];
+    for (var i = 0; i < n; i++) ref.push([(guruList[i] || {}).nama || '', (mapelList[i] || {}).nama || '', (formList[i] || {}).judul || '']);
+    SvXlsx.unduh('template_jadwal_supervisi', [
+      { nama: 'Jadwal', rows: [['Jenis (pra / supervisi)', 'Tanggal (YYYY-MM-DD)', 'Nama Guru', 'Nama Supervisor', 'Mapel (opsional)', 'Judul Form (opsional)', 'Kelas (opsional, otomatis bila kosong)']] },
+      { nama: 'Daftar Nama', rows: ref }]);
+  }
+  async function importJadwal(rows) {
+    await muatMaster();
+    var ok = [], err = [], A = SvXlsx.ambil;
+    rows.forEach(function (r, i) {
+      if (!A(r, 'Nama Guru') && !A(r, 'Tanggal')) return;
+      var jt = String(A(r, 'Jenis')).toLowerCase(), jenis = jt.indexOf('pra') === 0 ? 'pra' : (jt.indexOf('supervisi') === 0 ? 'supervisi' : null),
+        t = SvXlsx.tgl(A(r, 'Tanggal')), g = cari(guruList, A(r, 'Nama Guru'), 'nama'), s = cari(guruList, A(r, 'Nama Supervisor'), 'nama'),
+        mt = A(r, 'Mapel'), m = mt ? cari(mapelList, mt, 'nama') : null, ft = A(r, 'Judul Form'), f = ft ? cari(formList, ft, 'judul') : null, e = [];
+      if (!jenis) e.push('Jenis'); if (!t) e.push('Tanggal'); if (!g) e.push('Nama Guru'); if (!s) e.push('Nama Supervisor');
+      if (mt && !m) e.push('Mapel'); if (ft && !f) e.push('Judul Form'); if (g && s && g.id === s.id) e.push('Guru = Supervisor');
+      if (e.length) err.push('Baris ' + (i + 2) + ': ' + e.join(', ')); else { var uj = unitJenjang(); ok.push({ jenis: jenis, tanggal: t, guru_id: g.id, supervisor_id: s.id, mapel_id: m ? m.id : null, form_id: f ? f.id : null, kelas: String(A(r, 'Kelas')) || kelasOtomatis(g.id, m ? m.id : null) || null, unit_kerja: uj.unit_kerja, jenjang: uj.jenjang }); }
+    });
+    if (!ok.length) { alert('Tidak ada baris valid.' + (err.length ? '\n\n' + err.join('\n') : '')); return; }
+    if (!confirm(ok.length + ' jadwal akan ditambahkan.' + (err.length ? '\n\n' + err.length + ' baris dilewati:\n' + err.slice(0, 10).join('\n') : '') + '\n\nLanjutkan?')) return;
+    var res = await supabaseClient.from('supervisi_jadwal').insert(ok);
+    if (res.error) { alert('Gagal: ' + res.error.message); return; }
+    viewJadwal();
+  }
+
+  // ================= EXCEL: FORM =================
+  var TIPE_FORM = ['skala', 'ya_tidak', 'teks', 'bukti_catatan', 'info', 'bagian'];
+  function tplForm() {
+    var rows = [['Judul Form', 'Jenis (pra / supervisi)', 'Tipe', 'Teks', 'Keterangan (khusus bagian)', 'Kolom Komentar (Ya / kosong, khusus skala)', 'Opsi Skala (pisahkan dengan |)']];
+    formList.forEach(function (f) { f.pertanyaan.forEach(function (q) { rows.push([f.judul, f.jenis, q.tipe, q.teks, q.keterangan || '', q.komentar ? 'Ya' : '', (q.opsi || []).join('|')]); }); });
+    if (rows.length === 1) rows.push(['Contoh Form', 'pra', 'bagian', 'Keselarasan', '', '', ''], ['Contoh Form', 'pra', 'skala', 'Contoh indikator', '', 'Ya', '1 — Kurang|2 — Cukup|3 — Baik|4 — Sangat baik']);
+    SvXlsx.unduh('template_form_supervisi', [{ nama: 'Form', rows: rows },
+      { nama: 'Petunjuk', rows: [['Tipe yang tersedia'], ['skala'], ['ya_tidak'], ['teks'], ['bukti_catatan'], ['info'], ['bagian'], [''], ['Baris dengan Judul Form yang sama digabung jadi satu form. Judul yang sudah ada akan DIPERBARUI, judul baru dibuat sebagai form baru.']] }]);
+  }
+  async function importForm(rows) {
+    await muatMaster();
+    var grup = {}, urut = [], err = [], A = SvXlsx.ambil;
+    rows.forEach(function (r, i) {
+      var j = String(A(r, 'Judul Form')), tp = String(A(r, 'Tipe')).toLowerCase(), tx = String(A(r, 'Teks'));
+      if (!j && !tx) return;
+      if (!j || !tx || TIPE_FORM.indexOf(tp) < 0) { err.push('Baris ' + (i + 2) + ': Judul Form / Tipe / Teks tidak valid'); return; }
+      var jt = String(A(r, 'Jenis')).toLowerCase(), jenis = jt.indexOf('pra') === 0 ? 'pra' : (jt.indexOf('supervisi') === 0 ? 'supervisi' : null);
+      if (!grup[j]) { grup[j] = { jenis: jenis, q: [] }; urut.push(j); }
+      if (!grup[j].jenis) grup[j].jenis = jenis;
+      var q = { tipe: tp, teks: tx }, ket = String(A(r, 'Keterangan')), op = String(A(r, 'Opsi'));
+      if (tp === 'bagian' && ket) q.keterangan = ket;
+      if (tp === 'skala') { if (String(A(r, 'Kolom Komentar')).toLowerCase() === 'ya') q.komentar = 'Komentar Kritis'; if (op) q.opsi = op.split('|').map(function (x) { return x.trim(); }); }
+      grup[j].q.push(q);
+    });
+    urut = urut.filter(function (j) { if (!grup[j].jenis) { err.push('Form "' + j + '": Jenis harus pra atau supervisi'); return false; } return true; });
+    if (!urut.length) { alert('Tidak ada form valid.' + (err.length ? '\n\n' + err.join('\n') : '')); return; }
+    if (!confirm(urut.length + ' form akan disimpan (judul yang sama diperbarui).' + (err.length ? '\n\nDilewati:\n' + err.slice(0, 10).join('\n') : '') + '\n\nLanjutkan?')) return;
+    for (var x = 0; x < urut.length; x++) {
+      var j = urut[x], lama = cari(formList, j, 'judul'), pakai = {};
+      if (lama) lama.pertanyaan.forEach(function (q) { pakai[q.teks] = q.id; }); // pertahankan id supaya hasil lama tetap terbaca
+      grup[j].q.forEach(function (q, i) { q.id = pakai[q.teks] || ('n' + Date.now().toString(36) + i); });
+      var d = { judul: j, jenis: grup[j].jenis, pertanyaan: grup[j].q };
+      var res = lama ? await supabaseClient.from('supervisi_form').update(d).eq('id', lama.id) : await supabaseClient.from('supervisi_form').insert(d);
+      if (res.error) { alert('Gagal menyimpan "' + j + '": ' + res.error.message); return; }
+    }
+    viewForm();
+  }
+
+  (async function () {
+    var s = (await supabaseClient.auth.getSession()).data.session;
+    if (!s) { location.href = 'index.html'; return; }
+    var p = await supabaseClient.from('profiles').select('nama, role').eq('id', s.user.id).single();
+    if (!p.data || p.data.role !== 'admin') { location.href = 'supervisi.html'; return; }
+    document.getElementById('userName').textContent = p.data.nama || s.user.email;
+    lucide.createIcons();
+    buka('jadwal');
+  })();
+  document.getElementById('logoutBtn').addEventListener('click', async function (e) { e.preventDefault(); await supabaseClient.auth.signOut(); location.href = 'index.html'; });
+</script>
+</body>
+</html>

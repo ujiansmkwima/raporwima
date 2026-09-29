@@ -6,7 +6,7 @@
 <title>Masuk — E-Rapor SMK Widya Mandala Tambak</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=7">
 <script src="https://unpkg.com/lucide@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-client.js"></script>
@@ -26,7 +26,12 @@
       <img src="assets/logo.png" alt="Logo SMK Widya Mandala Tambak">
     </div>
 
-    <div class="login-card__title">Masuk ke E-Rapor</div>
+    <div class="login-tabs" role="tablist">
+      <button type="button" class="login-tab is-active" data-mode="erapor">E-Rapor</button>
+      <button type="button" class="login-tab" data-mode="supervisi">Supervisi</button>
+    </div>
+
+    <div class="login-card__title" id="loginTitle">Masuk ke E-Rapor</div>
     <div class="login-card__sub">SMK Widya Mandala Tambak — Banyumas<br>Sistem Penilaian Akademik</div>
 
     <div class="field">
@@ -143,6 +148,16 @@
 
   document.getElementById('year').textContent = new Date().getFullYear();
 
+  // Tab: E-Rapor / Supervisi. Akun & kata sandi sama; bedanya hanya halaman tujuan.
+  var modeLogin = 'erapor';
+  document.querySelectorAll('.login-tab').forEach(function (t) {
+    t.addEventListener('click', function () {
+      modeLogin = t.dataset.mode;
+      document.querySelectorAll('.login-tab').forEach(function (x) { x.classList.toggle('is-active', x === t); });
+      document.getElementById('loginTitle').textContent = modeLogin === 'supervisi' ? 'Masuk ke Supervisi' : 'Masuk ke E-Rapor';
+    });
+  });
+
   var form = document.getElementById('loginForm');
   var submitBtn = document.getElementById('submitBtn');
   var note = document.getElementById('loginNote');
@@ -193,6 +208,10 @@
     // Kunci harus sama dengan SambutanGuru.KUNCI_BARU_LOGIN di sambutan-guru.js.
     if (role !== 'admin') {
       try { sessionStorage.setItem('erapor_sambutan_baru_login', '1'); } catch (e) { /* abaikan */ }
+    }
+    if (modeLogin === 'supervisi') {
+      window.location.href = role === 'admin' ? 'supervisi-admin.html' : 'supervisi.html';
+      return;
     }
     window.location.href = role === 'admin' ? 'admin.html' : 'guru.html';
   });
