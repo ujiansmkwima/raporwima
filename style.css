@@ -2143,3 +2143,31 @@ a { color: inherit; text-decoration: none; }
 @media (prefers-reduced-motion: reduce) {
   .modal-box.sambutan-box { animation: none; }
 }
+
+/* ===== Freeze kolom Nama pada tabel lebar (ditandai oleh sticky-nama.js) =====
+   Saat tabel digeser ke kanan, kolom Nama / Nama Siswa tetap menempel di
+   sisi kiri .table-wrap. Latar dibuat solid supaya angka di bawahnya tidak
+   tembus pandang. */
+.data-table th.col-nama-sticky,
+.data-table td.col-nama-sticky {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--surface);
+  /* border-collapse membuat garis sel ikut bergeser; bayangan tipis di
+     sisi kanan menandai batas kolom beku */
+  box-shadow: 1px 0 0 var(--border), 4px 0 6px -4px rgba(15, 23, 42, 0.18);
+}
+.data-table th.col-nama-sticky {
+  z-index: 3;
+  background: var(--surface-tint-strong);
+}
+.data-table tr:hover td.col-nama-sticky { background: var(--primary-tint); }
+
+@media print {
+  .data-table th.col-nama-sticky,
+  .data-table td.col-nama-sticky {
+    position: static;
+    box-shadow: none;
+  }
+}
