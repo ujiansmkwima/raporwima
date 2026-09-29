@@ -10,7 +10,8 @@
 
    Pemakaian:  SvPdf.unduhAman(jadwal, form, identitas, { jawaban, catatan }, tombolOpsional)
      - identitas = objek dari idn(j) di halaman (jenis, guru, spv, unit, mapel, kelas, jenjang, tanggal)
-     - opsi.jawaban / opsi.catatan opsional: dipakai kalau ingin mencetak isian yang belum disimpan. */
+     - opsi.jawaban / opsi.catatan opsional: dipakai kalau ingin mencetak isian yang belum disimpan.
+     - opsi.paket opsional: [{ form, jawaban, catatan }] untuk form sepaket (SvForm.isianPaket); semuanya masuk satu PDF. */
 var SvPdf = (function () {
   // Predikat dari persentase skor. Ubah angkanya di sini bila sekolah memakai patokan lain.
   var AMBANG = [[90, 'Sangat Baik'], [75, 'Baik'], [60, 'Cukup']];
@@ -229,51 +230,57 @@ var SvPdf = (function () {
     var jenisLabel = id.jenis || (j.jenis === 'pra' ? 'Pra-Supervisi Akademik' : 'Supervisi');
 
     doc.setProperties({ title: bersih(jenisLabel) + ' - ' + bersih(id.guru), author: bersih(id.spv), subject: bersih(f.judul) });
-    var y = kop(doc, profil, logo);
-    y = judul(doc, y, jenisLabel, f.judul);
-    y = tabelIdentitas(doc, y + 3, id) + 5;
+    // Paket form: tiap form dicetak di halaman baru (kop, identitas, isian, rekap, catatan, tanda tangan), semuanya dalam satu file PDF.
+    var daftar = opsi.paket && opsi.paket.length ? opsi.paket : [{ form: f, jawaban: jw, catatan: catatan }];
+    daftar.forEach(function (it, k) {
+      var f = it.form, jw = it.jawaban || {}, catatan = it.catatan;
+      if (k > 0) doc.addPage();
+      var y = kop(doc, profil, logo);
+      y = judul(doc, y, jenisLabel, f.judul);
+      y = tabelIdentitas(doc, y + 3, id) + 5;
 
-    var t = susunBaris(f, jw, id);
-    doc.autoTable({
-      startY: y, margin: { left: M.kiri, right: M.kanan, top: M.atas, bottom: M.bawah }, theme: 'grid',
-      head: [t.head], body: t.body, rowPageBreak: 'avoid', showHead: 'everyPage',
-      styles: { font: 'helvetica', fontSize: 8.5, cellPadding: { top: 1.8, bottom: 1.8, left: 2, right: 2 }, lineColor: GARIS, lineWidth: 0.2, textColor: [30, 30, 30], valign: 'top', overflow: 'linebreak' },
-      headStyles: { fillColor: BIRU, textColor: 255, fontStyle: 'bold', halign: 'center', valign: 'middle' },
-      columnStyles: { 0: { cellWidth: t.lebar[0], halign: 'center' }, 1: { cellWidth: t.lebar[1] }, 2: { cellWidth: t.lebar[2] }, 3: { cellWidth: t.lebar[3] } }
-    });
-    y = doc.lastAutoTable.finalY + 5;
-
-    var sk = rekapSkor(f, jw);
-    if (sk) {
-      var sel = function (x) { return { content: x, styles: { halign: 'center', fontStyle: 'bold', fillColor: [238, 243, 250] } }; };
+      var t = susunBaris(f, jw, id);
       doc.autoTable({
-        startY: y, margin: { left: M.kiri, right: M.kanan, bottom: M.bawah }, theme: 'grid', rowPageBreak: 'avoid',
-        styles: { font: 'helvetica', fontSize: 9, cellPadding: 2, lineColor: GARIS, lineWidth: 0.2, textColor: [30, 30, 30] },
-        columnStyles: { 0: { cellWidth: 45 }, 1: { cellWidth: 45 }, 2: { cellWidth: 45 }, 3: { cellWidth: 45 } },
-        body: [[sel('Jumlah Skor: ' + sk.tot + ' / ' + sk.maks), sel('Rata-rata: ' + sk.rata), sel('Persentase: ' + sk.persen + '%'), sel('Predikat: ' + sk.pred)]]
+        startY: y, margin: { left: M.kiri, right: M.kanan, top: M.atas, bottom: M.bawah }, theme: 'grid',
+        head: [t.head], body: t.body, rowPageBreak: 'avoid', showHead: 'everyPage',
+        styles: { font: 'helvetica', fontSize: 8.5, cellPadding: { top: 1.8, bottom: 1.8, left: 2, right: 2 }, lineColor: GARIS, lineWidth: 0.2, textColor: [30, 30, 30], valign: 'top', overflow: 'linebreak' },
+        headStyles: { fillColor: BIRU, textColor: 255, fontStyle: 'bold', halign: 'center', valign: 'middle' },
+        columnStyles: { 0: { cellWidth: t.lebar[0], halign: 'center' }, 1: { cellWidth: t.lebar[1] }, 2: { cellWidth: t.lebar[2] }, 3: { cellWidth: t.lebar[3] } }
       });
-      y = doc.lastAutoTable.finalY;
-      if (sk.kosong) {
-        doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(100, 100, 100);
-        doc.text('Catatan: ' + sk.kosong + ' butir skala belum diisi dan tidak dihitung.', M.kiri, y + 4);
-        y += 4;
+      y = doc.lastAutoTable.finalY + 5;
+
+      var sk = rekapSkor(f, jw);
+      if (sk) {
+        var sel = function (x) { return { content: x, styles: { halign: 'center', fontStyle: 'bold', fillColor: [238, 243, 250] } }; };
+        doc.autoTable({
+          startY: y, margin: { left: M.kiri, right: M.kanan, bottom: M.bawah }, theme: 'grid', rowPageBreak: 'avoid',
+          styles: { font: 'helvetica', fontSize: 9, cellPadding: 2, lineColor: GARIS, lineWidth: 0.2, textColor: [30, 30, 30] },
+          columnStyles: { 0: { cellWidth: 45 }, 1: { cellWidth: 45 }, 2: { cellWidth: 45 }, 3: { cellWidth: 45 } },
+          body: [[sel('Jumlah Skor: ' + sk.tot + ' / ' + sk.maks), sel('Rata-rata: ' + sk.rata), sel('Persentase: ' + sk.persen + '%'), sel('Predikat: ' + sk.pred)]]
+        });
+        y = doc.lastAutoTable.finalY;
+        if (sk.kosong) {
+          doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(100, 100, 100);
+          doc.text('Catatan: ' + sk.kosong + ' butir skala belum diisi dan tidak dihitung.', M.kiri, y + 4);
+          y += 4;
+        }
+        y += 5;
       }
-      y += 5;
-    }
 
-    doc.autoTable({
-      startY: y, margin: { left: M.kiri, right: M.kanan, top: M.atas, bottom: M.bawah }, theme: 'grid', rowPageBreak: 'avoid',
-      head: [['Catatan / Tindak Lanjut']], body: [[nilai(catatan)]],
-      styles: { font: 'helvetica', fontSize: 9, cellPadding: 2.2, lineColor: GARIS, lineWidth: 0.2, textColor: [30, 30, 30], valign: 'top', overflow: 'linebreak' },
-      headStyles: { fillColor: BIRU, textColor: 255, fontStyle: 'bold', halign: 'left' },
-      columnStyles: { 0: { cellWidth: LEBAR } }
-    });
-    y = doc.lastAutoTable.finalY + 10;
+      doc.autoTable({
+        startY: y, margin: { left: M.kiri, right: M.kanan, top: M.atas, bottom: M.bawah }, theme: 'grid', rowPageBreak: 'avoid',
+        head: [['Catatan / Tindak Lanjut']], body: [[nilai(catatan)]],
+        styles: { font: 'helvetica', fontSize: 9, cellPadding: 2.2, lineColor: GARIS, lineWidth: 0.2, textColor: [30, 30, 30], valign: 'top', overflow: 'linebreak' },
+        headStyles: { fillColor: BIRU, textColor: 255, fontStyle: 'bold', halign: 'left' },
+        columnStyles: { 0: { cellWidth: LEBAR } }
+      });
+      y = doc.lastAutoTable.finalY + 10;
 
-    blokTtd(doc, y, {
-      kota: profil.kota_ttd || 'Tambak', tanggal: tglId(j.tanggal) || id.tanggal || '',
-      namaKepsek: profil.kepala_sekolah, nipKepsek: profil.nip_kepala_sekolah, ttdKepsek: profil.ttd_kepala_sekolah,
-      namaSpv: id.spv && id.spv !== '—' ? id.spv : '', nipSpv: spv.nip, ttdSpv: spv.ttd
+      blokTtd(doc, y, {
+        kota: profil.kota_ttd || 'Tambak', tanggal: tglId(j.tanggal) || id.tanggal || '',
+        namaKepsek: profil.kepala_sekolah, nipKepsek: profil.nip_kepala_sekolah, ttdKepsek: profil.ttd_kepala_sekolah,
+        namaSpv: id.spv && id.spv !== '—' ? id.spv : '', nipSpv: spv.nip, ttdSpv: spv.ttd
+      });
     });
     footer(doc, bersih(jenisLabel) + ' - ' + bersih(id.guru));
 

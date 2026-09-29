@@ -57,5 +57,23 @@ var SvForm = (function () {
       return '<div class="sv-q"><div class="sv-q__t">' + esc(judul) + '</div><div style="white-space:pre-wrap;">' + b + '</div></div>';
     }).join('');
   }
-  return { render: render, baca: baca, hasil: hasil, identitas: identitas };
+  // Form induk + form yang sepaket dengannya (f.paket_ids), urut: induk dulu. Id yang sudah terhapus dilewati.
+  function paket(f, list) {
+    var out = [f];
+    (f.paket_ids || []).forEach(function (id) {
+      var x = list.find(function (i) { return i.id === id; });
+      if (x && out.indexOf(x) < 0) out.push(x);
+    });
+    return out;
+  }
+  // Isian tiap form dalam paket dari sebuah jadwal: [{ form, jawaban, catatan }]. Induk memakai kolom lama, sisanya jawaban_paket.
+  function isianPaket(j, forms) {
+    var jp = j.jawaban_paket || {};
+    return forms.map(function (f, i) {
+      if (i === 0) return { form: f, jawaban: j.jawaban || {}, catatan: j.catatan || '' };
+      var p = jp[f.id] || {};
+      return { form: f, jawaban: p.jawaban || {}, catatan: p.catatan || '' };
+    });
+  }
+  return { render: render, baca: baca, hasil: hasil, identitas: identitas, paket: paket, isianPaket: isianPaket };
 })();

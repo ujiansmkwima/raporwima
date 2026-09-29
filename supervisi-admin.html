@@ -10,14 +10,14 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-client.js"></script>
 <script src="sticky-nama.js?v=1"></script>
-<script src="supervisi-form.js?v=1"></script>
+<script src="supervisi-form.js?v=2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="supervisi-excel.js?v=2"></script>
 <script src="supervisi-ttd.js?v=1"></script>
-<script src="supervisi-pdf.js?v=1"></script>
+<script src="supervisi-pdf.js?v=2"></script>
 </head>
 <body>
 <div class="app">
@@ -60,6 +60,11 @@
     return { jenis: JENIS[j.jenis], guru: nm(guruList, j.guru_id), spv: nm(guruList, j.supervisor_id), unit: uj.unit, mapel: nm(mapelList, j.mapel_id), kelas: j.kelas || '', jenjang: j.jenjang || uj.unit.split(' ')[0] || '', tanggal: tglId(j.tanggal) };
   }
   var JENIS = { pra: 'Pra-Supervisi Akademik', supervisi: 'Supervisi' };
+  // Semua form dalam paket (induk + sepaket) untuk jadwal j, siap dicetak ke satu PDF
+  function paketPdf(j) {
+    var f = formList.find(function (x) { return x.id === j.form_id; });
+    return f ? { paket: SvForm.isianPaket(j, SvForm.paket(f, formList)) } : {};
+  }
 
   function esc(s) { return (s === null || s === undefined) ? '' : String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function nm(list, id) { var x = list.find(function (i) { return i.id === id; }); return x ? x.nama : '—'; }
@@ -125,7 +130,7 @@
     content.innerHTML = '<div style="margin-bottom:14px;"><button class="btn-small btn-small--primary" id="btnTambah">+ Tambah Jadwal</button> <button class="btn-small" id="btnTplJadwal">Unduh Template</button> <button class="btn-small" id="btnImpJadwal">Import Excel</button></div>' +
       '<div class="table-wrap"><table class="data-table"><thead><tr><th>Tanggal</th><th>Jenis</th><th>Nama Guru Disupervisi</th><th>Mapel</th><th>Supervisor</th><th>Form</th><th>Status</th><th></th></tr></thead><tbody>' +
       (rows.length ? rows.map(function (j) {
-        return '<tr><td>' + tglId(j.tanggal) + '</td><td>' + JENIS[j.jenis] + '</td><td>' + esc(nm(guruList, j.guru_id)) + '</td><td>' + esc(nm(mapelList, j.mapel_id)) + '</td><td>' + esc(nm(guruList, j.supervisor_id)) + '</td><td>' + esc(nm(formList, j.form_id)) + '</td>' +
+        return '<tr><td>' + tglId(j.tanggal) + '</td><td>' + JENIS[j.jenis] + '</td><td>' + esc(nm(guruList, j.guru_id)) + '</td><td>' + esc(nm(mapelList, j.mapel_id)) + '</td><td>' + esc(nm(guruList, j.supervisor_id)) + '</td><td>' + esc(nm(formList, j.form_id)) + jmlPaket(j) + '</td>' +
           '<td><span class="chip ' + (j.status === 'selesai' ? 'chip--aktif' : 'chip--muted') + '">' + j.status + '</span></td>' +
           '<td>' + (j.status === 'selesai' ? '<button class="btn-small" data-lihat="' + j.id + '">Lihat Hasil</button> <button class="btn-small" data-pdf="' + j.id + '">Unduh PDF</button> ' : '') +
           '<button class="btn-small" data-edit="' + j.id + '">Ubah</button> <button class="btn-small" data-hapus="' + j.id + '">Hapus</button></td></tr>';
@@ -136,13 +141,18 @@
     content.querySelectorAll('[data-edit]').forEach(function (b) { b.addEventListener('click', function () { modalJadwal(rows.find(function (x) { return x.id === b.dataset.edit; })); }); });
     content.querySelectorAll('[data-pdf]').forEach(function (b) { b.addEventListener('click', function () {
       var j = rows.find(function (x) { return x.id === b.dataset.pdf; });
-      SvPdf.unduhAman(j, formList.find(function (x) { return x.id === j.form_id; }), idn(j), {}, b);
+      SvPdf.unduhAman(j, formList.find(function (x) { return x.id === j.form_id; }), idn(j), paketPdf(j), b);
     }); });
     content.querySelectorAll('[data-lihat]').forEach(function (b) { b.addEventListener('click', function () { modalHasil(rows.find(function (x) { return x.id === b.dataset.lihat; })); }); });
     content.querySelectorAll('[data-hapus]').forEach(function (b) { b.addEventListener('click', async function () {
       if (!confirm('Hapus jadwal ini?')) return;
       await supabaseClient.from('supervisi_jadwal').delete().eq('id', b.dataset.hapus); viewJadwal();
     }); });
+  }
+
+  function jmlPaket(j) {
+    var f = formList.find(function (x) { return x.id === j.form_id; }), n = f ? SvForm.paket(f, formList).length - 1 : 0;
+    return n > 0 ? ' <span class="chip chip--muted">+' + n + ' sepaket</span>' : '';
   }
 
   function modal(judul, html) {
@@ -187,19 +197,21 @@
 
   function modalHasil(j) {
     var f = formList.find(function (x) { return x.id === j.form_id; });
-    var jw = j.jawaban || {};
+    var isi = f ? SvForm.isianPaket(j, SvForm.paket(f, formList)) : [];
     var o = modal('Hasil ' + JENIS[j.jenis], '<div style="margin-bottom:10px;"><button class="btn-small btn-small--primary" id="hsPdf">Unduh PDF</button></div>' + SvForm.identitas(idn(j)) +
-      (f ? SvForm.hasil(f, jw) : '<div class="panel-note">Form sudah tidak tersedia.</div>') +
-      '<div class="sv-q"><div class="sv-q__t">Catatan</div><div>' + esc(j.catatan || '—') + '</div></div>');
-    o.querySelector('#hsPdf').addEventListener('click', function () { SvPdf.unduhAman(j, f, idn(j), {}, this); });
+      (f ? isi.map(function (x) {
+        return (isi.length > 1 ? '<div class="form-section-title" style="margin-top:18px;">' + esc(x.form.judul) + '</div>' : '') + SvForm.hasil(x.form, x.jawaban) +
+          '<div class="sv-q"><div class="sv-q__t">Catatan</div><div>' + esc(x.catatan || '—') + '</div></div>';
+      }).join('') : '<div class="panel-note">Form sudah tidak tersedia.</div>'));
+    o.querySelector('#hsPdf').addEventListener('click', function () { SvPdf.unduhAman(j, f, idn(j), paketPdf(j), this); });
   }
 
   // ================= FORM BUILDER =================
   async function viewForm() {
     await muatMaster();
     content.innerHTML = '<div style="margin-bottom:14px;"><button class="btn-small btn-small--primary" id="btnForm">+ Buat Form</button> <button class="btn-small" id="btnTplForm">Unduh Template</button> <button class="btn-small" id="btnImpForm">Import Excel</button></div>' +
-      '<div class="table-wrap"><table class="data-table"><thead><tr><th>Judul</th><th>Jenis</th><th>Jumlah Pertanyaan</th><th></th></tr></thead><tbody>' +
-      (formList.length ? formList.map(function (f) { return '<tr><td>' + esc(f.judul) + '</td><td>' + JENIS[f.jenis] + '</td><td>' + f.pertanyaan.length + '</td><td><button class="btn-small" data-ef="' + f.id + '">Ubah</button> <button class="btn-small" data-hf="' + f.id + '">Hapus</button></td></tr>'; }).join('') : '<tr><td colspan="4">Belum ada form.</td></tr>') + '</tbody></table></div>';
+      '<div class="table-wrap"><table class="data-table"><thead><tr><th>Judul</th><th>Jenis</th><th>Jumlah Pertanyaan</th><th>Sepaket dengan</th><th></th></tr></thead><tbody>' +
+      (formList.length ? formList.map(function (f) { return '<tr><td>' + esc(f.judul) + '</td><td>' + JENIS[f.jenis] + '</td><td>' + f.pertanyaan.length + '</td><td>' + (SvForm.paket(f, formList).slice(1).map(function (x) { return esc(x.judul); }).join('<br>') || '—') + '</td><td><button class="btn-small" data-ef="' + f.id + '">Ubah</button> <button class="btn-small" data-hf="' + f.id + '">Hapus</button></td></tr>'; }).join('') : '<tr><td colspan="5">Belum ada form.</td></tr>') + '</tbody></table></div>';
     document.getElementById('btnForm').addEventListener('click', function () { modalForm(null); });
     document.getElementById('btnTplForm').addEventListener('click', tplForm);
     document.getElementById('btnImpForm').addEventListener('click', function () { SvXlsx.pilihFile(importForm, 'judul form'); });
@@ -215,6 +227,10 @@
     var o = modal(f ? 'Ubah Form' : 'Buat Form',
       '<div class="form-grid"><div class="field field--full"><label>Judul Form</label><input id="fmJudul"></div>' +
       '<div class="field"><label>Jenis</label><select id="fmJenis"><option value="pra">Pra-Supervisi Akademik</option><option value="supervisi">Supervisi</option></select></div></div>' +
+      '<div class="form-section-title">Form Sepaket (opsional)</div><div class="panel-note" style="margin-bottom:8px;">Centang form yang ikut muncul di supervisor saat form ini dipilih di jadwal. Form sepaket tidak perlu dijadwalkan sendiri.</div>' +
+      '<div id="fmPaket">' + (formList.filter(function (x) { return !f || x.id !== f.id; }).map(function (x) {
+        return '<label style="display:block;font-size:13px;margin:3px 0;"><input type="checkbox" data-pk="' + x.id + '"' + (f && (f.paket_ids || []).indexOf(x.id) >= 0 ? ' checked' : '') + '> ' + esc(x.judul) + ' <span style="color:var(--ink-soft);">(' + JENIS[x.jenis] + ')</span></label>';
+      }).join('') || '<div style="font-size:12.5px;color:var(--ink-soft);">Belum ada form lain.</div>') + '</div>' +
       '<div class="form-section-title">Pertanyaan / Indikator</div><div id="fmQ"></div>' +
       '<div style="margin-top:12px;"><button class="btn-small" id="fmAdd">+ Tambah Pertanyaan</button></div>' +
       '<div style="margin-top:18px;"><button class="btn-small btn-small--primary" id="fmSimpan">Simpan Form</button></div>');
@@ -241,8 +257,10 @@
       var isi = qs.filter(function (q) { return q.teks.trim(); });
       if (!judul || !isi.length) { alert('Isi judul dan minimal satu pertanyaan.'); return; }
       var d = { judul: judul, jenis: o.querySelector('#fmJenis').value, pertanyaan: isi };
+      var pk = Array.prototype.map.call(o.querySelectorAll('[data-pk]:checked'), function (c) { return c.dataset.pk; });
+      if (pk.length || (f && (f.paket_ids || []).length)) d.paket_ids = pk; // kolom baru: hanya dikirim bila dipakai
       var res = f ? await supabaseClient.from('supervisi_form').update(d).eq('id', f.id) : await supabaseClient.from('supervisi_form').insert(d);
-      if (res.error) { alert('Gagal: ' + res.error.message); return; }
+      if (res.error) { alert('Gagal: ' + res.error.message + (d.paket_ids ? '\n\nJalankan migrasi_supervisi_paket.sql di Supabase SQL Editor bila belum.' : '')); return; }
       o.remove(); viewForm();
     });
   }

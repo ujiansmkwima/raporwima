@@ -10,7 +10,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-client.js"></script>
 <script src="sticky-nama.js?v=1"></script>
-<script src="supervisi-form.js?v=1"></script>
+<script src="supervisi-form.js?v=2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -18,7 +18,7 @@
 <script src="supervisi-excel.js?v=2"></script>
 <script src="supervisi-otomatis.js?v=2"></script>
 <script src="supervisi-ttd.js?v=1"></script>
-<script src="supervisi-pdf.js?v=1"></script>
+<script src="supervisi-pdf.js?v=2"></script>
 </head>
 <body>
 <div class="app">
@@ -82,55 +82,87 @@
     content.querySelectorAll('[data-isi]').forEach(function (b) { b.addEventListener('click', function () { isiForm(rows.find(function (x) { return x.id === b.dataset.isi; })); }); });
     content.querySelectorAll('[data-pdf]').forEach(function (b) { b.addEventListener('click', function () {
       var j = rows.find(function (x) { return x.id === b.dataset.pdf; });
-      SvPdf.unduhAman(j, formList.find(function (x) { return x.id === j.form_id; }), idn(j), {}, b);
+      SvPdf.unduhAman(j, formList.find(function (x) { return x.id === j.form_id; }), idn(j), paketPdf(j), b);
     }); });
   }
 
-  function isiForm(j, target) {
+  // Semua form dalam paket (induk + sepaket) untuk jadwal j, siap dicetak ke satu PDF
+  function paketPdf(j) {
     var f = formList.find(function (x) { return x.id === j.form_id; });
-    if (!f) { alert('Admin belum memilih form untuk jadwal ini.'); return; }
-    var jw = j.jawaban || {};
+    return f ? { paket: SvForm.isianPaket(j, SvForm.paket(f, formList)) } : {};
+  }
+
+  function isiForm(j, target) {
+    var f0 = formList.find(function (x) { return x.id === j.form_id; });
+    if (!f0) { alert('Admin belum memilih form untuk jadwal ini.'); return; }
+    var forms = SvForm.paket(f0, formList), isian = SvForm.isianPaket(j, forms), aktif = 0, banyak = forms.length > 1;
     var o = document.createElement('div'); o.className = 'modal-overlay';
-    o.innerHTML = '<div class="modal-box"><div class="modal-box__head"><div class="modal-box__title">' + esc(f.judul) + '</div><button class="modal-box__close">×</button></div>' +
+    var tabs = banyak ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 12px;">' + forms.map(function (f, i) {
+      return '<button class="btn-small' + (i === 0 ? ' btn-small--primary' : '') + '" data-tab="' + i + '">' + (i + 1) + '. ' + esc(f.judul) + '</button>';
+    }).join('') + '</div>' : '';
+    var panel = forms.map(function (f, i) {
+      return '<div data-panel="' + i + '"' + (i ? ' style="display:none;"' : '') + '>' +
+        (banyak ? '<div class="sv-bagian"><div class="sv-bagian__t">' + esc(f.judul) + '</div></div>' : '') +
+        '<div class="svBody">' + SvForm.render(f, isian[i].jawaban, idn(j)) + '</div>' +
+        '<div class="sv-q"><div class="sv-q__t">Catatan / Tindak Lanjut</div><textarea data-cat rows="3" style="width:100%;">' + esc(isian[i].catatan) + '</textarea></div></div>';
+    }).join('');
+    o.innerHTML = '<div class="modal-box"><div class="modal-box__head"><div class="modal-box__title">' + esc(f0.judul) + (banyak ? ' <span style="font-size:12px;font-weight:500;">(+' + (forms.length - 1) + ' form sepaket)</span>' : '') + '</div><button class="modal-box__close">×</button></div>' +
       SvForm.identitas(idn(j)) +
-      '<div style="margin-bottom:8px;"><button class="btn-small" id="svTpl">Unduh Template Excel</button> <button class="btn-small" id="svImp">Import dari Excel</button> <button class="btn-small" id="svPdf">Unduh PDF</button></div>' +
-      '<div class="panel-note" style="margin-bottom:10px;"><strong>Isi Otomatis</strong> — pilih target nilai dulu: <select id="svTarget"><option value="">— target nilai —</option><option value="BAIK">BAIK</option><option value="SANGAT BAIK">SANGAT BAIK</option></select> <button class="btn-small btn-small--primary" id="svOto" disabled>Isi Otomatis</button> <strong id="svSkor"></strong><br>Hasilnya berupa draft: periksa dan sesuaikan dengan hasil pengamatan sebelum disimpan.</div>' +
-      '<div id="svBody">' + SvForm.render(f, jw, idn(j)) + '</div>' +
-      '<div class="sv-q"><div class="sv-q__t">Catatan / Tindak Lanjut</div><textarea id="svCatatan" rows="3" style="width:100%;">' + esc(j.catatan || '') + '</textarea></div>' +
+      (banyak ? '<div class="panel-note" style="margin-bottom:10px;">Jadwal ini satu paket dengan ' + (forms.length - 1) + ' form lain. Isi semua tab di bawah, lalu simpan sekali.</div>' : '') +
+      '<div style="margin-bottom:8px;"><button class="btn-small" id="svTpl">Unduh Template Excel</button> <button class="btn-small" id="svImp">Import dari Excel</button> <button class="btn-small" id="svPdf">Unduh PDF</button>' + (banyak ? ' <span style="font-size:12px;color:var(--ink-soft);">(Excel: form pada tab aktif · PDF: semua form)</span>' : '') + '</div>' +
+      '<div class="panel-note" style="margin-bottom:10px;"><strong>Isi Otomatis</strong> — pilih target nilai dulu: <select id="svTarget"><option value="">— target nilai —</option><option value="BAIK">BAIK</option><option value="SANGAT BAIK">SANGAT BAIK</option></select> <button class="btn-small btn-small--primary" id="svOto" disabled>Isi Otomatis</button> <strong id="svSkor"></strong><br>Hasilnya berupa draft' + (banyak ? ' untuk semua form dalam paket' : '') + ': periksa dan sesuaikan dengan hasil pengamatan sebelum disimpan.</div>' +
+      tabs + panel +
       '<div style="margin-top:18px;"><button class="btn-small btn-small--primary" id="svSimpan">Simpan & Tandai Selesai</button></div></div>';
     document.body.appendChild(o);
     o.querySelector('.modal-box__close').addEventListener('click', function () { o.remove(); });
+    function pn(i) { return o.querySelector('[data-panel="' + i + '"]'); }
+    function cat(i) { return pn(i).querySelector('[data-cat]'); }
+    function bacaSemua() { return forms.map(function (f, i) { return { form: f, jawaban: SvForm.baca(pn(i)), catatan: cat(i).value }; }); }
+    o.querySelectorAll('[data-tab]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        aktif = parseInt(b.dataset.tab, 10);
+        o.querySelectorAll('[data-tab]').forEach(function (x) { x.classList.toggle('btn-small--primary', x === b); });
+        forms.forEach(function (f, i) { pn(i).style.display = i === aktif ? '' : 'none'; });
+      });
+    });
     var selT = o.querySelector('#svTarget'), btnO = o.querySelector('#svOto');
     function oto(tanya) {
-      var cur = SvForm.baca(o), ada = Object.keys(cur).some(function (k) { return cur[k] !== ''; });
-      if (tanya && ada && !confirm('Isian yang sudah ada akan diganti. Lanjutkan?')) return;
-      var r = SvOto.isi(f, selT.value, { mapel: nm(mapelList, j.mapel_id) });
-      o.querySelector('#svBody').innerHTML = SvForm.render(f, r.jawaban, idn(j));
-      o.querySelector('#svCatatan').value = r.catatan;
-      o.querySelector('#svSkor').textContent = r.skor ? 'Rata-rata skala ' + r.skor.rata + ' (' + r.skor.persen + '%)' : '';
+      var ada = bacaSemua().some(function (x) { return Object.keys(x.jawaban).some(function (k) { return x.jawaban[k] !== ''; }); });
+      if (tanya && ada && !confirm('Isian yang sudah ada akan diganti' + (banyak ? ' (semua form dalam paket)' : '') + '. Lanjutkan?')) return;
+      var skor = [];
+      forms.forEach(function (f, i) {
+        var r = SvOto.isi(f, selT.value, { mapel: nm(mapelList, j.mapel_id) });
+        pn(i).querySelector('.svBody').innerHTML = SvForm.render(f, r.jawaban, idn(j));
+        cat(i).value = r.catatan;
+        if (r.skor) skor.push((banyak ? (i + 1) + ': ' : '') + 'Rata-rata skala ' + r.skor.rata + ' (' + r.skor.persen + '%)');
+      });
+      o.querySelector('#svSkor').textContent = skor.join(' · ');
     }
     selT.addEventListener('change', function () { btnO.disabled = !selT.value; });
     btnO.addEventListener('click', function () { oto(true); });
     if (target) { selT.value = target; btnO.disabled = false; oto(false); }
     o.querySelector('#svTpl').addEventListener('click', function () {
-      SvXlsx.templateIsian(f, SvForm.baca(o), o.querySelector('#svCatatan').value, idn(j), { sekolah: profil && profil.nama_sekolah, namaFile: 'isian_' + j.jenis + '_' + nm(guruList, j.guru_id).replace(/\W+/g, '_') })
+      var f = forms[aktif];
+      SvXlsx.templateIsian(f, SvForm.baca(pn(aktif)), cat(aktif).value, idn(j), { sekolah: profil && profil.nama_sekolah, namaFile: 'isian_' + j.jenis + '_' + nm(guruList, j.guru_id).replace(/\W+/g, '_') + (banyak ? '_form' + (aktif + 1) : '') })
         .catch(function (e) { alert('Gagal membuat template: ' + e.message); });
     });
     o.querySelector('#svPdf').addEventListener('click', function () {
-      SvPdf.unduhAman(j, f, idn(j), { jawaban: SvForm.baca(o), catatan: o.querySelector('#svCatatan').value }, this);
+      SvPdf.unduhAman(j, f0, idn(j), { paket: bacaSemua() }, this);
     });
     o.querySelector('#svImp').addEventListener('click', function () {
+      var f = forms[aktif];
       SvXlsx.pilihFile(function (rows) {
-        var r = SvXlsx.isianDari(f, rows), cur = SvForm.baca(o);
-        o.querySelector('#svBody').innerHTML = SvForm.render(f, Object.assign(cur, r.jawaban), idn(j));
-        if (r.catatan !== null) o.querySelector('#svCatatan').value = r.catatan;
-        alert(r.n + ' isian diimpor.' + (r.err.length ? '\n\nDilewati:\n' + r.err.join('\n') : '') + '\n\nPeriksa dulu, lalu klik Simpan.');
+        var r = SvXlsx.isianDari(f, rows), cur = SvForm.baca(pn(aktif));
+        pn(aktif).querySelector('.svBody').innerHTML = SvForm.render(f, Object.assign(cur, r.jawaban), idn(j));
+        if (r.catatan !== null) cat(aktif).value = r.catatan;
+        alert(r.n + ' isian diimpor' + (banyak ? ' ke form tab ' + (aktif + 1) : '') + '.' + (r.err.length ? '\n\nDilewati:\n' + r.err.join('\n') : '') + '\n\nPeriksa dulu, lalu klik Simpan.');
       }, 'kode');
     });
     o.querySelector('#svSimpan').addEventListener('click', async function () {
-      var jawaban = SvForm.baca(o);
-      var res = await supabaseClient.from('supervisi_jadwal').update({ jawaban: jawaban, catatan: o.querySelector('#svCatatan').value, status: 'selesai', selesai_at: new Date().toISOString() }).eq('id', j.id);
-      if (res.error) { alert('Gagal menyimpan: ' + res.error.message); return; }
+      var semua = bacaSemua(), d = { jawaban: semua[0].jawaban, catatan: semua[0].catatan, status: 'selesai', selesai_at: new Date().toISOString() };
+      if (banyak) { d.jawaban_paket = {}; semua.forEach(function (x, i) { if (i) d.jawaban_paket[x.form.id] = { jawaban: x.jawaban, catatan: x.catatan }; }); }
+      var res = await supabaseClient.from('supervisi_jadwal').update(d).eq('id', j.id);
+      if (res.error) { alert('Gagal menyimpan: ' + res.error.message + (banyak ? '\n\nJalankan migrasi_supervisi_paket.sql di Supabase SQL Editor bila belum.' : '')); return; }
       o.remove(); muat();
     });
   }
