@@ -17,7 +17,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="supervisi-excel.js?v=2"></script>
 <script src="supervisi-ttd.js?v=1"></script>
-<script src="supervisi-pdf.js?v=2"></script>
+<script src="supervisi-pdf.js?v=3"></script>
 </head>
 <body>
 <div class="app">
@@ -127,7 +127,7 @@
     await muatMaster();
     var r = await supabaseClient.from('supervisi_jadwal').select('*').order('tanggal', { ascending: false });
     var rows = r.data || [];
-    content.innerHTML = '<div style="margin-bottom:14px;"><button class="btn-small btn-small--primary" id="btnTambah">+ Tambah Jadwal</button> <button class="btn-small" id="btnTplJadwal">Unduh Template</button> <button class="btn-small" id="btnImpJadwal">Import Excel</button></div>' +
+    content.innerHTML = '<div style="margin-bottom:14px;"><button class="btn-small btn-small--primary" id="btnTambah">+ Tambah Jadwal</button> <button class="btn-small" id="btnTplJadwal">Unduh Template</button> <button class="btn-small" id="btnImpJadwal">Import Excel</button> <button class="btn-small" id="btnPdfJadwal">Unduh PDF Jadwal</button></div>' +
       '<div class="table-wrap"><table class="data-table"><thead><tr><th>Tanggal</th><th>Jenis</th><th>Nama Guru Disupervisi</th><th>Mapel</th><th>Supervisor</th><th>Form</th><th>Status</th><th></th></tr></thead><tbody>' +
       (rows.length ? rows.map(function (j) {
         return '<tr><td>' + tglId(j.tanggal) + '</td><td>' + JENIS[j.jenis] + '</td><td>' + esc(nm(guruList, j.guru_id)) + '</td><td>' + esc(nm(mapelList, j.mapel_id)) + '</td><td>' + esc(nm(guruList, j.supervisor_id)) + '</td><td>' + esc(nm(formList, j.form_id)) + jmlPaket(j) + '</td>' +
@@ -138,6 +138,7 @@
     document.getElementById('btnTambah').addEventListener('click', function () { modalJadwal(null); });
     document.getElementById('btnTplJadwal').addEventListener('click', tplJadwal);
     document.getElementById('btnImpJadwal').addEventListener('click', function () { SvXlsx.pilihFile(importJadwal, 'jenis (pra'); });
+    document.getElementById('btnPdfJadwal').addEventListener('click', function () { modalPdfJadwal(rows); });
     content.querySelectorAll('[data-edit]').forEach(function (b) { b.addEventListener('click', function () { modalJadwal(rows.find(function (x) { return x.id === b.dataset.edit; })); }); });
     content.querySelectorAll('[data-pdf]').forEach(function (b) { b.addEventListener('click', function () {
       var j = rows.find(function (x) { return x.id === b.dataset.pdf; });
@@ -148,6 +149,30 @@
       if (!confirm('Hapus jadwal ini?')) return;
       await supabaseClient.from('supervisi_jadwal').delete().eq('id', b.dataset.hapus); viewJadwal();
     }); });
+  }
+
+  // Unduh PDF daftar jadwal (landscape) + tanda tangan Kepala Sekolah dari Profil Sekolah
+  function modalPdfJadwal(rows) {
+    if (!rows.length) { alert('Belum ada jadwal untuk dicetak.'); return; }
+    var hariIni = new Date(), p2 = function (n) { return (n < 10 ? '0' : '') + n; };
+    var iso = hariIni.getFullYear() + '-' + p2(hariIni.getMonth() + 1) + '-' + p2(hariIni.getDate());
+    var o = modal('Unduh PDF Jadwal Supervisi',
+      '<div class=\"form-grid\">' +
+      '<div class=\"field\"><label>Jenis</label><select id=\"pJenis\"><option value=\"\">Semua (Pra-Supervisi & Supervisi)</option><option value=\"pra\">Pra-Supervisi Akademik</option><option value=\"supervisi\">Supervisi</option></select></div>' +
+      '<div class=\"field\"><label>Tanggal Tanda Tangan</label><input type=\"date\" id=\"pTtd\" value=\"' + iso + '\"></div>' +
+      '<div class=\"field\"><label>Dari Tanggal (opsional)</label><input type=\"date\" id=\"pDari\"></div>' +
+      '<div class=\"field\"><label>Sampai Tanggal (opsional)</label><input type=\"date\" id=\"pSampai\"></div></div>' +
+      '<div class=\"panel-note\" style=\"margin-top:10px;\">Nama, NIP, kota, dan gambar tanda tangan Kepala Sekolah diambil dari menu Profil Sekolah.</div>' +
+      '<div style=\"margin-top:18px;\"><button class=\"btn-small btn-small--primary\" id=\"pUnduh\">Unduh PDF</button></div>');
+    o.querySelector('#pUnduh').addEventListener('click', async function () {
+      var jenis = o.querySelector('#pJenis').value, dari = o.querySelector('#pDari').value, sampai = o.querySelector('#pSampai').value;
+      var pilih = rows.filter(function (j) {
+        return (!jenis || j.jenis === jenis) && (!dari || j.tanggal >= dari) && (!sampai || j.tanggal <= sampai);
+      });
+      if (!pilih.length) { alert('Tidak ada jadwal pada pilihan tersebut.'); return; }
+      await SvPdf.unduhJadwalAman(pilih, idn, { jenis: jenis, tanggalTtd: o.querySelector('#pTtd').value }, this);
+      o.remove();
+    });
   }
 
   function jmlPaket(j) {

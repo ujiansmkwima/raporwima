@@ -8,6 +8,8 @@
      jspdf-autotable 3.8.x -> doc.autoTable(...)
      supabase-client.js    -> supabaseClient (mengambil profil sekolah & tanda tangan supervisor)
 
+   Jadwal   :  SvPdf.unduhJadwalAman(rows, idn, { jenis, tanggalTtd }, tombol) -> PDF landscape daftar jadwal + tanda tangan Kepala Sekolah.
+
    Pemakaian:  SvPdf.unduhAman(jadwal, form, identitas, { jawaban, catatan }, tombolOpsional)
      - identitas = objek dari idn(j) di halaman (jenis, guru, spv, unit, mapel, kelas, jenjang, tanggal)
      - opsi.jawaban / opsi.catatan opsional: dipakai kalau ingin mencetak isian yang belum disimpan.
@@ -86,8 +88,9 @@ var SvPdf = (function () {
     } catch (e) { /* gambar rusak: lewati, ruang tetap kosong */ }
   }
 
-  function kop(doc, profil, logo) {
-    var tengah = 105, y = 17;
+  function kop(doc, profil, logo, W) {
+    W = W || 210;
+    var tengah = W / 2, y = 17;
     if (logo) {
       var r = Math.min(22 / logo.w, 22 / logo.h);
       try { doc.addImage(logo.d, 'PNG', M.kiri, 11, logo.w * r, logo.h * r); } catch (e) { /* tanpa logo */ }
@@ -97,10 +100,10 @@ var SvPdf = (function () {
     var alamat = bersih(profil.alamat_sekolah || '');
     if (alamat) {
       doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
-      doc.text(doc.splitTextToSize(alamat, 140).slice(0, 2), tengah, y + 6, { align: 'center' });
+      doc.text(doc.splitTextToSize(alamat, W - 70).slice(0, 2), tengah, y + 6, { align: 'center' });
     }
-    doc.setDrawColor(20, 20, 20); doc.setLineWidth(0.8); doc.line(M.kiri, 35, 210 - M.kanan, 35);
-    doc.setLineWidth(0.2); doc.line(M.kiri, 36.2, 210 - M.kanan, 36.2);
+    doc.setDrawColor(20, 20, 20); doc.setLineWidth(0.8); doc.line(M.kiri, 35, W - M.kanan, 35);
+    doc.setLineWidth(0.2); doc.line(M.kiri, 36.2, W - M.kanan, 36.2);
     return 36.2;
   }
 
@@ -209,12 +212,12 @@ var SvPdf = (function () {
   }
 
   function footer(doc, teks) {
-    var n = doc.getNumberOfPages();
+    var n = doc.getNumberOfPages(), W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
     for (var i = 1; i <= n; i++) {
       doc.setPage(i); doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(120, 120, 120);
-      doc.setDrawColor(190, 190, 190); doc.setLineWidth(0.2); doc.line(M.kiri, 285, 210 - M.kanan, 285);
-      doc.text(bersih(teks), M.kiri, 289);
-      doc.text('Halaman ' + i + ' dari ' + n, 210 - M.kanan, 289, { align: 'right' });
+      doc.setDrawColor(190, 190, 190); doc.setLineWidth(0.2); doc.line(M.kiri, H - 12, W - M.kanan, H - 12);
+      doc.text(bersih(teks), M.kiri, H - 8);
+      doc.text('Halaman ' + i + ' dari ' + n, W - M.kanan, H - 8, { align: 'right' });
     }
   }
 
@@ -300,5 +303,99 @@ var SvPdf = (function () {
     finally { if (tombol) { tombol.disabled = false; tombol.textContent = teks; } }
   }
 
-  return { unduh: unduh, unduhAman: unduhAman };
+
+  // ================= PDF JADWAL SUPERVISI =================
+  var HARI = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+  function hariId(iso) {
+    var m = String(iso || '').match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    return m ? HARI[new Date(+m[1], +m[2] - 1, +m[3]).getDay()] : '';
+  }
+  function hariIni() { var d = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; }; return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); }
+
+  // Satu tanda tangan: Kepala Sekolah di sisi kanan (landscape).
+  function blokTtdKepsek(doc, y, o) {
+    var W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), perlu = 48;
+    if (y + perlu > H - M.bawah) { doc.addPage(); y = M.atas + 4; }
+    var cx = W - M.kanan - 48;
+    doc.setTextColor(20, 20, 20); doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+    doc.text(bersih(o.kota) + ', ' + bersih(o.tanggal), cx, y, { align: 'center' });
+    doc.text('Kepala Sekolah', cx, y + 5, { align: 'center' });
+    letakGambar(doc, o.ttd, cx, y + 8, 46, 22);
+    var t = bersih(o.nama) || '(................................)', ukuran = 10;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(ukuran);
+    while (doc.getTextWidth(t) > 86 && ukuran > 7) { ukuran -= 0.5; doc.setFontSize(ukuran); }
+    doc.text(t, cx, y + 34, { align: 'center' });
+    var w = doc.getTextWidth(t); doc.setLineWidth(0.25); doc.setDrawColor(20, 20, 20); doc.line(cx - w / 2, y + 35, cx + w / 2, y + 35);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+    doc.text('NIP. ' + (bersih(o.nip) || '-'), cx, y + 40, { align: 'center' });
+  }
+
+  // rows: baris supervisi_jadwal (sudah difilter) | idnFn(j): identitas dari halaman (guru, spv, mapel, kelas, jenis)
+  // opsi: { jenis: 'pra'|'supervisi'|'' , tanggalTtd: 'YYYY-MM-DD', profil }
+  async function unduhJadwal(rows, idnFn, opsi) {
+    opsi = opsi || {};
+    if (!window.jspdf || !window.jspdf.jsPDF) throw new Error('Pustaka PDF (jsPDF) belum termuat. Periksa koneksi internet lalu muat ulang halaman.');
+    if (!rows || !rows.length) throw new Error('Tidak ada jadwal pada pilihan tersebut.');
+    var peringatan = [], profil = opsi.profil || null;
+    if (!profil) {
+      try {
+        var p = await supabaseClient.from('profil_sekolah').select('nama_sekolah, alamat_sekolah, kepala_sekolah, nip_kepala_sekolah, kota_ttd, ttd_kepala_sekolah').maybeSingle();
+        if (p.error) throw p.error; profil = p.data || {};
+      } catch (e) { profil = {}; peringatan.push('Profil sekolah tidak bisa dibaca (' + (e.message || e) + ').'); }
+    }
+    if (!peringatan.length && !profil.ttd_kepala_sekolah) peringatan.push('Tanda tangan Kepala Sekolah belum diunggah (Admin > Profil Sekolah) - ruang tanda tangan dikosongkan.');
+
+    var urut = rows.slice().sort(function (a, b) { return String(a.tanggal).localeCompare(String(b.tanggal)); });
+    var logo = await muatLogo();
+    var doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape', compress: true });
+    if (typeof doc.autoTable !== 'function') throw new Error('Pustaka tabel PDF (jspdf-autotable) belum termuat.');
+    var W = 297, LEBAR_L = W - M.kiri - M.kanan; // 267 mm
+
+    var jenisLabel = opsi.jenis === 'pra' ? 'PRA-SUPERVISI AKADEMIK' : (opsi.jenis === 'supervisi' ? 'SUPERVISI' : 'PRA-SUPERVISI AKADEMIK DAN SUPERVISI');
+    var tMin = urut[0].tanggal, tMax = urut[urut.length - 1].tanggal;
+    var periode = tMin === tMax ? tglId(tMin) : (tglId(tMin) + ' s.d. ' + tglId(tMax));
+
+    doc.setProperties({ title: 'Jadwal ' + jenisLabel, author: bersih(profil.nama_sekolah || ''), subject: 'Jadwal ' + jenisLabel });
+    var y = kop(doc, profil, logo, W);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(20, 20, 20);
+    doc.text('JADWAL ' + jenisLabel, W / 2, y + 9, { align: 'center' });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(60, 60, 60);
+    doc.text('Periode: ' + periode, W / 2, y + 15, { align: 'center' });
+    y = y + 20;
+
+    var body = urut.map(function (j, i) {
+      var id = idnFn(j);
+      return [String(i + 1), hariId(j.tanggal), tglId(j.tanggal), nilai(id.guru), nilai(id.mapel), nilai(id.kelas), nilai(id.jenis), nilai(id.spv)];
+    });
+    doc.autoTable({
+      startY: y, margin: { left: M.kiri, right: M.kanan, top: M.atas, bottom: M.bawah }, theme: 'grid',
+      head: [['No', 'Hari', 'Tanggal', 'Nama Guru yang Disupervisi', 'Mata Pelajaran', 'Kelas', 'Jenis', 'Supervisor']],
+      body: body, rowPageBreak: 'avoid', showHead: 'everyPage',
+      styles: { font: 'helvetica', fontSize: 9, cellPadding: { top: 2.2, bottom: 2.2, left: 2.5, right: 2.5 }, lineColor: GARIS, lineWidth: 0.2, textColor: [30, 30, 30], valign: 'middle', overflow: 'linebreak' },
+      headStyles: { fillColor: BIRU, textColor: 255, fontStyle: 'bold', halign: 'center', valign: 'middle' },
+      alternateRowStyles: { fillColor: [246, 248, 252] },
+      columnStyles: { 0: { cellWidth: 10, halign: 'center' }, 1: { cellWidth: 22, halign: 'center' }, 2: { cellWidth: 34, halign: 'center' }, 3: { cellWidth: 62 }, 4: { cellWidth: 45 }, 5: { cellWidth: 26, halign: 'center' }, 6: { cellWidth: 34 }, 7: { cellWidth: 34 } }
+    });
+    y = doc.lastAutoTable.finalY + 10;
+
+    blokTtdKepsek(doc, y, {
+      kota: profil.kota_ttd || 'Tambak', tanggal: tglId(opsi.tanggalTtd || hariIni()),
+      nama: profil.kepala_sekolah, nip: profil.nip_kepala_sekolah, ttd: profil.ttd_kepala_sekolah
+    });
+    footer(doc, 'Jadwal ' + jenisLabel.charAt(0) + jenisLabel.slice(1).toLowerCase() + ' - ' + bersih(profil.nama_sekolah || ''));
+    doc.save('Jadwal_' + namaFileAman(jenisLabel) + '_' + namaFileAman(tMin) + (tMin === tMax ? '' : '_sd_' + namaFileAman(tMax)) + '.pdf');
+    return peringatan;
+  }
+
+  async function unduhJadwalAman(rows, idnFn, opsi, tombol) {
+    var teks = tombol ? tombol.textContent : '';
+    if (tombol) { tombol.disabled = true; tombol.textContent = 'Membuat PDF...'; }
+    try {
+      var peringatan = await unduhJadwal(rows, idnFn, opsi);
+      if (peringatan && peringatan.length) alert('PDF berhasil dibuat.\n\nCatatan:\n- ' + peringatan.join('\n- '));
+    } catch (e) { alert('Gagal membuat PDF: ' + (e.message || e)); }
+    finally { if (tombol) { tombol.disabled = false; tombol.textContent = teks; } }
+  }
+
+  return { unduh: unduh, unduhAman: unduhAman, unduhJadwal: unduhJadwal, unduhJadwalAman: unduhJadwalAman };
 })();
