@@ -66,6 +66,11 @@ var SvForm = (function () {
     });
     return out;
   }
+  // Form Supervisi yang menjadi induk dari form f (f dipaketkan di paket_ids-nya). Aturan: induk paket selalu form Supervisi;
+  // form Pra-Supervisi yang sudah dipaketkan tidak dijadwalkan sendiri, hanya ikut jadwal induknya.
+  function indukDari(f, list) {
+    return list.filter(function (x) { return x.jenis === 'supervisi' && x.id !== f.id && (x.paket_ids || []).indexOf(f.id) >= 0; });
+  }
   // Isian tiap form dalam paket dari sebuah jadwal: [{ form, jawaban, catatan }]. Induk memakai kolom lama, sisanya jawaban_paket.
   function isianPaket(j, forms) {
     var jp = j.jawaban_paket || {};
@@ -75,5 +80,5 @@ var SvForm = (function () {
       return { form: f, jawaban: p.jawaban || {}, catatan: p.catatan || '' };
     });
   }
-  return { render: render, baca: baca, hasil: hasil, identitas: identitas, paket: paket, isianPaket: isianPaket };
+  return { render: render, baca: baca, hasil: hasil, identitas: identitas, paket: paket, indukDari: indukDari, isianPaket: isianPaket };
 })();

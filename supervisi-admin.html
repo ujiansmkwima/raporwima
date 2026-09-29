@@ -199,9 +199,14 @@
       '<div class="field"><label>Mata Pelajaran</label><select id="fMapel">' + opts(mapelList, j && j.mapel_id, '— pilih —') + '</select></div>' +
       '<div class="field"><label>Form</label><select id="fForm"></select></div>' +
       '<div class="field field--full"><label>Kelas (otomatis dari Penugasan Guru, boleh diubah)</label><input id="fKelas"></div></div>' +
+      '<div class="panel-note" id="fHint" style="margin-top:10px;">Pra-Supervisi yang sudah dipaketkan dengan Supervisi tidak perlu dijadwalkan sendiri: jadwalkan form <strong>Supervisi</strong>-nya, Pra-Supervisi ikut otomatis.</div>' +
       '<div style="margin-top:18px;"><button class="btn-small btn-small--primary" id="fSimpan">Simpan</button></div>');
     var fJenis = o.querySelector('#fJenis'), fForm = o.querySelector('#fForm');
-    function isiForm() { fForm.innerHTML = opts(formList.filter(function (f) { return f.jenis === fJenis.value; }), j && j.form_id, '— pilih form —'); }
+    // Pra-Supervisi yang sudah dipaketkan ke form Supervisi tidak dijadwalkan sendiri (ikut jadwal induknya)
+    function isiForm() {
+      fForm.innerHTML = opts(formList.filter(function (f) { return f.jenis === fJenis.value && !(f.jenis === 'pra' && SvForm.indukDari(f, formList).length && !(j && j.form_id === f.id)); }), j && j.form_id, '— pilih form —');
+      var h = o.querySelector('#fHint'); if (h) h.style.display = fJenis.value === 'pra' ? '' : 'none';
+    }
     if (j) { fJenis.value = j.jenis; o.querySelector('#fTgl').value = j.tanggal; }
     isiForm(); fJenis.addEventListener('change', isiForm);
     var fKelas = o.querySelector('#fKelas'), fG = o.querySelector('#fGuru'), fM = o.querySelector('#fMapel');
@@ -236,7 +241,7 @@
     await muatMaster();
     content.innerHTML = '<div style="margin-bottom:14px;"><button class="btn-small btn-small--primary" id="btnForm">+ Buat Form</button> <button class="btn-small" id="btnTplForm">Unduh Template</button> <button class="btn-small" id="btnImpForm">Import Excel</button></div>' +
       '<div class="table-wrap"><table class="data-table"><thead><tr><th>Judul</th><th>Jenis</th><th>Jumlah Pertanyaan</th><th>Sepaket dengan</th><th></th></tr></thead><tbody>' +
-      (formList.length ? formList.map(function (f) { return '<tr><td>' + esc(f.judul) + '</td><td>' + JENIS[f.jenis] + '</td><td>' + f.pertanyaan.length + '</td><td>' + (SvForm.paket(f, formList).slice(1).map(function (x) { return esc(x.judul); }).join('<br>') || '—') + '</td><td><button class="btn-small" data-ef="' + f.id + '">Ubah</button> <button class="btn-small" data-hf="' + f.id + '">Hapus</button></td></tr>'; }).join('') : '<tr><td colspan="5">Belum ada form.</td></tr>') + '</tbody></table></div>';
+      (formList.length ? formList.map(function (f) { return '<tr><td>' + esc(f.judul) + '</td><td>' + JENIS[f.jenis] + '</td><td>' + f.pertanyaan.length + '</td><td>' + ((f.jenis === 'pra' ? SvForm.indukDari(f, formList).map(function (x) { return 'Induk: ' + esc(x.judul); }) : SvForm.paket(f, formList).slice(1).map(function (x) { return esc(x.judul); })).join('<br>') || '—') + '</td><td><button class="btn-small" data-ef="' + f.id + '">Ubah</button> <button class="btn-small" data-hf="' + f.id + '">Hapus</button></td></tr>'; }).join('') : '<tr><td colspan="5">Belum ada form.</td></tr>') + '</tbody></table></div>';
     document.getElementById('btnForm').addEventListener('click', function () { modalForm(null); });
     document.getElementById('btnTplForm').addEventListener('click', tplForm);
     document.getElementById('btnImpForm').addEventListener('click', function () { SvXlsx.pilihFile(importForm, 'judul form'); });
@@ -252,14 +257,34 @@
     var o = modal(f ? 'Ubah Form' : 'Buat Form',
       '<div class="form-grid"><div class="field field--full"><label>Judul Form</label><input id="fmJudul"></div>' +
       '<div class="field"><label>Jenis</label><select id="fmJenis"><option value="pra">Pra-Supervisi Akademik</option><option value="supervisi">Supervisi</option></select></div></div>' +
-      '<div class="form-section-title">Form Sepaket (opsional)</div><div class="panel-note" style="margin-bottom:8px;">Centang form yang ikut muncul di supervisor saat form ini dipilih di jadwal. Form sepaket tidak perlu dijadwalkan sendiri.</div>' +
-      '<div id="fmPaket">' + (formList.filter(function (x) { return !f || x.id !== f.id; }).map(function (x) {
-        return '<label style="display:block;font-size:13px;margin:3px 0;"><input type="checkbox" data-pk="' + x.id + '"' + (f && (f.paket_ids || []).indexOf(x.id) >= 0 ? ' checked' : '') + '> ' + esc(x.judul) + ' <span style="color:var(--ink-soft);">(' + JENIS[x.jenis] + ')</span></label>';
-      }).join('') || '<div style="font-size:12.5px;color:var(--ink-soft);">Belum ada form lain.</div>') + '</div>' +
+      '<div class="form-section-title">Form Sepaket (opsional)</div><div id="fmPaketWrap"></div>' +
       '<div class="form-section-title">Pertanyaan / Indikator</div><div id="fmQ"></div>' +
       '<div style="margin-top:12px;"><button class="btn-small" id="fmAdd">+ Tambah Pertanyaan</button></div>' +
       '<div style="margin-top:18px;"><button class="btn-small btn-small--primary" id="fmSimpan">Simpan Form</button></div>');
     if (f) { o.querySelector('#fmJudul').value = f.judul; o.querySelector('#fmJenis').value = f.jenis; }
+    // Induk paket = form Supervisi. Checklist hanya muncul di form Supervisi dan hanya berisi form Pra-Supervisi.
+    var pkTerpilih = f ? (f.paket_ids || []).slice() : [];
+    function gambarPaket() {
+      var wrap = o.querySelector('#fmPaketWrap');
+      if (o.querySelector('#fmJenis').value !== 'supervisi') {
+        var induk = f ? SvForm.indukDari(f, formList) : [];
+        wrap.innerHTML = '<div class="panel-note">Form Pra-Supervisi tidak menjadi induk paket. Untuk memaketkannya, buka form <strong>Supervisi</strong> lalu centang form ini.' +
+          (induk.length ? '<br>Saat ini sepaket di bawah induk: <strong>' + induk.map(function (x) { return esc(x.judul); }).join(', ') + '</strong> (tidak dijadwalkan sendiri).' : '') + '</div>';
+        return;
+      }
+      var pra = formList.filter(function (x) { return x.jenis === 'pra'; });
+      wrap.innerHTML = '<div class="panel-note" style="margin-bottom:8px;">Form Supervisi ini adalah <strong>induk</strong> paket dan yang dijadwalkan. Centang form Pra-Supervisi yang ikut dalam paket; Pra-Supervisi boleh diisi supervisor walaupun belum tanggal jadwal.</div>' +
+        (pra.map(function (x) {
+          return '<label style="display:block;font-size:13px;margin:3px 0;"><input type="checkbox" data-pk="' + x.id + '"' + (pkTerpilih.indexOf(x.id) >= 0 ? ' checked' : '') + '> ' + esc(x.judul) + '</label>';
+        }).join('') || '<div style="font-size:12.5px;color:var(--ink-soft);">Belum ada form Pra-Supervisi.</div>');
+      wrap.querySelectorAll('[data-pk]').forEach(function (c) {
+        c.addEventListener('change', function () {
+          var i = pkTerpilih.indexOf(c.dataset.pk);
+          if (c.checked && i < 0) pkTerpilih.push(c.dataset.pk); else if (!c.checked && i >= 0) pkTerpilih.splice(i, 1);
+        });
+      });
+    }
+    gambarPaket(); o.querySelector('#fmJenis').addEventListener('change', gambarPaket);
     function gambar() {
       var T = { skala: 'Skala 1–4', ya_tidak: 'Ya / Tidak', teks: 'Isian teks', bukti_catatan: 'Bukti + Catatan', info: 'Data isian singkat', bagian: 'Judul bagian' };
       o.querySelector('#fmQ').innerHTML = qs.map(function (q, i) {
@@ -282,7 +307,8 @@
       var isi = qs.filter(function (q) { return q.teks.trim(); });
       if (!judul || !isi.length) { alert('Isi judul dan minimal satu pertanyaan.'); return; }
       var d = { judul: judul, jenis: o.querySelector('#fmJenis').value, pertanyaan: isi };
-      var pk = Array.prototype.map.call(o.querySelectorAll('[data-pk]:checked'), function (c) { return c.dataset.pk; });
+      // Hanya form Supervisi yang punya paket, dan isinya hanya form Pra-Supervisi (Pra tidak boleh jadi induk)
+      var pk = d.jenis === 'supervisi' ? pkTerpilih.filter(function (id) { var x = formList.find(function (y) { return y.id === id; }); return x && x.jenis === 'pra'; }) : [];
       if (pk.length || (f && (f.paket_ids || []).length)) d.paket_ids = pk; // kolom baru: hanya dikirim bila dipakai
       var res = f ? await supabaseClient.from('supervisi_form').update(d).eq('id', f.id) : await supabaseClient.from('supervisi_form').insert(d);
       if (res.error) { alert('Gagal: ' + res.error.message + (d.paket_ids ? '\n\nJalankan migrasi_supervisi_paket.sql di Supabase SQL Editor bila belum.' : '')); return; }
@@ -306,6 +332,7 @@
         mt = A(r, 'Mapel'), m = mt ? cari(mapelList, mt, 'nama') : null, ft = A(r, 'Judul Form'), f = ft ? cari(formList, ft, 'judul') : null, e = [];
       if (!jenis) e.push('Jenis'); if (!t) e.push('Tanggal'); if (!g) e.push('Nama Guru'); if (!s) e.push('Nama Supervisor');
       if (mt && !m) e.push('Mapel'); if (ft && !f) e.push('Judul Form'); if (g && s && g.id === s.id) e.push('Guru = Supervisor');
+      if (jenis === 'pra' && f && SvForm.indukDari(f, formList).length) e.push('Form Pra sudah sepaket dgn Supervisi (jadwalkan form Supervisi-nya)');
       if (e.length) err.push('Baris ' + (r.__baris || i + 2) + ': ' + e.join(', ')); else { var uj = unitJenjang(); ok.push({ jenis: jenis, tanggal: t, guru_id: g.id, supervisor_id: s.id, mapel_id: m ? m.id : null, form_id: f ? f.id : null, kelas: String(A(r, 'Kelas')) || kelasOtomatis(g.id, m ? m.id : null) || null, unit_kerja: uj.unit_kerja, jenjang: uj.jenjang }); }
     });
     if (!ok.length) { alert('Tidak ada baris valid.' + (err.length ? '\n\n' + err.join('\n') : '')); return; }
