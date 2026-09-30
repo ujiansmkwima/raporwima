@@ -720,19 +720,7 @@ a { color: inherit; text-decoration: none; }
   text-align: center;
 }
 
-@media (max-width: 860px) {
-  .app { flex-direction: column; }
-  .sidebar { width: 100%; flex-direction: row; align-items: center; padding: 12px 16px; overflow-x: auto; }
-  .sidebar__brand-school, .sidebar__role, .sidebar__footer, .sidebar__section-label { display: none; }
-  .sidebar__brand { border-bottom: none; margin: 0; padding: 0; margin-right: 10px; }
-  .menu-list { flex-direction: row; overflow-x: auto; margin-bottom: 0; }
-  .menu-item { flex-shrink: 0; }
-  .menu-item--nested { padding-left: 12px; }
-  .menu-placeholder { display: none; }
-  .topbar, .content { padding-left: 20px; padding-right: 20px; }
-  /* Judul + tombol (mis. Simpan) turun ke baris berikutnya kalau tidak muat. */
-  .panel-head { flex-wrap: wrap; gap: 12px; }
-}
+/* (Aturan layar sempit ≤860px dipindah ke bagian "MOBILE" di akhir file ini.) */
 
 /* ---------- Panel admin: header, form tambah, tabel ---------- */
 
@@ -2210,3 +2198,255 @@ a { color: inherit; text-decoration: none; }
 .sv-ident__k { background: var(--surface-tint-strong); padding: 7px 12px; font-weight: 600; color: var(--ink-soft); }
 .sv-ident__v { background: var(--surface); padding: 7px 12px; }
 .sv-q input[readonly] { background: var(--surface-tint-strong); }
+
+
+/* =====================================================================
+   MOBILE — tampilan nyaman di HP (≤860px). Dipakai bersama mobile.js.
+   - Menu samping jadi laci geser (tombol ☰ di topbar)
+   - Tabel isian jadi kartu per baris (label kolom di atas tiap isian)
+   - Tombol & isian cukup besar untuk jempol; font isian 16px supaya
+     iPhone tidak zoom otomatis saat isian diketuk
+   - Tombol "Simpan" mengambang di kanan bawah
+   ===================================================================== */
+.menu-toggle { display: none; }
+.sidebar-overlay { display: none; }
+
+@media screen and (max-width: 860px) {
+  .app { flex-direction: column; }
+
+  /* ----- Laci menu ----- */
+  .menu-toggle {
+    display: inline-flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    cursor: pointer;
+  }
+  .menu-toggle span {
+    display: block;
+    width: 18px;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--ink);
+    transition: transform 0.2s ease, opacity 0.2s ease;
+  }
+  body.nav-open .menu-toggle span:nth-child(1) { transform: translateY(6px) rotate(45deg); }
+  body.nav-open .menu-toggle span:nth-child(2) { opacity: 0; }
+  body.nav-open .menu-toggle span:nth-child(3) { transform: translateY(-6px) rotate(-45deg); }
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(84vw, 300px);
+    z-index: 60;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 16px 12px calc(16px + env(safe-area-inset-bottom, 0px));
+    transform: translateX(-104%);
+    transition: transform 0.22s ease, box-shadow 0.22s ease;
+  }
+  body.nav-open .sidebar { transform: none; box-shadow: 0 0 40px rgba(2, 6, 23, 0.4); }
+  .sidebar-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 55;
+    background: rgba(15, 23, 42, 0.5);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+  body.nav-open .sidebar-overlay { opacity: 1; pointer-events: auto; }
+  body.nav-open { overflow: hidden; }
+  .menu-item { padding: 12px; }
+  .menu-item--nested { padding-left: 24px; }
+
+  /* ----- Topbar & konten ----- */
+  .topbar { padding: 10px 14px; gap: 10px; }
+  .topbar > div:not(.user-chip) { flex: 1; min-width: 0; }
+  .topbar__title { font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .topbar__meta { font-size: 11.5px; margin-top: 4px; max-width: 100%; }
+  .user-chip { gap: 8px; flex-shrink: 0; }
+  .user-chip__text { max-width: 104px; }
+  .user-chip__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .user-chip__role { display: none; }
+  .user-chip__avatar { width: 34px; height: 34px; }
+  /* Topbar dipadatkan: tombol kecil (mis. Panduan) & label tahun ajaran tidak menambah tinggi */
+  .topbar .btn-small { min-height: 30px; padding: 4px 10px; font-size: 12px; }
+  .topbar > div:not(.user-chip) > div { gap: 6px !important; }
+  .topbar__meta { padding: 3px 9px 3px 8px; line-height: 1.3; }
+  .content { padding: 16px 14px calc(92px + env(safe-area-inset-bottom, 0px)); }
+
+  .panel-head { flex-direction: column; align-items: stretch; gap: 10px; margin-bottom: 14px; }
+  .panel-head__title { font-size: 16.5px; }
+  .panel-head > .btn-small--primary { width: 100%; }
+  .panel-head--toggle { flex-direction: row; align-items: center; }
+
+  /* ----- Tombol & isian ramah jempol ----- */
+  .btn-small { min-height: 40px; padding: 9px 14px; font-size: 13px; }
+  .toolbar { gap: 8px; }
+  .toolbar .btn-small { flex: 1 1 calc(50% - 8px); padding: 9px 10px; }
+  .content input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  .content select,
+  .content textarea,
+  .modal-box input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  .modal-box select,
+  .modal-box textarea { font-size: 16px !important; }
+  .content input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  .content select,
+  .modal-box input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  .modal-box select { min-height: 42px; }
+  .tp-checklist__item { padding-top: 8px; padding-bottom: 8px; }
+  .tp-checklist__item input[type="checkbox"] { width: 20px; height: 20px; }
+
+  .add-form { padding: 14px; gap: 10px; }
+  .add-form .field { min-width: 100%; flex-basis: 100%; }
+  .add-form .btn-small--primary { width: 100%; }
+  .capaian-input { min-width: 0; }
+
+  .stat-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .stat-card { padding: 12px 14px; }
+
+  /* Tab-tab (sub-tab, langkah PKL, tab supervisi): 1 baris, digeser ke samping */
+  .subtab-nav, .pkl-steps, .sv-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin-left: -14px;
+    margin-right: -14px;
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+  .subtab-btn, .pkl-step-btn, .sv-tabs > * { flex-shrink: 0; white-space: nowrap; min-height: 40px; }
+
+  .task-section__head { flex-wrap: wrap; }
+  .sv-ident { grid-template-columns: 1fr; }
+
+  /* ----- Jendela pop-up ----- */
+  .modal-overlay { padding: 12px; }
+  .modal-box { padding: 20px 16px 22px; border-radius: 14px; }
+  .modal-box__actions { flex-wrap: wrap; gap: 8px; }
+  .modal-box__actions .btn-small { flex: 1 1 auto; }
+
+  /* ----- Tombol Simpan mengambang (dipasang simpan-atas.js) ----- */
+  .simpan-atas {
+    position: fixed !important;
+    right: 14px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    z-index: 30;
+    margin: 0 !important;
+  }
+  .simpan-atas .btn-small {
+    min-height: 46px;
+    padding: 12px 22px;
+    font-size: 14px;
+    border-radius: 999px;
+    box-shadow: 0 10px 24px -6px rgba(37, 99, 235, 0.6);
+  }
+
+  /* ----- Tabel isian / tabel pendek jadi KARTU per baris ----- */
+  .table-wrap--cards {
+    border: none;
+    background: transparent;
+    box-shadow: none;
+    overflow: visible;
+  }
+  .data-table--cards,
+  .data-table--cards tbody { display: block; }
+  .data-table--cards { width: 100%; min-width: 0 !important; }
+  .data-table--cards thead { display: none; }
+
+  .data-table--cards tr {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    padding: 14px;
+    margin-bottom: 12px;
+  }
+  .data-table--cards tr:hover td { background: transparent; }
+  .data-table--cards tr.row-catatan { display: block; text-align: center; }
+  .data-table--cards tr.row-catatan td::before { display: none; }
+
+  .data-table--cards td,
+  .data-table--cards td.col-tp,
+  .data-table--cards td.col-hitung {
+    display: block;
+    min-width: 0 !important;
+    width: auto !important;
+    padding: 0 !important;
+    border: none !important;
+    background: transparent;
+    text-align: left !important;
+    font-size: 14px;
+    word-break: break-word;
+  }
+  .data-table--cards td::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 4px;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+  .data-table--cards td.td-tanpa-label::before { display: none; }
+
+  .data-table--cards td.td-no {
+    grid-column: 1 / -1;
+    order: -2;
+    margin-bottom: -8px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--ink-soft);
+  }
+  .data-table--cards td.td-no::before { content: "No. "; display: inline; margin: 0; font-size: inherit; letter-spacing: 0; text-transform: none; }
+  .data-table--cards td.td-nama {
+    grid-column: 1 / -1;
+    order: -1;
+    font-size: 15.5px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+  .data-table--cards td.td-nama::before { display: none; }
+  .data-table--cards td.td-lebar { grid-column: 1 / -1; }
+
+  .data-table--cards td.col-nama-sticky {
+    position: static;
+    box-shadow: none;
+    background: transparent;
+  }
+  .data-table--cards td input:not([type="checkbox"]):not([type="radio"]),
+  .data-table--cards td select,
+  .data-table--cards td textarea,
+  .data-table--cards td.col-tp input[type="number"] {
+    width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box;
+  }
+  .data-table--cards td textarea { min-height: 88px; }
+  .data-table--cards td .btn-small { margin: 2px 4px 2px 0; }
+}
+
+@media screen and (max-width: 480px) {
+  .user-chip__name { display: none; }
+}
+
+@media screen and (max-width: 380px) {
+  .stat-grid { grid-template-columns: 1fr; }
+  .toolbar .btn-small { flex-basis: 100%; }
+}
