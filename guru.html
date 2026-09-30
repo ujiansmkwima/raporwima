@@ -5831,6 +5831,11 @@
           var listRelevan = list.filter(function (m) {
             return !m.agama_spesifik || m.agama_spesifik === siswa.agama;
           });
+          // Mapel Pendidikan Agama milik agama siswa ini SELALU di nomor 1,
+          // apa pun agamanya (Buddha, Islam, dst.), tidak tergantung angka
+          // "Urutan pada Rapor". Sisanya tetap berurutan seperti biasa.
+          listRelevan = listRelevan.filter(function (m) { return m.agama_spesifik && m.agama_spesifik === siswa.agama; })
+            .concat(listRelevan.filter(function (m) { return !(m.agama_spesifik && m.agama_spesifik === siswa.agama); }));
           return listRelevan.map(function (m, i) {
             var n = nilaiMap[m.id] || {};
             var namaTampil = namaMapelUntukSiswa(m.nama, siswa.agama);
@@ -6209,6 +6214,11 @@
           var listRelevan = list.filter(function (m) {
             return !m.agama_spesifik || m.agama_spesifik === siswa.agama;
           });
+          // Mapel Pendidikan Agama milik agama siswa ini SELALU di nomor 1,
+          // apa pun agamanya (Buddha, Islam, dst.), tidak tergantung angka
+          // "Urutan pada Rapor". Sisanya tetap berurutan seperti biasa.
+          listRelevan = listRelevan.filter(function (m) { return m.agama_spesifik && m.agama_spesifik === siswa.agama; })
+            .concat(listRelevan.filter(function (m) { return !(m.agama_spesifik && m.agama_spesifik === siswa.agama); }));
           return listRelevan.map(function (m, i) {
             var n = ntsMap[m.id] || {};
             var namaTampil = namaMapelUntukSiswa(m.nama, siswa.agama);
