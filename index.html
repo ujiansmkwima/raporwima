@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css?v=9">
+<link rel="stylesheet" href="slideshow.css?v=1">
 <script src="https://unpkg.com/lucide@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-client.js"></script>
@@ -111,26 +112,94 @@
       var dotEls = dots.querySelectorAll('.login-slideshow__dot');
       var aktif = 0;
       var timer = null;
+      var DURASI = 6500; // ms per slide (bar progres di titik ikut durasi ini)
+      var EFEK = ['zoom', 'geser', 'lingkar', 'tirai', 'kabur', 'balik'];
+      var efekTerakhir = '';
+      var timerLeaving = null;
+      wrap.style.setProperty('--ss-durasi', DURASI + 'ms');
 
-      function tampilkan(i) {
-        aktif = (i + slideEls.length) % slideEls.length;
-        slideEls.forEach(function (el, idx) { el.classList.toggle('is-active', idx === aktif); });
-        dotEls.forEach(function (el, idx) { el.classList.toggle('is-active', idx === aktif); });
+      function pilihEfek() {
+        var e;
+        do { e = EFEK[Math.floor(Math.random() * EFEK.length)]; } while (e === efekTerakhir && EFEK.length > 1);
+        efekTerakhir = e;
+        return e;
+      }
+
+      // Mulai ulang animasi bar progres di titik aktif.
+      function segarkanDot() {
+        dotEls.forEach(function (el, idx) { el.classList.remove('is-active'); });
+        void wrap.offsetWidth; // paksa reflow supaya animasi mulai dari nol
+        if (dotEls[aktif]) dotEls[aktif].classList.add('is-active');
+      }
+
+      function tampilkan(i, arah) {
+        var baru = (i + slideEls.length) % slideEls.length;
+        if (baru === aktif && slideEls[baru].classList.contains('is-active')) return;
+        var lama = aktif;
+        aktif = baru;
+
+        track.style.setProperty('--dir', arah === -1 ? -1 : 1);
+        track.setAttribute('data-efek', pilihEfek());
+
+        slideEls.forEach(function (el, idx) {
+          if (idx === aktif) { el.classList.remove('is-leaving'); el.classList.add('is-active'); }
+          else if (idx === lama) { el.classList.remove('is-active'); el.classList.add('is-leaving'); }
+          else { el.classList.remove('is-active', 'is-leaving'); }
+        });
+        segarkanDot();
+
+        clearTimeout(timerLeaving);
+        timerLeaving = setTimeout(function () {
+          slideEls.forEach(function (el) { el.classList.remove('is-leaving'); });
+        }, 1600);
       }
 
       function mulaiAutoGeser() {
         if (timer) clearInterval(timer);
         if (slideEls.length < 2) return;
-        timer = setInterval(function () { tampilkan(aktif + 1); }, 5000);
+        timer = setInterval(function () { tampilkan(aktif + 1, 1); }, DURASI);
       }
 
       dotEls.forEach(function (el) {
         el.addEventListener('click', function () {
-          tampilkan(parseInt(el.dataset.i, 10));
+          var tujuan = parseInt(el.dataset.i, 10);
+          tampilkan(tujuan, tujuan < aktif ? -1 : 1);
           mulaiAutoGeser();
         });
       });
 
+      if (slideEls.length > 1) {
+        // Tombol panah kiri/kanan
+        var ikonKiri = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>';
+        var ikonKanan = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>';
+        var btnPrev = document.createElement('button');
+        btnPrev.type = 'button';
+        btnPrev.className = 'login-slideshow__nav login-slideshow__nav--prev';
+        btnPrev.setAttribute('aria-label', 'Gambar sebelumnya');
+        btnPrev.innerHTML = ikonKiri;
+        var btnNext = document.createElement('button');
+        btnNext.type = 'button';
+        btnNext.className = 'login-slideshow__nav login-slideshow__nav--next';
+        btnNext.setAttribute('aria-label', 'Gambar berikutnya');
+        btnNext.innerHTML = ikonKanan;
+        wrap.appendChild(btnPrev);
+        wrap.appendChild(btnNext);
+        btnPrev.addEventListener('click', function () { tampilkan(aktif - 1, -1); mulaiAutoGeser(); });
+        btnNext.addEventListener('click', function () { tampilkan(aktif + 1, 1); mulaiAutoGeser(); });
+
+        // Jeda saat kursor di atas slideshow, lanjut saat kursor keluar
+        wrap.addEventListener('mouseenter', function () {
+          wrap.classList.add('is-paused');
+          if (timer) { clearInterval(timer); timer = null; }
+        });
+        wrap.addEventListener('mouseleave', function () {
+          wrap.classList.remove('is-paused');
+          segarkanDot();
+          mulaiAutoGeser();
+        });
+      }
+
+      segarkanDot();
       mulaiAutoGeser();
     } catch (err) {
       // Diamkan — slideshow bersifat dekoratif, kegagalan di sini

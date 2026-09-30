@@ -1,0 +1,171 @@
+/* =========================================================
+   SLIDESHOW LOGIN — TRANSISI SINEMATIK
+   Dimuat SETELAH style.css (menimpa gaya slideshow lama).
+   Efek berganti otomatis tiap slide: zoom, geser+parallax,
+   lingkar, tirai diagonal, kabur, dan balik 3D. Ditambah efek
+   Ken Burns (gambar pelan-pelan zoom), teks muncul bertahap,
+   bar progres di titik navigasi, dan tombol panah saat hover.
+   ========================================================= */
+
+.login-slideshow .login-slideshow__track {
+  perspective: 1600px;
+  --dir: 1;
+}
+
+/* ---- Dasar slide: hanya slide aktif & yang sedang keluar terlihat ---- */
+.login-slideshow .login-slideshow__slide {
+  opacity: 0;
+  visibility: hidden;
+  transition: none;
+  will-change: transform, opacity, clip-path, filter;
+  backface-visibility: hidden;
+}
+.login-slideshow .login-slideshow__slide.is-active {
+  opacity: 1;
+  visibility: visible;
+  z-index: 2;
+}
+.login-slideshow .login-slideshow__slide.is-leaving {
+  opacity: 1;
+  visibility: visible;
+  z-index: 1;
+}
+
+/* ---- Ken Burns: gambar zoom pelan (tetap berjalan saat slide keluar) ---- */
+.login-slideshow .login-slideshow__slide img {
+  transform-origin: 50% 50%;
+}
+.login-slideshow .login-slideshow__slide.is-active img,
+.login-slideshow .login-slideshow__slide.is-leaving img {
+  animation: ssKenBurnsA 9s ease-out forwards;
+}
+.login-slideshow .login-slideshow__slide:nth-child(even).is-active img,
+.login-slideshow .login-slideshow__slide:nth-child(even).is-leaving img {
+  animation-name: ssKenBurnsB;
+}
+@keyframes ssKenBurnsA {
+  from { transform: scale(1) translate3d(0, 0, 0); }
+  to   { transform: scale(1.14) translate3d(-1.5%, -1%, 0); }
+}
+@keyframes ssKenBurnsB {
+  from { transform: scale(1.14) translate3d(1.5%, 1%, 0); }
+  to   { transform: scale(1) translate3d(0, 0, 0); }
+}
+
+/* ---- Teks (judul & deskripsi) muncul bertahap ---- */
+.login-slideshow .login-slideshow__slide.is-active .login-slideshow__caption-title {
+  animation: ssCaptionIn 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.55s both;
+}
+.login-slideshow .login-slideshow__slide.is-active .login-slideshow__caption-desc {
+  animation: ssCaptionIn 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.8s both;
+}
+@keyframes ssCaptionIn {
+  from { opacity: 0; transform: translate3d(0, 22px, 0); filter: blur(4px); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); filter: blur(0); }
+}
+
+/* =========================================================
+   EFEK TRANSISI  (dipilih lewat atribut data-efek pada track)
+   ========================================================= */
+
+/* 1. ZOOM — melebur sambil mengecil dari besar */
+.login-slideshow__track[data-efek="zoom"] .is-active  { animation: ssZoomIn 1.3s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.login-slideshow__track[data-efek="zoom"] .is-leaving { animation: ssZoomOut 1.3s ease both; }
+@keyframes ssZoomIn  { from { opacity: 0; transform: scale(1.18); } to { opacity: 1; transform: scale(1); } }
+@keyframes ssZoomOut { from { opacity: 1; transform: scale(1); }    to { opacity: 0; transform: scale(0.94); } }
+
+/* 2. GESER — slide baru menyapu masuk, yang lama tertinggal (parallax) */
+.login-slideshow__track[data-efek="geser"] .is-active  { animation: ssGeserIn 1.15s cubic-bezier(0.77, 0, 0.175, 1) both; }
+.login-slideshow__track[data-efek="geser"] .is-leaving { animation: ssGeserOut 1.15s cubic-bezier(0.77, 0, 0.175, 1) both; }
+@keyframes ssGeserIn  { from { transform: translate3d(calc(var(--dir) * 100%), 0, 0); } to { transform: translate3d(0, 0, 0); } }
+@keyframes ssGeserOut { from { transform: translate3d(0, 0, 0); filter: brightness(1); } to { transform: translate3d(calc(var(--dir) * -32%), 0, 0); filter: brightness(0.55); } }
+
+/* 3. LINGKAR — lingkaran membuka dari tengah */
+.login-slideshow__track[data-efek="lingkar"] .is-active  { animation: ssLingkarIn 1.3s cubic-bezier(0.65, 0, 0.35, 1) both; }
+.login-slideshow__track[data-efek="lingkar"] .is-leaving { animation: ssLingkarOut 1.3s ease both; }
+@keyframes ssLingkarIn  { from { clip-path: circle(0% at 50% 50%); } to { clip-path: circle(75% at 50% 50%); } }
+@keyframes ssLingkarOut { from { transform: scale(1); filter: brightness(1); } to { transform: scale(1.08); filter: brightness(0.6); } }
+
+/* 4. TIRAI — sapuan diagonal dari kiri ke kanan */
+.login-slideshow__track[data-efek="tirai"] .is-active  { animation: ssTiraiIn 1.2s cubic-bezier(0.65, 0, 0.35, 1) both; }
+.login-slideshow__track[data-efek="tirai"] .is-leaving { animation: ssTiraiOut 1.2s ease both; }
+@keyframes ssTiraiIn  {
+  from { clip-path: polygon(0 0, 0 0, -25% 100%, -25% 100%); }
+  to   { clip-path: polygon(0 0, 125% 0, 100% 100%, -25% 100%); }
+}
+@keyframes ssTiraiOut { from { filter: brightness(1); } to { filter: brightness(0.5); } }
+
+/* 5. KABUR — gambar lama memudar kabur, gambar baru fokus perlahan */
+.login-slideshow__track[data-efek="kabur"] .is-active  { animation: ssKaburIn 1.4s ease both; }
+.login-slideshow__track[data-efek="kabur"] .is-leaving { animation: ssKaburOut 1.4s ease both; }
+@keyframes ssKaburIn  { from { opacity: 0; filter: blur(26px); transform: scale(1.12); } to { opacity: 1; filter: blur(0); transform: scale(1); } }
+@keyframes ssKaburOut { from { opacity: 1; filter: blur(0); } to { opacity: 0; filter: blur(26px); } }
+
+/* 6. BALIK — putaran 3D seperti membalik kartu */
+.login-slideshow__track[data-efek="balik"] .is-active  { animation: ssBalikIn 1.25s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.login-slideshow__track[data-efek="balik"] .is-leaving { animation: ssBalikOut 1.25s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes ssBalikIn  { from { opacity: 0; transform: rotateY(calc(var(--dir) * -75deg)) scale(0.88); } to { opacity: 1; transform: rotateY(0) scale(1); } }
+@keyframes ssBalikOut { from { opacity: 1; transform: rotateY(0) scale(1); } to { opacity: 0; transform: rotateY(calc(var(--dir) * 75deg)) scale(0.88); } }
+
+/* =========================================================
+   TITIK NAVIGASI dengan bar progres
+   ========================================================= */
+.login-slideshow .login-slideshow__dot {
+  position: relative;
+  overflow: hidden;
+  height: 7px;
+}
+.login-slideshow .login-slideshow__dot.is-active {
+  background: rgba(255, 255, 255, 0.35);
+}
+.login-slideshow .login-slideshow__dot.is-active::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  border-radius: inherit;
+  background: #fff;
+  transform-origin: left center;
+  animation: ssProgres var(--ss-durasi, 6500ms) linear forwards;
+}
+.login-slideshow.is-paused .login-slideshow__dot.is-active::after {
+  animation-play-state: paused;
+}
+@keyframes ssProgres { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+/* =========================================================
+   TOMBOL PANAH (muncul saat kursor di atas slideshow)
+   ========================================================= */
+.login-slideshow__nav {
+  position: absolute;
+  top: 50%;
+  z-index: 3;
+  width: 44px;
+  height: 44px;
+  margin-top: -22px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.35);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.3s ease, background 0.2s ease, transform 0.2s ease;
+}
+.login-slideshow__nav--prev { left: 16px; transform: translateX(-8px); }
+.login-slideshow__nav--next { right: 16px; transform: translateX(8px); }
+.login-slideshow:hover .login-slideshow__nav { opacity: 1; transform: translateX(0); }
+.login-slideshow__nav:hover { background: rgba(15, 23, 42, 0.65); }
+.login-slideshow__nav svg { width: 20px; height: 20px; }
+
+/* Hormati pengguna yang mematikan animasi di perangkatnya */
+@media (prefers-reduced-motion: reduce) {
+  .login-slideshow .login-slideshow__slide.is-active img,
+  .login-slideshow .login-slideshow__slide.is-leaving img { animation: none; }
+  .login-slideshow__track[data-efek] .is-active  { animation: ssZoomInLembut 0.6s ease both; }
+  .login-slideshow__track[data-efek] .is-leaving { animation: none; opacity: 0; }
+  @keyframes ssZoomInLembut { from { opacity: 0; } to { opacity: 1; } }
+}
