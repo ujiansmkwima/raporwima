@@ -169,3 +169,9 @@
   .login-slideshow__track[data-efek] .is-leaving { animation: none; opacity: 0; }
   @keyframes ssZoomInLembut { from { opacity: 0; } to { opacity: 1; } }
 }
+
+/* Panel slideshow muncul dengan fade lembut (bukan tiba-tiba) */
+.login-slideshow {
+  animation: ssPanelMasuk 0.7s ease both;
+}
+@keyframes ssPanelMasuk { from { opacity: 0; } to { opacity: 1; } }
