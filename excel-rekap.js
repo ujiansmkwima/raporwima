@@ -346,9 +346,122 @@
     await unduhWorkbook(wb, opts.namaFile || ('leger_' + namaFileAman(opts.siswa.nama) + '.xlsx'));
   }
 
+
+  // =========================================================
+  // 3) UNDUH DATA TERINPUT (tabel umum, 1 sheet rapi)
+  // =========================================================
+  //
+  // Dipakai halaman input (Nilai Tengah Semester, Ekstrakurikuler,
+  // Kokurikuler, Catatan Wali Kelas, dan rekap kelas) untuk mengunduh
+  // data yang SUDAH terisi dalam format siap cetak: kop judul + nama
+  // sekolah, blok identitas, tabel bergaris (header berwarna, baris
+  // header dibekukan, filter otomatis), dan blok tanda tangan.
+  //
+  // opts = {
+  //   namaFile, namaSheet,
+  //   judul: 'NILAI EKSTRAKURIKULER',
+  //   profilSekolah: { nama_sekolah, alamat_sekolah, kepala_sekolah, nip_kepala_sekolah, kota_ttd, tanggal_rapor },
+  //   identitas: [[labelKiri, nilaiKiri, labelKanan?, nilaiKanan?], ...],
+  //   headers: ['No', 'NIS', ...],
+  //   rows: [[1, '123', ...], ...]  (sel boleh { v, abu:true }),
+  //   lebar: [5, 14, 30, ...]       (lebar tiap kolom, karakter),
+  //   tengahKolom: [0, 1],          (indeks kolom rata tengah),
+  //   ttd: { labelKiri: 'Pembina', namaKiri, nipKiri }  (opsional; tanpa ini tidak ada blok tanda tangan)
+  // }
+  function tulisIdentitasRingkas(ws, startRow, totalKolom, pasangan) {
+    // Tata letak aman untuk tabel sempit (4-8 kolom): label di kolom 1-2
+    // (digabung), nilai di kolom 3 sampai akhir, format ": nilai".
+    var r = startRow;
+    var kolNilai = totalKolom >= 3 ? 3 : 2;
+    pasangan.forEach(function (p) {
+      var teks = (p[1] === null || p[1] === undefined || p[1] === '') ? '-' : p[1];
+      if (kolNilai > 2) ws.mergeCells(r, 1, r, kolNilai - 1);
+      ws.getCell(r, 1).value = p[0];
+      ws.getCell(r, 1).font = { size: 10 };
+      ws.getCell(r, 1).alignment = { horizontal: 'left', vertical: 'middle' };
+      if (totalKolom > kolNilai) ws.mergeCells(r, kolNilai, r, totalKolom);
+      ws.getCell(r, kolNilai).value = ': ' + teks;
+      ws.getCell(r, kolNilai).font = { size: 10, bold: true };
+      ws.getCell(r, kolNilai).alignment = { horizontal: 'left', vertical: 'middle' };
+      r++;
+    });
+    return r + 1;
+  }
+
+  function tulisTtdRingkas(ws, startRow, totalKolom, opsi) {
+    // Kiri = kolom 1..kiriAkhir (No, NIS, Nama), kanan = sisanya.
+    var kiriAkhir = Math.min(3, totalKolom - 1);
+    var kananAwal = kiriAkhir + 1;
+    var r = startRow + 2;
+    function sel(baris, kolAwal, kolAkhir, teks, font) {
+      if (kolAkhir > kolAwal) ws.mergeCells(baris, kolAwal, baris, kolAkhir);
+      var c = ws.getCell(baris, kolAwal);
+      c.value = teks;
+      c.font = font || { size: 10 };
+      c.alignment = { horizontal: 'center', vertical: 'middle' };
+    }
+    sel(r, kananAwal, totalKolom, opsi.kotaTanggal || '');
+    r++;
+    sel(r, 1, kiriAkhir, opsi.labelKiri || 'Guru');
+    sel(r, kananAwal, totalKolom, 'Kepala Sekolah');
+    r += 4; // ruang tanda tangan basah
+    sel(r, 1, kiriAkhir, opsi.namaKiri || '-', { bold: true, underline: true, size: 10 });
+    sel(r, kananAwal, totalKolom, opsi.kepalaSekolah || '-', { bold: true, underline: true, size: 10 });
+    r++;
+    sel(r, 1, kiriAkhir, 'NIP. ' + (opsi.nipKiri || '..........................'));
+    sel(r, kananAwal, totalKolom, 'NIP. ' + (opsi.nipKepalaSekolah || '..........................'));
+  }
+
+  async function unduhTabel(opts) {
+    var headers = opts.headers || [];
+    var rows = opts.rows || [];
+    var totalKolom = headers.length;
+    if (!totalKolom) throw new Error('Tidak ada kolom untuk diunduh.');
+
+    var wb = new ExcelJS.Workbook();
+    var ws = buatWorksheet(wb, opts.namaSheet || 'Data');
+
+    var profil = opts.profilSekolah || {};
+    var barisJudul = [opts.judul || 'DATA', (profil.nama_sekolah || 'SMK Widya Mandala Tambak').toUpperCase()];
+    if (profil.alamat_sekolah) barisJudul.push(profil.alamat_sekolah);
+    var next = tulisJudul(ws, totalKolom, barisJudul);
+
+    if (opts.identitas && opts.identitas.length) {
+      next = tulisIdentitasRingkas(ws, next, totalKolom, opts.identitas);
+    }
+
+    var barisHeader = next;
+    var akhirTabel = tulisTabel(ws, next, headers, rows, { tengahKolom: opts.tengahKolom || [0] });
+
+    for (var c = 0; c < totalKolom; c++) {
+      ws.getColumn(c + 1).width = (opts.lebar && opts.lebar[c]) || 16;
+    }
+
+    // Header tabel dibekukan + filter otomatis (hanya bila ada data).
+    ws.views = [{ state: 'frozen', ySplit: barisHeader, showGridLines: false }];
+    if (rows.length) {
+      ws.autoFilter = { from: { row: barisHeader, column: 1 }, to: { row: barisHeader, column: totalKolom } };
+    }
+    ws.pageSetup.printTitlesRow = barisHeader + ':' + barisHeader;
+
+    if (opts.ttd) {
+      tulisTtdRingkas(ws, akhirTabel, totalKolom, {
+        kotaTanggal: kotaTanggalDariProfil(profil),
+        kepalaSekolah: profil.kepala_sekolah,
+        nipKepalaSekolah: profil.nip_kepala_sekolah,
+        labelKiri: opts.ttd.labelKiri,
+        namaKiri: opts.ttd.namaKiri,
+        nipKiri: opts.ttd.nipKiri
+      });
+    }
+
+    await unduhWorkbook(wb, opts.namaFile || 'data.xlsx');
+  }
+
   global.RekapExcel = {
     unduhRekapNilaiSemester: unduhRekapNilaiSemester,
     unduhLegerSiswa: unduhLegerSiswa,
+    unduhTabel: unduhTabel,
     namaFileAman: namaFileAman,
     formatTanggalId: formatTanggalId
   };

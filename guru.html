@@ -2030,7 +2030,7 @@
       (ptsRes.data || []).forEach(function (r) { ptsMap[r.siswa_id] = r.nilai_pts; });
 
       // ---------- KKM bawaan mapel (dari Admin) ----------
-      // Dipakai sebagai nilai bawaan "Nilai Minimal" di tab Konversi —
+      // Dipakai sebagai nilai bawaan "Nilai terendah yang dikehendaki" di tab Konversi —
       // guru boleh mengubahnya sendiri.
       var mapelKkmRes = await supabaseClient
         .from('mata_pelajaran').select('kkm').eq('id', p.mapel.id).maybeSingle();
@@ -2064,6 +2064,7 @@
 
         '<div class="subtab-panel" id="subtabIsi">' +
         '<div class="toolbar">' +
+        '<button class="btn-small" id="btnExportNts">⬇ Unduh Data (Excel)</button>' +
         '<button class="btn-small" id="btnTemplateNts">⬇ Unduh Template Excel</button>' +
         '<button class="btn-small" id="btnImportNts">⬆ Import dari Excel</button>' +
         '<input type="file" id="fileImportNts" accept=".xlsx,.xls" style="display:none;">' +
@@ -2077,15 +2078,18 @@
 
         '<div class="subtab-panel" id="subtabKonversi" hidden>' +
         '<div class="panel-note">' +
-        'Nilai Konversi adalah nilai yang sudah disesuaikan ke rentang <strong>Nilai Minimal</strong>–<strong>Nilai Maksimal</strong> yang kamu tentukan: nilai yang rendah ikut naik sampai minimal sekitar Nilai Minimal (mis. KKM), dan nilai yang sudah tinggi juga ikut naik secara proporsional, tidak melebihi Nilai Maksimal. Hasilnya lalu dikirim sebagai <strong>Nilai Tengah Semester (PTS)</strong> di menu "Input Nilai Mapel" — guru tidak perlu mengetik ulang di sana.<br>' +
-        'Rumus: <code>Nilai Konversi = Nilai Minimal + (Nilai ÷ 100) × (Nilai Maksimal − Nilai Minimal)</code>, dibulatkan 2 desimal.' +
+        'Nilai Konversi adalah nilai yang sudah disesuaikan ke rentang <strong>Nilai terendah</strong>–<strong>Nilai teratas</strong> yang dikehendaki yang kamu tentukan: nilai yang rendah ikut naik sampai minimal sekitar Nilai terendah yang dikehendaki (mis. KKM), dan nilai yang sudah tinggi juga ikut naik secara proporsional, tidak melebihi Nilai teratas yang dikehendaki. Hasilnya lalu dikirim sebagai <strong>Nilai Tengah Semester (PTS)</strong> di menu "Input Nilai Mapel" — guru tidak perlu mengetik ulang di sana.<br>' +
+        'Rumus: <code>Nilai Konversi = Nilai terendah + (Nilai ÷ 100) × (Nilai teratas − Nilai terendah)</code>, dibulatkan 2 desimal.' +
         '</div>' +
         '<div class="add-form">' +
-        '<div class="field"><label>Nilai Minimal (KKM)</label><input type="number" step="0.01" id="cfgKonvMin" value="' + kkmMapel + '"></div>' +
-        '<div class="field"><label>Nilai Maksimal</label><input type="number" step="0.01" id="cfgKonvMax" value="100"></div>' +
+        '<div class="field"><label>Nilai terendah yang dikehendaki</label><input type="number" step="0.01" id="cfgKonvMin" value="' + kkmMapel + '"></div>' +
+        '<div class="field"><label>Nilai teratas yang dikehendaki</label><input type="number" step="0.01" id="cfgKonvMax" value="100"></div>' +
         '</div>' +
-        '<div class="panel-note" id="konversiPeringatan" style="color:var(--danger);display:none;">Nilai Maksimal harus lebih besar dari Nilai Minimal.</div>' +
-        '<div class="toolbar"><button class="btn-small btn-small--primary" id="btnKirimKonversi">⇪ Kirim ke Input Nilai Semester (PTS)</button></div>' +
+        '<div class="panel-note" id="konversiPeringatan" style="color:var(--danger);display:none;">Nilai teratas yang dikehendaki harus lebih besar dari Nilai terendah yang dikehendaki.</div>' +
+        '<div class="toolbar">' +
+        '<button class="btn-small" id="btnKirimAsli">⇪ Kirim nilai asli ke input nilai semester</button>' +
+        '<button class="btn-small btn-small--primary" id="btnKirimKonversi">⇪ Kirim nilai konversi ke input nilai semester</button>' +
+        '</div>' +
         '<div id="konversiMsg"></div>' +
         '<div class="table-wrap"><table class="data-table"><thead><tr><th>No</th><th>NIS</th><th>Nama</th>' +
         '<th class="col-hitung">Nilai Tengah Semester</th><th class="col-hitung">Nilai Konversi</th><th>PTS di Input Nilai Semester (saat ini)</th></tr></thead>' +
@@ -2147,30 +2151,43 @@
       });
 
       // ---------- Kirim hasil konversi ke "Input Nilai Mapel" (Nilai PTS) ----------
-      document.getElementById('btnKirimKonversi').addEventListener('click', async function () {
+      // Kirim ke kolom PTS di Input Nilai Semester. mode = 'konversi' (nilai
+      // yang sudah disesuaikan ke rentang terendah–teratas) atau 'asli'
+      // (nilai tengah semester apa adanya, tanpa konversi).
+      async function kirimKePts(btn, mode) {
+        var konversi = mode === 'konversi';
         var batas = batasKonversi();
-        if (batas.max <= batas.min) { alert('Nilai Maksimal harus lebih besar dari Nilai Minimal.'); return; }
+        if (konversi && batas.max <= batas.min) {
+          alert('Nilai teratas yang dikehendaki harus lebih besar dari Nilai terendah yang dikehendaki.');
+          return;
+        }
 
         var daftarKirim = [];
         siswaList.forEach(function (s) {
           var elNilai = content.querySelector('.nts-nilai[data-siswa="' + s.id + '"]');
           var asli = elNilai ? angkaAtauNull(elNilai.value) : null;
-          var hasil = hitungKonversi(asli, batas);
+          var hasil = konversi ? hitungKonversi(asli, batas) : asli;
           if (hasil !== null) daftarKirim.push({ siswa: s, hasil: hasil });
         });
         if (!daftarKirim.length) {
-          alert('Belum ada Nilai Tengah Semester yang bisa dikonversi. Isi dulu di tab "Nilai Tengah Semester".');
+          alert(konversi
+            ? 'Belum ada Nilai Tengah Semester yang bisa dikonversi. Isi dulu di tab "Nilai Tengah Semester".'
+            : 'Belum ada Nilai Tengah Semester yang bisa dikirim. Isi dulu di tab "Nilai Tengah Semester".');
           return;
         }
 
+        var jenisTeks = konversi
+          ? 'Nilai Konversi (disesuaikan ke rentang ' + batas.min + '–' + batas.max + ')'
+          : 'Nilai Asli (tanpa konversi)';
         var konfirmasi = confirm(
-          'Kirim Nilai Konversi (disesuaikan ke rentang ' + batas.min + '–' + batas.max + ') sebagai Nilai Tengah Semester (PTS) di menu "Input Nilai Mapel" untuk ' + daftarKirim.length + ' siswa?\n\n' +
+          'Kirim ' + jenisTeks + ' sebagai Nilai Tengah Semester (PTS) di menu "Input Nilai Mapel" untuk ' + daftarKirim.length + ' siswa?\n\n' +
           'Nilai PTS yang sudah ada di sana akan DITIMPA. Komponen nilai lain (TP, Akhir Semester, Nilai Rapor) tidak ikut berubah.'
         );
         if (!konfirmasi) return;
 
-        var btn = this;
-        btn.disabled = true;
+        var teksAsli = btn.textContent;
+        var semuaTombol = [document.getElementById('btnKirimAsli'), document.getElementById('btnKirimKonversi')];
+        semuaTombol.forEach(function (b) { b.disabled = true; });
         btn.textContent = 'Mengirim...';
 
         var jobs = daftarKirim.map(function (x) {
@@ -2187,8 +2204,8 @@
         var hasilKirim = await Promise.all(jobs);
         var gagal = hasilKirim.filter(function (r) { return r.error; });
 
-        btn.disabled = false;
-        btn.textContent = '⇪ Kirim ke Input Nilai Semester (PTS)';
+        semuaTombol.forEach(function (b) { b.disabled = false; });
+        btn.textContent = teksAsli;
 
         if (gagal.length) {
           document.getElementById('konversiMsg').innerHTML =
@@ -2199,9 +2216,12 @@
             if (el) el.textContent = x.hasil;
           });
           document.getElementById('konversiMsg').innerHTML =
-            '<div class="import-summary">Nilai Konversi berhasil dikirim sebagai Nilai Tengah Semester (PTS) untuk ' + daftarKirim.length + ' siswa. Buka menu "Input Nilai Mapel" untuk melanjutkan Nilai Akhir Semester &amp; Nilai Rapor.</div>';
+            '<div class="import-summary">' + (konversi ? 'Nilai Konversi' : 'Nilai Asli') + ' berhasil dikirim sebagai Nilai Tengah Semester (PTS) untuk ' + daftarKirim.length + ' siswa. Buka menu "Input Nilai Mapel" untuk melanjutkan Nilai Akhir Semester &amp; Nilai Rapor.</div>';
         }
-      });
+      }
+
+      document.getElementById('btnKirimKonversi').addEventListener('click', function () { kirimKePts(this, 'konversi'); });
+      document.getElementById('btnKirimAsli').addEventListener('click', function () { kirimKePts(this, 'asli'); });
 
       // =======================================================
       //  Excel
@@ -2217,6 +2237,29 @@
           'Catatan Selama KBM': kosongkan ? '' : (elCatatan ? elCatatan.value : '')
         };
       }
+
+      document.getElementById('btnExportNts').addEventListener('click', function () {
+        var rows = siswaList.map(function (s, i) {
+          var b = barisExcelSiswa(s, false);
+          return [i + 1, b['NIS'], b['Nama'], b['Nilai'], b['Catatan Selama KBM']];
+        });
+        unduhDataRapi(this, {
+          judul: 'NILAI TENGAH SEMESTER',
+          namaSheet: 'Nilai Tengah Semester',
+          namaFile: 'nilai_tengah_semester_' + p.mapel.nama.replace(/[^a-z0-9]/gi, '_') + '_' + p.kelas.nama.replace(/[^a-z0-9]/gi, '_') + '.xlsx',
+          identitas: [
+            ['Mata Pelajaran', p.mapel.nama],
+            ['Kelas', p.kelas.nama],
+            ['Tahun Ajaran', tahunAktif.nama],
+            ['Semester', tahunAktif.semester]
+          ],
+          headers: ['No', 'NIS', 'Nama Peserta Didik', 'Nilai', 'Catatan Selama KBM'],
+          rows: rows,
+          lebar: [5, 16, 34, 10, 65],
+          tengahKolom: [0, 1, 3],
+          ttd: { labelKiri: 'Guru Mata Pelajaran', namaKiri: nama }
+        });
+      });
 
       document.getElementById('btnTemplateNts').addEventListener('click', function () {
         var rows = siswaList.map(function (s) { return barisExcelSiswa(s, true); });
@@ -3241,6 +3284,25 @@
       unduhXlsxRapi(wb, opts.namaFile);
     }
 
+    // Unduh DATA YANG SUDAH TERINPUT sebagai file Excel siap cetak (kop,
+    // identitas, tabel bergaris, tanda tangan) lewat RekapExcel.unduhTabel.
+    // `btn` = tombol yang diklik (dinonaktifkan sementara selama file dibuat).
+    async function unduhDataRapi(btn, opts) {
+      var teksAsli = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Menyiapkan...';
+      try {
+        var profilRes = await supabaseClient.from('profil_sekolah').select('*').maybeSingle();
+        opts.profilSekolah = profilRes.data || {};
+        await RekapExcel.unduhTabel(opts);
+      } catch (err) {
+        alert('Gagal membuat file Excel: ' + (err && err.message ? err.message : err));
+      } finally {
+        btn.disabled = false;
+        btn.textContent = teksAsli;
+      }
+    }
+
     function ringkasPesanImport(pesan, batas) {
       batas = batas || 30;
       if (pesan.length <= batas) return pesan.join('\n');
@@ -3316,6 +3378,7 @@
         '<div class="panel-head__desc">Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + '. Isi Predikat dan Deskripsi untuk tiap peserta.</div></div>' +
         '<button class="btn-small btn-small--primary" id="btnSimpanEkskul">Simpan Semua Nilai</button></div>' +
         '<div class="toolbar">' +
+        '<button class="btn-small" id="btnExportEkskul">⬇ Unduh Data (Excel)</button>' +
         '<button class="btn-small" id="btnTemplateEkskul">⬇ Unduh Template Excel</button>' +
         '<button class="btn-small" id="btnImportEkskul">⬆ Import dari Excel</button>' +
         '<input type="file" id="fileImportEkskul" accept=".xlsx,.xls" style="display:none;">' +
@@ -3330,6 +3393,30 @@
       // Template sudah berisi seluruh peserta ekskul ini (NIS, Nama, Kelas)
       // beserta isian yang sedang tampil di layar, tinggal diisi kolom
       // Predikat & Deskripsi lalu di-import lagi.
+      document.getElementById('btnExportEkskul').addEventListener('click', function () {
+        var rows = siswaList.map(function (s, i) {
+          var sel = content.querySelector('.ekskul-predikat[data-siswa="' + s.id + '"]');
+          var ta = content.querySelector('.ekskul-deskripsi[data-siswa="' + s.id + '"]');
+          return [i + 1, s.nis || '', s.nama, kelasNamaMap[s.id] || '', sel ? sel.value : '', ta ? ta.value : ''];
+        });
+        unduhDataRapi(this, {
+          judul: 'NILAI EKSTRAKURIKULER',
+          namaSheet: 'Nilai Ekskul',
+          namaFile: 'nilai_ekskul_' + namaFileAman(ekskul.nama) + '.xlsx',
+          identitas: [
+            ['Ekstrakurikuler', ekskul.nama],
+            ['Tahun Ajaran', tahunAktif.nama],
+            ['Semester', tahunAktif.semester],
+            ['Jumlah Peserta', String(siswaList.length)]
+          ],
+          headers: ['No', 'NIS', 'Nama Peserta Didik', 'Kelas', 'Predikat', 'Deskripsi'],
+          rows: rows,
+          lebar: [5, 16, 32, 13, 14, 65],
+          tengahKolom: [0, 1, 3, 4],
+          ttd: { labelKiri: 'Pembina Ekstrakurikuler', namaKiri: nama }
+        });
+      });
+
       document.getElementById('btnTemplateEkskul').addEventListener('click', function () {
         var rows = siswaList.map(function (s, i) {
           var sel = content.querySelector('.ekskul-predikat[data-siswa="' + s.id + '"]');
@@ -4647,9 +4734,40 @@
 
       content.innerHTML =
         '<div class="panel-head"><div><div class="panel-head__title">Rekap Ekstrakurikuler — ' + escapeHtml(wk.kelas.nama) + '</div>' +
-        '<div class="panel-head__desc">Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + '. Data ini diisi pembina masing-masing kegiatan — tampilan di sini bersifat baca saja.</div></div></div>' +
+        '<div class="panel-head__desc">Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + '. Data ini diisi pembina masing-masing kegiatan — tampilan di sini bersifat baca saja.</div></div>' +
+        '<button class="btn-small" id="btnExportRekapEkskul">⬇ Unduh Rekap (Excel)</button></div>' +
         '<div class="table-wrap"><table class="data-table"><thead><tr><th>No</th><th>NIS</th><th>Nama</th><th>Kegiatan Ekstrakurikuler</th></tr></thead>' +
         '<tbody>' + rowsHtml + '</tbody></table></div>';
+
+      document.getElementById('btnExportRekapEkskul').addEventListener('click', function () {
+        var rows = [];
+        siswaList.forEach(function (s, i) {
+          var kegiatan = perSiswa[s.id];
+          if (!kegiatan.length) {
+            rows.push([i + 1, s.nis || '', s.nama, 'Tidak mengikuti ekstrakurikuler', '', '']);
+            return;
+          }
+          kegiatan.forEach(function (k) {
+            rows.push([i + 1, s.nis || '', s.nama, k.nama, k.predikat || 'Belum dinilai', k.deskripsi || '']);
+          });
+        });
+        unduhDataRapi(this, {
+          judul: 'REKAP EKSTRAKURIKULER',
+          namaSheet: 'Rekap Ekskul',
+          namaFile: 'rekap_ekskul_' + namaFileAman(wk.kelas.nama) + '_' + namaFileAman(tahunAktif.nama) + '_' + namaFileAman(tahunAktif.semester) + '.xlsx',
+          identitas: [
+            ['Kelas', wk.kelas.nama],
+            ['Tahun Ajaran', tahunAktif.nama],
+            ['Semester', tahunAktif.semester],
+            ['Wali Kelas', nama]
+          ],
+          headers: ['No', 'NIS', 'Nama Peserta Didik', 'Kegiatan Ekstrakurikuler', 'Predikat', 'Deskripsi'],
+          rows: rows,
+          lebar: [5, 16, 32, 28, 14, 65],
+          tengahKolom: [0, 1, 4],
+          ttd: { labelKiri: 'Wali Kelas', namaKiri: nama }
+        });
+      });
     }
 
     // ================= PJ KOKURIKULER: Nilai Kokurikuler =================
@@ -4693,6 +4811,7 @@
         '<div class="panel-head__desc">Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + ' &middot; ' + escapeHtml(labelKelas) + '. Isi Deskripsi capaian kokurikuler tiap siswa.</div></div>' +
         '<button class="btn-small btn-small--primary" id="btnSimpanKoku">Simpan Semua Nilai</button></div>' +
         '<div class="toolbar">' +
+        '<button class="btn-small" id="btnExportKoku">⬇ Unduh Data (Excel)</button>' +
         '<button class="btn-small" id="btnTemplateKoku">⬇ Unduh Template Excel</button>' +
         '<button class="btn-small" id="btnImportKoku">⬆ Import dari Excel</button>' +
         '<input type="file" id="fileImportKoku" accept=".xlsx,.xls" style="display:none;">' +
@@ -4707,6 +4826,34 @@
       // Template berisi seluruh siswa dalam lingkup PJ ini (NIS, Nama, Kelas)
       // beserta Deskripsi yang sedang tampil di layar. Cukup isi kolom
       // Deskripsi lalu di-import lagi.
+      document.getElementById('btnExportKoku').addEventListener('click', function () {
+        var rows = siswaList.map(function (s, i) {
+          var ta = content.querySelector('tr[data-siswa="' + s.id + '"] .koku-deskripsi');
+          var baris = [i + 1, s.nis || '', s.nama];
+          if (showKelasCol) baris.push(s.kelasNama || '');
+          baris.push(ta ? ta.value : '');
+          return baris;
+        });
+        var headers = ['No', 'NIS', 'Nama Peserta Didik'].concat(showKelasCol ? ['Kelas'] : [], ['Deskripsi']);
+        var lebar = [5, 16, 32].concat(showKelasCol ? [13] : [], [70]);
+        unduhDataRapi(this, {
+          judul: 'NILAI KOKURIKULER',
+          namaSheet: 'Nilai Kokurikuler',
+          namaFile: 'nilai_kokurikuler_' + namaFileAman(pj.nama_kegiatan) + '_' + namaFileAman(labelKelas) + '.xlsx',
+          identitas: [
+            ['Kegiatan', pj.nama_kegiatan],
+            ['Kelas', labelKelas],
+            ['Tahun Ajaran', tahunAktif.nama],
+            ['Semester', tahunAktif.semester]
+          ],
+          headers: headers,
+          rows: rows,
+          lebar: lebar,
+          tengahKolom: showKelasCol ? [0, 1, 3] : [0, 1],
+          ttd: { labelKiri: 'Penanggung Jawab Kokurikuler', namaKiri: nama }
+        });
+      });
+
       document.getElementById('btnTemplateKoku').addEventListener('click', function () {
         var rows = siswaList.map(function (s, i) {
           var ta = content.querySelector('tr[data-siswa="' + s.id + '"] .koku-deskripsi');
@@ -4864,9 +5011,40 @@
 
       content.innerHTML =
         '<div class="panel-head"><div><div class="panel-head__title">Rekap Kokurikuler — ' + escapeHtml(wk.kelas.nama) + '</div>' +
-        '<div class="panel-head__desc">Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + '. Data ini diisi guru Penanggung Jawab (PJ) Kokurikuler masing-masing kegiatan — tampilan di sini bersifat baca saja.</div></div></div>' +
+        '<div class="panel-head__desc">Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + '. Data ini diisi guru Penanggung Jawab (PJ) Kokurikuler masing-masing kegiatan — tampilan di sini bersifat baca saja.</div></div>' +
+        '<button class="btn-small" id="btnExportRekapKoku">⬇ Unduh Rekap (Excel)</button></div>' +
         '<div class="table-wrap"><table class="data-table"><thead><tr><th>No</th><th>NIS</th><th>Nama</th><th>Kegiatan Kokurikuler</th></tr></thead>' +
         '<tbody>' + rowsHtml + '</tbody></table></div>';
+
+      document.getElementById('btnExportRekapKoku').addEventListener('click', function () {
+        var rows = [];
+        siswaList.forEach(function (s, i) {
+          var kegiatan = perSiswa[s.id];
+          if (!kegiatan.length) {
+            rows.push([i + 1, s.nis || '', s.nama, 'Belum mengikuti kokurikuler', '']);
+            return;
+          }
+          kegiatan.forEach(function (k) {
+            rows.push([i + 1, s.nis || '', s.nama, k.nama_kegiatan || 'Tanpa nama kegiatan', k.deskripsi || '']);
+          });
+        });
+        unduhDataRapi(this, {
+          judul: 'REKAP KOKURIKULER',
+          namaSheet: 'Rekap Kokurikuler',
+          namaFile: 'rekap_kokurikuler_' + namaFileAman(wk.kelas.nama) + '_' + namaFileAman(tahunAktif.nama) + '_' + namaFileAman(tahunAktif.semester) + '.xlsx',
+          identitas: [
+            ['Kelas', wk.kelas.nama],
+            ['Tahun Ajaran', tahunAktif.nama],
+            ['Semester', tahunAktif.semester],
+            ['Wali Kelas', nama]
+          ],
+          headers: ['No', 'NIS', 'Nama Peserta Didik', 'Kegiatan Kokurikuler', 'Deskripsi'],
+          rows: rows,
+          lebar: [5, 16, 32, 30, 70],
+          tengahKolom: [0, 1],
+          ttd: { labelKiri: 'Wali Kelas', namaKiri: nama }
+        });
+      });
     }
 
 
@@ -5226,6 +5404,7 @@
         '<button class="btn-small btn-small--primary" id="btnSusunSemua">✨ Susun Otomatis (Semua Siswa)</button>' +
         '<button class="btn-small" id="btnSusunKosong">✨ Susun Hanya yang Masih Kosong</button>' +
         '<button class="btn-small" id="btnKosongkanCatatan">🗑 Kosongkan Semua Catatan</button>' +
+        '<button class="btn-small" id="btnExportCatatan">⬇ Unduh Data (Excel)</button>' +
         '</div>' +
 
         '<div class="panel-note"><strong>Dasar penyusunan otomatis</strong><br>' +
@@ -5267,6 +5446,29 @@
         });
         document.getElementById('catatanWaliMsg').innerHTML =
           '<div class="panel-note">' + n + ' catatan kosong berhasil diisi otomatis. Catatan yang sudah ada tidak diubah.</div>';
+      });
+
+      document.getElementById('btnExportCatatan').addEventListener('click', function () {
+        var rows = siswaList.map(function (s, i) {
+          var el = content.querySelector('.catatan-wali-input[data-siswa="' + s.id + '"]');
+          return [i + 1, s.nis || '', s.nama, el ? el.value.trim() : ''];
+        });
+        unduhDataRapi(this, {
+          judul: 'CATATAN WALI KELAS',
+          namaSheet: 'Catatan Wali Kelas',
+          namaFile: 'catatan_wali_kelas_' + namaFileAman(wk.kelas.nama) + '_' + namaFileAman(tahunAktif.nama) + '_' + namaFileAman(tahunAktif.semester) + '.xlsx',
+          identitas: [
+            ['Kelas', wk.kelas.nama],
+            ['Tahun Ajaran', tahunAktif.nama],
+            ['Semester', tahunAktif.semester],
+            ['Wali Kelas', nama]
+          ],
+          headers: ['No', 'NIS', 'Nama Peserta Didik', 'Catatan Wali Kelas'],
+          rows: rows,
+          lebar: [5, 16, 32, 90],
+          tengahKolom: [0, 1],
+          ttd: { labelKiri: 'Wali Kelas', namaKiri: nama }
+        });
       });
 
       document.getElementById('btnKosongkanCatatan').addEventListener('click', function () {
