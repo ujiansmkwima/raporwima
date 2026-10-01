@@ -6,7 +6,7 @@
 <title>Masuk — E-Rapor SMK Widya Mandala Tambak</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=9">
+<link rel="stylesheet" href="style.css?v=10">
 <link rel="stylesheet" href="slideshow.css?v=2">
 <script src="https://unpkg.com/lucide@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -16,9 +16,14 @@
 
 <div class="login-shell" id="loginShell">
 
-  <div class="login-slideshow" id="loginSlideshow" style="display:none;">
-    <div class="login-slideshow__track" id="loginSlideshowTrack"></div>
-    <div class="login-slideshow__dots" id="loginSlideshowDots"></div>
+  <div class="login-left" id="loginLeft" style="display:none;">
+    <div class="login-slideshow" id="loginSlideshow">
+      <div class="login-slideshow__track" id="loginSlideshowTrack"></div>
+      <div class="login-slideshow__dots" id="loginSlideshowDots"></div>
+    </div>
+    <a href="panduan-guru.html" target="_blank" rel="noopener" class="btn-panduan">
+      <i data-lucide="book-open"></i> BACA PANDUAN
+    </a>
   </div>
 
   <form class="login-card" id="loginForm">
@@ -53,6 +58,12 @@
     <button type="submit" class="btn-primary" id="submitBtn">Masuk</button>
 
     <div class="login-card__note" id="loginNote">Peran (guru/admin) ditentukan otomatis berdasarkan akun kamu di Supabase.</div>
+
+    <div class="login-panduan-alt">
+      <a href="panduan-guru.html" target="_blank" rel="noopener" class="btn-panduan">
+        <i data-lucide="book-open"></i> BACA PANDUAN
+      </a>
+    </div>
 
     <div class="login-card__foot">© <span id="year"></span> SMK Widya Mandala Tambak</div>
     <div style="text-align:center;font-size:11px;opacity:0.55;margin-top:4px;">developed by hhh</div>
@@ -93,6 +104,7 @@
     var track = document.getElementById('loginSlideshowTrack');
     var dots = document.getElementById('loginSlideshowDots');
     var shell = document.getElementById('loginShell');
+    var left = document.getElementById('loginLeft');
 
     var slideEls = [];
     var dotEls = [];
@@ -229,7 +241,7 @@
     }
 
     function tampilkanPanel() {
-      wrap.style.display = '';
+      left.style.display = '';
       shell.classList.add('login-shell--with-slideshow');
       segarkanDot();
     }
