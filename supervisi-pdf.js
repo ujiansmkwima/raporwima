@@ -16,8 +16,8 @@
      - opsi.paket opsional: [{ form, jawaban, catatan }] untuk form sepaket (SvForm.isianPaket); semuanya masuk satu PDF. */
 var SvPdf = (function () {
   // Predikat dari persentase skor. Ubah angkanya di sini bila sekolah memakai patokan lain.
-  var AMBANG = [[90, 'Sangat Baik'], [75, 'Baik'], [60, 'Cukup']];
-  var PREDIKAT_TERENDAH = 'Perlu Perbaikan';
+  var AMBANG = [[86, 'Sangat Baik'], [71, 'Baik'], [56, 'Cukup']];
+  var PREDIKAT_TERENDAH = 'Perlu Pembinaan';
 
   var M = { kiri: 15, kanan: 15, atas: 15, bawah: 20 };
   var LEBAR = 210 - M.kiri - M.kanan; // 180 mm
@@ -138,16 +138,17 @@ var SvPdf = (function () {
     return (v && v !== '—') ? v : '';
   }
   function labelSkala(q, v) {
-    var i = parseInt(v, 10), opsi = q.opsi || ['1', '2', '3', '4'];
-    return (i >= 1 && i <= 4) ? bersih(opsi[i - 1] || String(i)) : '-';
+    var i = parseInt(v, 10), opsi = q.opsi || ['1', '2', '3', '4'], maks = q.tipe === 'pilihan' ? opsi.length : 4;
+    return (i >= 1 && i <= maks) ? bersih(opsi[i - 1] || String(i)) : '-';
   }
 
   // Menyusun baris tabel isian dari daftar pertanyaan form + jawaban.
   function susunBaris(f, jw, id) {
-    var body = [], n = 0, skala = 0, bukti = 0;
-    f.pertanyaan.forEach(function (q) { if (q.tipe === 'skala') skala++; if (q.tipe === 'bukti_catatan') bukti++; });
+    if (window.SvForm) f = SvForm.aktif(f, jw);
+    var body = [], n = 0, skala = 0, bukti = 0, pil = 0;
+    f.pertanyaan.forEach(function (q) { if (q.tipe === 'skala') skala++; if (q.tipe === 'bukti_catatan') bukti++; if (q.tipe === 'pilihan') pil++; });
     var H3 = skala && bukti ? 'Penilaian / Bukti Pembelajaran' : (bukti ? 'Bukti Pembelajaran' : 'Penilaian / Isian');
-    var H4 = skala && bukti ? 'Komentar Kritis / Catatan' : (bukti ? 'Catatan' : 'Komentar Kritis');
+    var H4 = skala && bukti ? 'Komentar Kritis / Catatan' : (bukti || (pil && !skala) ? 'Catatan' : 'Komentar Kritis');
     var W = bukti && !skala ? [10, 64, 53, 53] : (bukti ? [10, 70, 45, 55] : [10, 80, 34, 56]);
     function g(k) { return (jw[k] === undefined || jw[k] === null) ? '' : jw[k]; }
 
@@ -164,7 +165,7 @@ var SvPdf = (function () {
         return;
       }
       var no = String(++n);
-      if (t === 'skala') {
+      if (t === 'skala' || t === 'pilihan') {
         body.push([no, tanya, { content: labelSkala(q, g(q.id)), styles: { halign: 'center', fontStyle: 'bold' } }, q.komentar ? nilai(g(q.id + '_k')) : '']);
       } else if (t === 'ya_tidak') {
         body.push([no, tanya, { content: nilai(g(q.id)), styles: { halign: 'center', fontStyle: 'bold' } }, '']);
@@ -179,6 +180,7 @@ var SvPdf = (function () {
   }
 
   function rekapSkor(f, jw) {
+    if (window.SvForm) f = SvForm.aktif(f, jw);
     var skala = f.pertanyaan.filter(function (q) { return q.tipe === 'skala'; }), tot = 0, isi = 0;
     skala.forEach(function (q) { var v = parseInt(jw[q.id], 10); if (v >= 1 && v <= 4) { tot += v; isi++; } });
     if (!skala.length || !isi) return null;

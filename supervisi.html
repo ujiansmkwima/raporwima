@@ -10,15 +10,15 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-client.js"></script>
 <script src="sticky-nama.js?v=1"></script>
-<script src="supervisi-form.js?v=2"></script>
+<script src="supervisi-form.js?v=4"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-<script src="supervisi-excel.js?v=2"></script>
-<script src="supervisi-otomatis.js?v=2"></script>
+<script src="supervisi-excel.js?v=4"></script>
+<script src="supervisi-otomatis.js?v=4"></script>
 <script src="supervisi-ttd.js?v=1"></script>
-<script src="supervisi-pdf.js?v=2"></script>
+<script src="supervisi-pdf.js?v=5"></script>
 <script src="mobile.js?v=1" defer></script>
 </head>
 <body>
@@ -39,7 +39,7 @@
   </aside>
   <div class="main">
     <div class="topbar">
-      <div><div class="topbar__title" id="judul">Jadwal Supervisi Saya</div><div class="topbar__meta">Sesuai jadwal yang ditetapkan admin</div></div>
+      <div><div class="topbar__title" id="judul">Jadwal Supervisi Saya</div><div class="topbar__meta">Form boleh diisi kapan saja, tidak harus menunggu tanggal jadwal</div></div>
       <div class="user-chip"><div class="user-chip__text"><div class="user-chip__name" id="userName">Memuat...</div><div class="user-chip__role">Supervisor</div>
         <a href="#" id="logoutBtn" class="user-chip__logout"><i data-lucide="log-out" style="width:13px;height:13px;"></i> Keluar</a></div></div>
     </div>
@@ -74,10 +74,9 @@
     if (tampilan === 'isi') return renderIsi(today);
     content.innerHTML = '<div class="table-wrap"><table class="data-table"><thead><tr><th>Tanggal</th><th>Jenis</th><th>Nama Guru</th><th>Mapel</th><th>Status</th><th></th></tr></thead><tbody>' +
       (rows.length ? rows.map(function (j) {
-        var tombol = j.status === 'selesai' ? 'Lihat / Ubah' : (j.tanggal > today ? 'Belum waktunya' : 'Isi Form');
-        var kunci = j.status !== 'selesai' && j.tanggal > today;
-        var f0 = formList.find(function (x) { return x.id === j.form_id; });
-        var adaAnak = kunci && f0 && SvForm.paket(f0, formList).length > 1;
+        // Form boleh diisi kapan saja, tidak harus menunggu tanggal jadwal
+        var tombol = j.status === 'selesai' ? 'Lihat / Ubah' : 'Isi Form';
+        var kunci = false, adaAnak = false;
         return '<tr><td>' + tglId(j.tanggal) + '</td><td>' + JENIS[j.jenis] + '</td><td>' + esc(nm(guruList, j.guru_id)) + '</td><td>' + esc(nm(mapelList, j.mapel_id)) + '</td>' +
           '<td><span class="chip ' + (j.status === 'selesai' ? 'chip--aktif' : 'chip--muted') + '">' + j.status + '</span></td>' +
           '<td><button class="btn-small ' + (kunci ? '' : 'btn-small--primary') + '" data-isi="' + j.id + '"' + (kunci ? ' disabled' : '') + '>' + tombol + '</button>' + (j.status === 'selesai' ? ' <button class="btn-small" data-pdf="' + j.id + '">Unduh PDF</button>' : '') + (adaAnak ? ' <button class="btn-small btn-small--primary" data-anak="' + j.id + '">' + (SvForm.paket(f0, formList).slice(1).every(function (x) { return x.jenis === 'pra'; }) ? 'Isi Pra-Supervisi' : 'Isi Form Sepaket') + '</button>' : '') + '</td></tr>';
@@ -123,6 +122,14 @@
       tabs + panel +
       '<div style="margin-top:18px;"><button class="btn-small btn-small--primary" id="svSimpan">' + (anak ? 'Simpan Form Sepaket' : 'Simpan & Tandai Selesai') + '</button></div></div>';
     document.body.appendChild(o);
+    // Ganti jenis mapel (Kejuruan / Non-kejuruan) -> daftar indikator ditata ulang, isian yang sudah ada dipertahankan
+    o.querySelectorAll('.svBody').forEach(function (body) {
+      body.addEventListener('change', function (e) {
+        if (!e.target.dataset || !e.target.dataset.penentu) return;
+        var i = parseInt(body.parentNode.dataset.panel, 10);
+        body.innerHTML = SvForm.render(forms[i], SvForm.baca(body), idn(j));
+      });
+    });
     o.querySelector('.modal-box__close').addEventListener('click', function () { o.remove(); });
     function pn(i) { return o.querySelector('[data-panel="' + i + '"]'); }
     function cat(i) { return pn(i).querySelector('[data-cat]'); }
@@ -141,7 +148,7 @@
       var skor = [];
       forms.forEach(function (f, i) {
         if (i < mulai) return;
-        var r = SvOto.isi(f, selT.value, { mapel: nm(mapelList, j.mapel_id) });
+        var r = SvOto.isi(f, selT.value, { mapel: nm(mapelList, j.mapel_id), jawabanAwal: SvForm.baca(pn(i)) });
         pn(i).querySelector('.svBody').innerHTML = SvForm.render(f, r.jawaban, idn(j));
         cat(i).value = r.catatan;
         if (r.skor) skor.push((tampilTab ? (i + 1) + ': ' : '') + 'Rata-rata skala ' + r.skor.rata + ' (' + r.skor.persen + '%)');
@@ -196,7 +203,7 @@
     document.getElementById('btnTtd').addEventListener('click', function () { SvTtd.buka(meId, meNama, renderTtd); });
   }
   function renderIsi(today) {
-    var siap = rows.filter(function (j) { return j.status !== 'selesai' && j.tanggal <= today; });
+    var siap = rows.filter(function (j) { return j.status !== 'selesai'; });
     content.innerHTML = '<div class="panel-note">Pilih <strong>target nilai</strong> (Baik / Sangat Baik) lebih dulu, lalu klik <strong>Isi Otomatis</strong>. Jawaban terisi sebagai draft di formulir — periksa, ubah bila perlu, lalu simpan.</div>' +
       '<div class="table-wrap" style="margin-top:12px;"><table class="data-table"><thead><tr><th>Tanggal</th><th>Jenis</th><th>Nama Guru</th><th>Mapel</th><th>Target Nilai</th><th></th></tr></thead><tbody>' +
       (siap.length ? siap.map(function (j) {

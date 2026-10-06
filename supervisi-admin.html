@@ -10,14 +10,14 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-client.js"></script>
 <script src="sticky-nama.js?v=1"></script>
-<script src="supervisi-form.js?v=2"></script>
+<script src="supervisi-form.js?v=4"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-<script src="supervisi-excel.js?v=2"></script>
+<script src="supervisi-excel.js?v=4"></script>
 <script src="supervisi-ttd.js?v=1"></script>
-<script src="supervisi-pdf.js?v=3"></script>
+<script src="supervisi-pdf.js?v=5"></script>
 <script src="mobile.js?v=1" defer></script>
 </head>
 <body>
@@ -310,7 +310,7 @@
         return;
       }
       var pra = formList.filter(function (x) { return x.jenis === 'pra'; });
-      wrap.innerHTML = '<div class="panel-note" style="margin-bottom:8px;">Form Supervisi ini adalah <strong>induk</strong> paket dan yang dijadwalkan. Centang form Pra-Supervisi yang ikut dalam paket; Pra-Supervisi boleh diisi supervisor walaupun belum tanggal jadwal.</div>' +
+      wrap.innerHTML = '<div class="panel-note" style="margin-bottom:8px;">Form Supervisi ini adalah <strong>induk</strong> paket dan yang dijadwalkan. Centang form Pra-Supervisi yang ikut dalam paket; Semua form dalam paket (termasuk form induk) boleh diisi supervisor kapan saja, walaupun belum tanggal jadwal.</div>' +
         (pra.map(function (x) {
           return '<label style="display:block;font-size:13px;margin:3px 0;"><input type="checkbox" data-pk="' + x.id + '"' + (pkTerpilih.indexOf(x.id) >= 0 ? ' checked' : '') + '> ' + esc(x.judul) + '</label>';
         }).join('') || '<div style="font-size:12.5px;color:var(--ink-soft);">Belum ada form Pra-Supervisi.</div>');
@@ -323,10 +323,10 @@
     }
     gambarPaket(); o.querySelector('#fmJenis').addEventListener('change', gambarPaket);
     function gambar() {
-      var T = { skala: 'Skala 1–4', ya_tidak: 'Ya / Tidak', teks: 'Isian teks', bukti_catatan: 'Bukti + Catatan', info: 'Data isian singkat', bagian: 'Judul bagian' };
+      var T = { skala: 'Skala 1–4', pilihan: 'Pilihan (tanpa skor)', ya_tidak: 'Ya / Tidak', teks: 'Isian teks', bukti_catatan: 'Bukti + Catatan', info: 'Data isian singkat', bagian: 'Judul bagian' };
       o.querySelector('#fmQ').innerHTML = qs.map(function (q, i) {
         var extra = q.tipe === 'bagian' ? '<div class="field" style="flex-basis:100%;"><input data-ket="' + i + '" placeholder="Keterangan (opsional)" value="' + esc(q.keterangan || '') + '"></div>'
-          : (q.tipe === 'skala' ? '<label style="font-size:12px;flex-basis:100%;"><input type="checkbox" data-kom="' + i + '"' + (q.komentar ? ' checked' : '') + '> Ada kolom komentar</label>' : '');
+          : ((q.tipe === 'skala' || q.tipe === 'pilihan') ? '<label style="font-size:12px;flex-basis:100%;"><input type="checkbox" data-kom="' + i + '"' + (q.komentar ? ' checked' : '') + '> Ada kolom komentar</label>' : '');
         return '<div class="sv-q"><div class="add-form" style="margin:0;"><div class="field" style="flex:3;"><input data-t="' + i + '" placeholder="Teks pertanyaan / indikator" value="' + esc(q.teks) + '"></div>' +
           '<div class="field"><select data-k="' + i + '">' + Object.keys(T).map(function (k) { return '<option value="' + k + '"' + (q.tipe === k ? ' selected' : '') + '>' + T[k] + '</option>'; }).join('') + '</select></div>' +
           '<button class="btn-small" data-x="' + i + '">Hapus</button>' + extra + '</div></div>';
@@ -380,7 +380,7 @@
   }
 
   // ================= EXCEL: FORM =================
-  var TIPE_FORM = ['skala', 'ya_tidak', 'teks', 'bukti_catatan', 'info', 'bagian'];
+  var TIPE_FORM = ['skala', 'pilihan', 'ya_tidak', 'teks', 'bukti_catatan', 'info', 'bagian'];
   function tplForm() {
     SvXlsx.templateForm({ forms: formList, sekolah: profil && profil.nama_sekolah })
       .catch(function (e) { alert('Gagal membuat template: ' + e.message); });
@@ -397,7 +397,7 @@
       if (!grup[j].jenis) grup[j].jenis = jenis;
       var q = { tipe: tp, teks: tx }, ket = String(A(r, 'Keterangan')), op = String(A(r, 'Opsi'));
       if (tp === 'bagian' && ket) q.keterangan = ket;
-      if (tp === 'skala') { if (String(A(r, 'Kolom Komentar')).toLowerCase() === 'ya') q.komentar = 'Komentar Kritis'; if (op) q.opsi = op.split('|').map(function (x) { return x.trim(); }); }
+      if (tp === 'skala' || tp === 'pilihan') { if (String(A(r, 'Kolom Komentar')).toLowerCase() === 'ya') q.komentar = 'Komentar Kritis'; if (op) q.opsi = op.split('|').map(function (x) { return x.trim(); }); }
       grup[j].q.push(q);
     });
     urut = urut.filter(function (j) { if (!grup[j].jenis) { err.push('Form "' + j + '": Jenis harus pra atau supervisi'); return false; } return true; });

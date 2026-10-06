@@ -174,7 +174,7 @@ var SvXlsx = (function () {
     }
     var vd = {
       1: dvList('"pra,supervisi"', 'Jenis tidak valid', 'Pilih pra atau supervisi.'),
-      2: dvList('"skala,ya_tidak,teks,bukti_catatan,info,bagian"', 'Tipe tidak valid', 'Pilih salah satu tipe dari daftar (lihat sheet Petunjuk Tipe).'),
+      2: dvList('"skala,pilihan,ya_tidak,teks,bukti_catatan,info,bagian"', 'Tipe tidak valid', 'Pilih salah satu tipe dari daftar (lihat sheet Petunjuk Tipe).'),
       5: dvList('"Ya"', 'Isian tidak valid', 'Isi Ya atau kosongkan.')
     };
     isiSheet(ws, {
@@ -188,6 +188,7 @@ var SvXlsx = (function () {
       judul: ['PETUNJUK TIPE PERTANYAAN'], header: ['Tipe', 'Fungsi', 'Kolom yang dipakai'], lebar: [18, 72, 44], landscape: true,
       rows: [
         ['skala', 'Penilaian skala 1–4; bisa diberi kolom komentar kritis.', 'Teks, Kolom Komentar (Ya), Opsi Skala'],
+        ['pilihan', 'Pilih satu dari daftar opsi bebas (mis. Ada / Sesuai / Perlu perbaikan), tanpa skor; bisa diberi kolom catatan.', 'Teks, Kolom Komentar (Ya), Opsi (pisahkan dengan |)'],
         ['ya_tidak', 'Pilihan Ya / Tidak.', 'Teks'],
         ['teks', 'Isian teks panjang (kesimpulan, refleksi, dsb.).', 'Teks'],
         ['bukti_catatan', 'Dua kolom isian: Bukti Pembelajaran dan Catatan.', 'Teks'],
@@ -207,6 +208,7 @@ var SvXlsx = (function () {
   // f = form, jw = jawaban sementara, id = identitas (idn(j)), opsi = { sekolah, namaFile }
   async function templateIsian(f, jw, catatan, id, opsi) {
     jw = jw || {}; id = id || {}; opsi = opsi || {};
+    if (window.SvForm) f = SvForm.aktif(f, jw);
     var wb = buatWb(), ws = wb.addWorksheet('Isian'), rows = [], skalaPertama = null;
     var g = function (k) { return jw[k] === undefined ? '' : jw[k]; };
     var dvSkala = dvList('"1,2,3,4"', 'Isian tidak valid', 'Isi angka 1, 2, 3, atau 4.');
@@ -214,7 +216,10 @@ var SvXlsx = (function () {
     f.pertanyaan.forEach(function (q) {
       var t = q.tipe;
       if (t === 'bagian') { rows.push({ bagian: q.teks, ket: q.keterangan || '' }); return; }
-      if (t === 'skala') {
+      if (t === 'pilihan') {
+        var vp = parseInt(g(q.id), 10), np = (q.opsi || []).length;
+        rows.push({ sel: [q.id, q.teks + '  [isi angka: ' + (q.opsi || []).map(function (o, i) { return (i + 1) + ' = ' + o; }).join(', ') + ']', (vp >= 1 && vp <= np) ? vp : '', q.komentar ? g(q.id + '_k') : '', ''], na: q.komentar ? [4] : [3, 4], val: { 2: dvList('"' + (q.opsi || []).map(function (o, i) { return i + 1; }).join(',') + '"', 'Isian tidak valid', 'Isi angka sesuai nomor opsi.') } });
+      } else if (t === 'skala') {
         if (!skalaPertama) skalaPertama = q;
         var v = parseInt(g(q.id), 10);
         rows.push({ sel: [q.id, q.teks, (v >= 1 && v <= 4) ? v : '', q.komentar ? g(q.id + '_k') : '', ''], na: q.komentar ? [4] : [3, 4], val: { 2: dvSkala } });
@@ -292,7 +297,12 @@ var SvXlsx = (function () {
       if (kode === 'catatan') { catatan = String(isi); n++; return; }
       var q = f.pertanyaan.filter(function (x) { return x.id === kode && x.tipe !== 'bagian'; })[0];
       if (!q) { err.push('Baris ' + baris + ': kode "' + kode + '" tidak ada di form ini'); return; }
-      if (q.tipe === 'skala') {
+      if (q.tipe === 'pilihan') {
+        var vp = parseInt(isi, 10), np = (q.opsi || []).length;
+        if (isi !== '' && !(vp >= 1 && vp <= np)) { err.push('Baris ' + baris + ': isi angka 1–' + np); return; }
+        jw[q.id] = isi === '' ? '' : String(vp);
+        if (q.komentar) jw[q.id + '_k'] = String(k4);
+      } else if (q.tipe === 'skala') {
         var v = parseInt(isi, 10);
         if (isi !== '' && !(v >= 1 && v <= 4)) { err.push('Baris ' + baris + ': skala harus 1–4'); return; }
         jw[q.id] = isi === '' ? '' : String(v);

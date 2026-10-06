@@ -1,5 +1,5 @@
 /* supervisi-form.js — dipakai bersama oleh supervisi.html (isi form) dan supervisi-admin.html (lihat hasil).
-   Tipe pertanyaan: bagian (judul), info (isian singkat, tanpa nomor), skala (1-4, opsional kolom komentar),
+   Tipe pertanyaan: bagian (judul), info (isian singkat, tanpa nomor), skala (1-4, opsional kolom komentar), pilihan (daftar opsi bebas, tanpa skor, opsional kolom komentar),
    ya_tidak, teks, bukti_catatan (dua kolom: Bukti Pembelajaran + Catatan). */
 var SvForm = (function () {
   function esc(s) { return (s === null || s === undefined) ? '' : String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -18,14 +18,24 @@ var SvForm = (function () {
     var v = /jenjang/.test(label) ? d.jenjang : /mata pelajaran/.test(label) ? d.mapel : /kelas/.test(label) ? d.kelas : '';
     return (v && v !== '—') ? v : '';
   }
+  // Penentu jenis mapel: butir 'pilihan' berjudul "Jenis mata pelajaran ..." (opsi 1 = Kejuruan, opsi 2 = Non-kejuruan).
+  // Bila Non-kejuruan, indikator bertanda (K) disembunyikan & tidak dihitung.
+  function penentu(f) { return (f.pertanyaan || []).filter(function (q) { return q.tipe === 'pilihan' && /jenis mata pelajaran/i.test(q.teks); })[0] || null; }
+  function aktif(f, jw) {
+    var p = penentu(f);
+    if (!p || !jw || String(jw[p.id]) !== '2') return f;
+    var o = {}; for (var k in f) o[k] = f[k];
+    o.pertanyaan = f.pertanyaan.filter(function (q) { return q.tipe === 'bagian' || !/\(K\)/.test(q.teks); });
+    return o;
+  }
   function render(f, jw, d) {
-    jw = jw || {}; var n = 0;
+    jw = jw || {}; var n = 0; var pn = penentu(f); f = aktif(f, jw);
     function v(k) { return jw[k] === undefined ? '' : String(jw[k]); }
     return f.pertanyaan.map(function (q) {
       if (q.tipe === 'bagian') return '<div class="sv-bagian"><div class="sv-bagian__t">' + esc(q.teks) + '</div>' + (q.keterangan ? '<div class="sv-bagian__k">' + esc(q.keterangan) + '</div>' : '') + '</div>';
       var judul = q.tipe === 'info' ? q.teks : (++n) + '. ' + q.teks, b;
-      if (q.tipe === 'skala') {
-        b = '<select data-a="' + q.id + '"><option value="">— pilih skala —</option>' + opsiSkala(q).map(function (l, i) { return '<option value="' + (i + 1) + '"' + (v(q.id) === String(i + 1) ? ' selected' : '') + '>' + esc(l) + '</option>'; }).join('') + '</select>';
+      if (q.tipe === 'skala' || q.tipe === 'pilihan') {
+        b = '<select data-a="' + q.id + '"' + (pn && pn.id === q.id ? ' data-penentu="1"' : '') + '><option value="">' + (q.tipe === 'pilihan' ? '— pilih —' : '— pilih skala —') + '</option>' + opsiSkala(q).map(function (l, i) { return '<option value="' + (i + 1) + '"' + (v(q.id) === String(i + 1) ? ' selected' : '') + '>' + esc(l) + '</option>'; }).join('') + '</select>';
         if (q.komentar) b += ta(q.id + '_k', q.komentar, v(q.id + '_k'));
       } else if (q.tipe === 'ya_tidak') {
         b = '<select data-a="' + q.id + '"><option value="">—</option>' + ['Ya', 'Tidak'].map(function (x) { return '<option' + (v(q.id) === x ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select>';
@@ -46,12 +56,12 @@ var SvForm = (function () {
   }
 
   function hasil(f, jw) {
-    jw = jw || {}; var n = 0;
+    jw = jw || {}; var n = 0; f = aktif(f, jw);
     function t(k) { return (jw[k] === undefined || jw[k] === '') ? '—' : esc(jw[k]); }
     return f.pertanyaan.map(function (q) {
       if (q.tipe === 'bagian') return '<div class="sv-bagian"><div class="sv-bagian__t">' + esc(q.teks) + '</div></div>';
       var judul = q.tipe === 'info' ? q.teks : (++n) + '. ' + q.teks, b;
-      if (q.tipe === 'skala') { var i = parseInt(jw[q.id], 10); b = i ? esc(opsiSkala(q)[i - 1]) : '—'; if (q.komentar) b += '<div class="sv-lbl">' + esc(q.komentar) + '</div>' + t(q.id + '_k'); }
+      if (q.tipe === 'skala' || q.tipe === 'pilihan') { var i = parseInt(jw[q.id], 10); b = i ? esc(opsiSkala(q)[i - 1]) : '—'; if (q.komentar) b += '<div class="sv-lbl">' + esc(q.komentar) + '</div>' + t(q.id + '_k'); }
       else if (q.tipe === 'bukti_catatan') b = '<div class="sv-lbl">Bukti Pembelajaran</div>' + t(q.id + '_b') + '<div class="sv-lbl">Catatan</div>' + t(q.id + '_c');
       else b = t(q.id);
       return '<div class="sv-q"><div class="sv-q__t">' + esc(judul) + '</div><div style="white-space:pre-wrap;">' + b + '</div></div>';
@@ -80,5 +90,5 @@ var SvForm = (function () {
       return { form: f, jawaban: p.jawaban || {}, catatan: p.catatan || '' };
     });
   }
-  return { render: render, baca: baca, hasil: hasil, identitas: identitas, paket: paket, indukDari: indukDari, isianPaket: isianPaket };
+  return { penentu: penentu, aktif: aktif, render: render, baca: baca, hasil: hasil, identitas: identitas, paket: paket, indukDari: indukDari, isianPaket: isianPaket };
 })();

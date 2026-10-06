@@ -313,9 +313,12 @@ var SvOto = (function () {
   function isi(f, target, ctx) {
     if (!P4[target]) throw new Error('Target nilai harus dipilih: BAIK atau SANGAT BAIK.');
     ctx = ctx || {}; dipakai = {};
+    var awal = ctx.jawabanAwal || {}, pen = window.SvForm ? SvForm.penentu(f) : null;
+    if (window.SvForm) f = SvForm.aktif(f, awal);   // mapel non-kejuruan: indikator (K) dilewati
     var jw = {}, gForm = pilih(['ringkas', 'biasa', 'biasa', 'naratif']), pq = f.pertanyaan;
     var skala = pq.filter(function (q) { return q.tipe === 'skala'; });
-    MODE = skala.length ? 'pra' : 'sup';
+    // Skala dengan kolom "Bukti ..." = form observasi (implementasi), bukan telaah perencanaan
+    MODE = (skala.length && !skala.some(function (q) { return /bukti/i.test(q.komentar || ''); })) ? 'pra' : 'sup';
     var butir = pq.filter(function (q) { return q.tipe === 'skala' || q.tipe === 'bukti_catatan'; });
     var n4 = Math.round(butir.length * P4[target]);
     if (butir.length >= 8) n4 = Math.max(0, Math.min(butir.length, n4 + rn(3) - 1));   // selisih ±1 supaya tiap hasil tidak persis sama
@@ -331,7 +334,14 @@ var SvOto = (function () {
       var t = q.teks.toLowerCase(), g = gayaItem(gForm), v, k;
       if (q.tipe === 'skala') {
         v = nb[q.id]; k = v === 4; total += v; jw[q.id] = String(v);
-        if (q.komentar) jw[q.id + '_k'] = komentarSkala(asp[q.id], k, g);
+        if (q.komentar) jw[q.id + '_k'] = MODE === 'sup' ? buktiObs(asp[q.id], k, g) : komentarSkala(asp[q.id], k, g);
+      } else if (q.tipe === 'pilihan') {
+        // Pilihan tanpa skor: cocokkan dengan target nilai (Baik / Sangat Baik); telaah perangkat -> "Sesuai"
+        var op = q.opsi || [], ix = -1;
+        op.forEach(function (o, i) { if (ix < 0 && o.toLowerCase() === target.toLowerCase()) ix = i; });
+        if (ix < 0) op.forEach(function (o, i) { if (ix < 0 && /^sesuai/i.test(o)) ix = i; });
+        jw[q.id] = ix >= 0 ? String(ix + 1) : '';
+        if (q.komentar) jw[q.id + '_k'] = '';
       } else if (q.tipe === 'ya_tidak') jw[q.id] = 'Ya';
       else if (q.tipe === 'bukti_catatan') {
         k = nb[q.id] === 4;
@@ -347,6 +357,7 @@ var SvOto = (function () {
           /tindak lanjut/.test(t) ? tulisRtl(acLemah, g) : catatanUmum(target, acLemah, g);
       }
     });
+    if (pen && awal[pen.id]) jw[pen.id] = String(awal[pen.id]);   // pilihan jenis mapel dari supervisor dipertahankan
     var skor = skala.length ? { rata: (total / skala.length).toFixed(2).replace('.', ','), persen: Math.round(total / (skala.length * 4) * 100) } : null;
     return { jawaban: jw, catatan: catatanUmum(target, acLemah, gForm), skor: skor };
   }
