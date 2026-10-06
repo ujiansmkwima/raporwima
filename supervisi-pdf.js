@@ -223,6 +223,17 @@ var SvPdf = (function () {
     }
   }
 
+  // Tanggal dokumen Pra-Supervisi (bila dipaketkan di bawah jadwal Supervisi) = 1 hari sebelum hari supervisi;
+  // jika jatuh pada hari Minggu, dimajukan ke hari Sabtu (2 hari sebelum). Keluaran 'YYYY-MM-DD'.
+  function tanggalPra(iso) {
+    var m = String(iso || '').match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (!m) return iso;
+    var d = new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10));
+    d.setDate(d.getDate() - 1);
+    if (d.getDay() === 0) d.setDate(d.getDate() - 1);
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+
   async function unduh(j, f, id, opsi) {
     opsi = opsi || {};
     if (!window.jspdf || !window.jspdf.jsPDF) throw new Error('Pustaka PDF (jsPDF) belum termuat. Periksa koneksi internet lalu muat ulang halaman.');
@@ -239,12 +250,16 @@ var SvPdf = (function () {
     var daftar = opsi.paket && opsi.paket.length ? opsi.paket : [{ form: f, jawaban: jw, catatan: catatan }];
     daftar.forEach(function (it, k) {
       var f = it.form, jw = it.jawaban || {}, catatan = it.catatan;
+      // Form Pra-Supervisi di dalam paket jadwal Supervisi: tanggal dokumennya H-1 (Minggu -> Sabtu)
+      var praPaket = f.jenis === 'pra' && j.jenis === 'supervisi';
+      var tglDok = praPaket ? tanggalPra(j.tanggal) : j.tanggal;
+      var idf = praPaket ? Object.assign({}, id, { tanggal: tglId(tglDok), jenis: 'Pra-Supervisi Akademik' }) : id;
       if (k > 0) doc.addPage();
       var y = kop(doc, profil, logo);
-      y = judul(doc, y, jenisLabel, f.judul);
-      y = tabelIdentitas(doc, y + 3, id) + 5;
+      y = judul(doc, y, praPaket ? 'Pra-Supervisi Akademik' : jenisLabel, f.judul);
+      y = tabelIdentitas(doc, y + 3, idf) + 5;
 
-      var t = susunBaris(f, jw, id);
+      var t = susunBaris(f, jw, idf);
       doc.autoTable({
         startY: y, margin: { left: M.kiri, right: M.kanan, top: M.atas, bottom: M.bawah }, theme: 'grid',
         head: [t.head], body: t.body, rowPageBreak: 'avoid', showHead: 'everyPage',
@@ -282,7 +297,7 @@ var SvPdf = (function () {
       y = doc.lastAutoTable.finalY + 10;
 
       blokTtd(doc, y, {
-        kota: profil.kota_ttd || 'Tambak', tanggal: tglId(j.tanggal) || id.tanggal || '',
+        kota: profil.kota_ttd || 'Tambak', tanggal: tglId(tglDok) || idf.tanggal || '',
         namaKepsek: profil.kepala_sekolah, nipKepsek: profil.nip_kepala_sekolah, ttdKepsek: profil.ttd_kepala_sekolah,
         namaSpv: id.spv && id.spv !== '—' ? id.spv : '', nipSpv: spv.nip, ttdSpv: spv.ttd
       });
