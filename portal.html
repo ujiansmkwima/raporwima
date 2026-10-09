@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Menu Utama — SMK Widya Mandala Tambak</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=10">
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-client.js"></script>
+<style>
+  body { background: var(--bg); min-height: 100vh; }
+  .portal { max-width: 980px; margin: 0 auto; padding: 28px 20px 48px; }
+  .portal__top { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 40px; }
+  .portal__brand { display: flex; align-items: center; gap: 12px; }
+  .portal__brand img { width: 46px; height: 46px; object-fit: contain; }
+  .portal__brand b { display: block; font-family: var(--font-display); font-size: 15px; letter-spacing: -0.01em; }
+  .portal__brand span { font-size: 12px; color: var(--ink-soft); }
+  .portal__user { display: flex; align-items: center; gap: 12px; font-size: 13px; text-align: right; }
+  .portal__user a { color: var(--ink-soft); text-decoration: none; font-size: 12px; display: inline-flex; align-items: center; gap: 4px; }
+  .portal__user a:hover { color: var(--danger); }
+  .portal__hello { font-family: var(--font-display); font-size: 26px; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 6px; }
+  .portal__sub { color: var(--ink-soft); font-size: 14px; margin: 0 0 28px; }
+  .portal__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
+  .app-card { display: flex; flex-direction: column; gap: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 24px; text-decoration: none; color: var(--ink); box-shadow: var(--shadow-sm); transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease; }
+  .app-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); border-color: var(--primary-soft); }
+  .app-card__icon { width: 48px; height: 48px; border-radius: 14px; display: flex; align-items: center; justify-content: center; background: var(--primary-tint-strong); color: var(--primary-dim); }
+  .app-card__icon i, .app-card__icon svg { width: 24px; height: 24px; }
+  .app-card--erapor .app-card__icon { background: var(--success-tint); color: var(--success); }
+  .app-card--supervisi .app-card__icon { background: var(--accent-tint); color: var(--accent); }
+  .app-card__title { font-family: var(--font-display); font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+  .app-card__desc { font-size: 13px; color: var(--ink-soft); line-height: 1.55; flex: 1; }
+  .app-card__go { font-size: 13px; font-weight: 700; color: var(--primary); display: inline-flex; align-items: center; gap: 4px; }
+  .portal__foot { text-align: center; font-size: 11.5px; color: var(--ink-faint); margin-top: 44px; }
+  .portal__note { margin-top: 22px; }
+</style>
+</head>
+<body>
+
+<div class="portal">
+  <div class="portal__top">
+    <div class="portal__brand">
+      <img src="assets/logo.png" alt="Logo SMK Widya Mandala Tambak">
+      <div><b>SMK Widya Mandala Tambak</b><span id="metaTa">Banyumas</span></div>
+    </div>
+    <div class="portal__user">
+      <div><div id="userName" style="font-weight:700;">Memuat...</div><div id="userRole" style="font-size:11.5px;color:var(--ink-soft);"></div></div>
+      <a href="#" id="logoutBtn"><i data-lucide="log-out" style="width:14px;height:14px;"></i> Keluar</a>
+    </div>
+  </div>
+
+  <h1 class="portal__hello" id="hello">Selamat datang</h1>
+  <p class="portal__sub">Pilih aplikasi yang ingin kamu buka.</p>
+
+  <div class="portal__grid" id="grid"></div>
+
+  <div class="panel-note portal__note" id="note" style="display:none;"></div>
+
+  <div class="portal__foot">© <span id="year"></span> SMK Widya Mandala Tambak · developed by hhh</div>
+</div>
+
+<script>
+  document.getElementById('year').textContent = new Date().getFullYear();
+
+  function kartu(href, kelas, ikon, judul, desc) {
+    return '<a class="app-card ' + kelas + '" href="' + href + '">' +
+      '<div class="app-card__icon"><i data-lucide="' + ikon + '"></i></div>' +
+      '<div class="app-card__title">' + judul + '</div>' +
+      '<div class="app-card__desc">' + desc + '</div>' +
+      '<div class="app-card__go">Buka <i data-lucide="arrow-right" style="width:14px;height:14px;"></i></div></a>';
+  }
+
+  (async function () {
+    var ses = await supabaseClient.auth.getSession();
+    if (!ses.data.session) { window.location.href = 'index.html'; return; }
+    var user = ses.data.session.user;
+
+    var pr = await supabaseClient.from('profiles').select('nama, role').eq('id', user.id).single();
+    if (pr.error || !pr.data) {
+      document.getElementById('userName').textContent = user.email;
+      document.getElementById('grid').innerHTML = '';
+      var n = document.getElementById('note');
+      n.style.display = ''; n.textContent = 'Akun ini belum punya role. Hubungi admin.';
+      return;
+    }
+    var admin = pr.data.role === 'admin';
+    var nama = pr.data.nama || user.email;
+    document.getElementById('userName').textContent = nama;
+    document.getElementById('userRole').textContent = admin ? 'Admin' : 'Guru';
+    document.getElementById('hello').textContent = 'Halo, ' + nama.split(' ')[0] + '!';
+
+    var ta = (await supabaseClient.from('tahun_ajaran').select('nama, semester').eq('is_aktif', true).maybeSingle()).data;
+    if (ta) document.getElementById('metaTa').textContent = 'Tahun Ajaran ' + ta.nama + ' — Semester ' + ta.semester;
+
+    document.getElementById('grid').innerHTML =
+      kartu(admin ? 'bukuinduk-admin.html' : 'bukuinduk-guru.html', '', 'book-user', 'Buku Induk',
+        admin ? 'Data induk lengkap seluruh siswa: identitas, orang tua, riwayat pendidikan, mutasi & kelulusan, arsip nilai dari E-Rapor, cetak & Excel.'
+              : 'Lengkapi Buku Induk siswa di kelas yang kamu ampu sebagai wali kelas, lengkap dengan nilai dari E-Rapor.') +
+      kartu(admin ? 'admin.html' : 'guru.html', 'app-card--erapor', 'file-text', 'E-Rapor',
+        admin ? 'Kelola tahun ajaran, kelas, siswa, mapel, penugasan guru, nilai, leger dan rapor.'
+              : 'Input nilai, tujuan pembelajaran, presensi, ekskul, PKL dan cetak rapor.') +
+      kartu(admin ? 'supervisi-admin.html' : 'supervisi.html', 'app-card--supervisi', 'clipboard-check', 'Supervisi',
+        admin ? 'Atur jadwal, form dan data supervisi akademik guru.'
+              : 'Lihat jadwal dan isi form pra-supervisi / supervisi.');
+
+    if (window.lucide) lucide.createIcons();
+  })();
+
+  document.getElementById('logoutBtn').addEventListener('click', async function (e) {
+    e.preventDefault();
+    await supabaseClient.auth.signOut();
+    window.location.href = 'index.html';
+  });
+  if (window.lucide) lucide.createIcons();
+</script>
+
+</body>
+</html>

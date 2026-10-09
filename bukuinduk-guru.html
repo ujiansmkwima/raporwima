@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Buku Induk (Wali Kelas) — SMK Widya Mandala Tambak</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=10">
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="xlsx-autofit.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="supabase-client.js"></script>
+<script src="sticky-nama.js?v=1"></script>
+<script src="bukuinduk-fields.js?v=1"></script>
+<script src="bukuinduk-core.js?v=1"></script>
+<script src="mobile.js?v=1" defer></script>
+</head>
+<body>
+
+<div class="app">
+
+  <aside class="sidebar">
+    <div class="sidebar__brand">
+      <img class="sidebar__brand-logo" src="assets/logo.png" alt="Logo SMK Widya Mandala Tambak">
+      <div class="sidebar__brand-text">
+        <span class="sidebar__brand-mark">Buku Induk</span>
+        <span class="sidebar__brand-school">SMK Widya Mandala Tambak</span>
+      </div>
+    </div>
+    <div class="sidebar__role"><i data-lucide="graduation-cap" style="width:13px;height:13px;"></i> <span id="roleLabel">Wali Kelas</span></div>
+
+    <div class="sidebar__section-label">Aplikasi</div>
+    <nav class="menu-list">
+      <a href="portal.html" class="menu-item"><i data-lucide="layout-grid" class="menu-icon"></i><span class="menu-item__title">Menu Utama</span></a>
+      <a href="guru.html" class="menu-item"><i data-lucide="file-text" class="menu-icon"></i><span class="menu-item__title">E-Rapor</span></a>
+    </nav>
+
+    <div class="sidebar__section-label">Wali Kelas</div>
+    <nav class="menu-list" id="menuBI">
+      <a href="#" class="menu-item" data-view="dashboard"><i data-lucide="layout-dashboard" class="menu-icon"></i><span class="menu-item__title">Ringkasan Kelas</span></a>
+      <a href="#" class="menu-item" data-view="siswa"><i data-lucide="book-user" class="menu-icon"></i><span class="menu-item__title">Data Siswa Kelas</span></a>
+      <a href="#" class="menu-item" data-view="kelengkapan"><i data-lucide="list-checks" class="menu-icon"></i><span class="menu-item__title">Kelengkapan Data</span></a>
+      <a href="#" class="menu-item" data-view="sinkron"><i data-lucide="refresh-cw" class="menu-icon"></i><span class="menu-item__title">Sinkron dari E-Rapor</span></a>
+      <a href="#" class="menu-item" data-view="excel"><i data-lucide="file-spreadsheet" class="menu-icon"></i><span class="menu-item__title">Unduh Excel</span></a>
+      <a href="#" class="menu-item" data-view="cetak"><i data-lucide="printer" class="menu-icon"></i><span class="menu-item__title">Cetak Buku Induk</span></a>
+    </nav>
+
+    <div class="sidebar__footer">
+      <div style="margin-bottom:8px; opacity:0.8;">SMK Widya Mandala Tambak · Banyumas</div>
+      <div style="margin-top:8px;font-size:10px;opacity:0.45;">developed by hhh</div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <div class="topbar__title">Buku Induk — Wali Kelas</div>
+        <div class="topbar__meta" id="topbarMeta">Memuat tahun ajaran aktif...</div>
+      </div>
+      <div class="user-chip">
+        <div class="user-chip__text">
+          <div class="user-chip__name" id="userName">Memuat...</div>
+          <div class="user-chip__role" id="userRoleLabel">Guru</div>
+          <a href="#" id="logoutBtn" class="user-chip__logout"><i data-lucide="log-out" style="width:13px;height:13px;"></i> Keluar</a>
+        </div>
+        <div class="user-chip__avatar" id="userAvatar">•</div>
+      </div>
+    </div>
+
+    <div class="content" id="content"></div>
+  </div>
+
+</div>
+
+<script>
+  lucide.createIcons();
+  var content = document.getElementById('content');
+  var esc = BI.esc;
+  var kelas = null; // kelas yang diampu sebagai wali kelas (tahun ajaran aktif)
+
+  function setActive(view) {
+    document.querySelectorAll('#menuBI .menu-item').forEach(function (m) { m.classList.toggle('menu-item--active', m.dataset.view === view); });
+  }
+
+  function pesanBukanWali(judul, desc) {
+    content.innerHTML = '<div class="empty-state"><div class="empty-state__mark">！</div><div class="empty-state__title">' + judul + '</div><div class="empty-state__desc">' + desc + '</div></div>';
+  }
+
+  async function renderDashboard() {
+    content.innerHTML = '<div class="panel-head"><div><div class="panel-head__title">Ringkasan Kelas ' + esc(kelas.nama) + '</div><div class="panel-head__desc">Memuat...</div></div></div>';
+    var list;
+    try { list = await BI.muatSiswa({ kelasId: kelas.id }); } catch (e) { content.innerHTML = '<div class="panel-note">' + esc(BI.pesanError(e)) + '</div>'; return; }
+    var hit = list.map(function (s) { return { s: s, k: BI.kelengkapan(s) }; });
+    var rata = hit.length ? Math.round(hit.reduce(function (t, x) { return t + x.k.persen; }, 0) / hit.length) : 0;
+    var perlu = hit.filter(function (x) { return x.k.persen < 100; }).sort(function (a, b) { return a.k.persen - b.k.persen; }).slice(0, 8);
+
+    content.innerHTML =
+      '<div class="panel-head"><div><div class="panel-head__title">Ringkasan Kelas ' + esc(kelas.nama) + '</div><div class="panel-head__desc">Kelola Buku Induk siswa di kelas yang kamu ampu sebagai wali kelas.</div></div></div>' +
+      '<div class="stat-grid"><div class="stat-card"><div class="stat-card__label">Jumlah siswa</div><div class="stat-card__value">' + list.length + '</div></div>' +
+      '<div class="stat-card"><div class="stat-card__label">Rata-rata kelengkapan</div><div class="stat-card__value">' + rata + '%</div></div>' +
+      '<div class="stat-card"><div class="stat-card__label">Data 100% lengkap</div><div class="stat-card__value">' + hit.filter(function (x) { return x.k.persen === 100; }).length + '</div></div></div>' +
+      '<div class="panel-note"><b>Tersambung dengan E-Rapor.</b> Biodata yang kamu lengkapi di sini otomatis dipakai E-Rapor (mis. Cetak Identitas). Nilai, kehadiran, ekskul & PKL dari E-Rapor ditarik ke Buku Induk lewat menu <b>Sinkron dari E-Rapor</b> atau otomatis saat membuka tab Perkembangan Belajar siswa.</div>' +
+      (perlu.length ? '<div class="section-title">Perlu dilengkapi</div><div class="table-wrap"><table class="data-table"><thead><tr><th>Nama</th><th>Kelengkapan</th><th>Isian kosong</th></tr></thead><tbody>' +
+        perlu.map(function (x) { return '<tr><td>' + esc(x.s.nama) + '</td><td>' + BI.chipKelengkapan(x.k.persen) + '</td><td style="font-size:12px;color:var(--ink-soft);">' + esc(x.k.kurang.slice(0, 6).join(', ')) + (x.k.kurang.length > 6 ? ', ...' : '') + '</td></tr>'; }).join('') +
+        '</tbody></table></div>' : '<div class="panel-note">Semua data siswa di kelas ini sudah lengkap. 🎉</div>');
+  }
+
+  var views = {
+    dashboard: renderDashboard,
+    siswa: function () { return BI.renderDaftar({ root: content, kelasId: kelas.id, judul: 'Data Siswa — ' + kelas.nama, desc: 'Pilih siswa untuk melengkapi Buku Induk-nya. NIS/NISN dan status hanya bisa diubah admin.', bolehUbah: true }); },
+    kelengkapan: function () { return BI.renderKelengkapan({ root: content, kelasId: kelas.id }); },
+    sinkron: function () { return BI.renderSinkron({ root: content, kelasId: kelas.id }); },
+    excel: function () { return BI.renderExcel({ root: content, kelasId: kelas.id }); },
+    cetak: function () { return BI.renderCetak({ root: content, kelasId: kelas.id }); }
+  };
+
+  (async function () {
+    var sesi = await BI.mulaiSesi();
+    if (!sesi) return;
+    if (BI.ctx.admin) { window.location.href = 'bukuinduk-admin.html'; return; }
+    document.getElementById('userName').textContent = sesi.nama;
+    document.getElementById('userAvatar').textContent = sesi.nama.trim().charAt(0).toUpperCase();
+    BI.pasangLogout('logoutBtn');
+
+    if (!sesi.ta) {
+      document.getElementById('topbarMeta').textContent = 'Belum ada tahun ajaran aktif — hubungi admin.';
+      pesanBukanWali('Belum ada tahun ajaran aktif', 'Hubungi admin untuk mengaktifkan tahun ajaran.');
+      return;
+    }
+    document.getElementById('topbarMeta').textContent = 'Tahun Ajaran ' + sesi.ta.nama + ' — Semester ' + sesi.ta.semester;
+
+    var wk = await supabaseClient.from('wali_kelas')
+      .select('id, kelas:kelas_id(id, nama, tingkat, program_keahlian)')
+      .eq('guru_id', sesi.user.id).eq('tahun_ajaran_id', sesi.ta.id).maybeSingle();
+    if (!wk.data || !wk.data.kelas) {
+      document.getElementById('menuBI').innerHTML = '<div class="menu-empty">Khusus wali kelas.</div>';
+      document.getElementById('userRoleLabel').textContent = 'Guru';
+      pesanBukanWali('Menu Buku Induk khusus wali kelas',
+        'Kamu belum ditugaskan sebagai wali kelas pada tahun ajaran ini. Hubungi admin bila seharusnya kamu wali kelas. Kamu tetap bisa memakai E-Rapor dari Menu Utama.');
+      return;
+    }
+    kelas = wk.data.kelas;
+    BI.ctx.kelasWali = kelas;
+    document.getElementById('userRoleLabel').textContent = 'Guru · Wali Kelas ' + kelas.nama;
+    document.getElementById('roleLabel').textContent = 'Wali Kelas ' + kelas.nama;
+
+    document.querySelectorAll('#menuBI .menu-item').forEach(function (item) {
+      item.addEventListener('click', function (e) {
+        e.preventDefault();
+        setActive(item.dataset.view);
+        views[item.dataset.view]();
+      });
+    });
+    setActive('dashboard');
+    renderDashboard();
+  })();
+</script>
+
+</body>
+</html>

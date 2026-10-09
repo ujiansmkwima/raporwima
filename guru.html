@@ -34,6 +34,12 @@
     </div>
     <div class="sidebar__role"><i data-lucide="graduation-cap" style="width:13px;height:13px;"></i> Panel Guru</div>
 
+    <div class="sidebar__section-label">Aplikasi</div>
+    <nav class="menu-list">
+      <a href="portal.html" class="menu-item"><i data-lucide="layout-grid" class="menu-icon"></i><span class="menu-item__title">Menu Utama</span></a>
+      <a href="bukuinduk-guru.html" class="menu-item"><i data-lucide="book-user" class="menu-icon"></i><span class="menu-item__title">Buku Induk</span></a>
+    </nav>
+
     <div class="sidebar__section-label">Ringkasan</div>
     <nav class="menu-list" id="menuRingkasan">
       <a href="#" class="menu-item" id="menuDashboardGuru"><i data-lucide="layout-dashboard" class="menu-icon"></i><span class="menu-item__title">Dashboard Saya</span></a>
@@ -6445,6 +6451,14 @@
           .single();
         var siswa = siswaRes.data || {};
 
+        // Tambahan dari Buku Induk (NIK, foto, hubungan wali). Boleh gagal/kosong
+        // (mis. migrasi_buku_induk.sql belum dijalankan) — cetak tetap jalan.
+        var detail = {};
+        try {
+          var detRes = await supabaseClient.from('bi_siswa_detail').select('nik, foto, wali_hubungan').eq('siswa_id', siswaId).maybeSingle();
+          if (!detRes.error && detRes.data) detail = detRes.data;
+        } catch (e) { /* abaikan */ }
+
         var jenisKelaminTampil = siswa.jenis_kelamin === 'L' ? 'Laki-laki' : (siswa.jenis_kelamin === 'P' ? 'Perempuan' : '');
         var ttlTampil = [siswa.tempat_lahir, formatTanggalIndonesia(siswa.tanggal_lahir)].filter(Boolean).join(', ');
         var tahunAkhir = (String(tahunAktif.nama).split('/')[1] || tahunAktif.nama).trim();
@@ -6457,6 +6471,7 @@
           '<table class="ident-table"><tbody>' +
           barisIdent('Nama Peserta Didik', siswa.nama) +
           barisIdent('NIS / NISN', (siswa.nis || '-') + ' / ' + (siswa.nisn || '-')) +
+          (detail.nik ? barisIdent('NIK', detail.nik) : '') +
           barisIdent('Tempat, Tanggal Lahir', ttlTampil) +
           barisIdent('Jenis Kelamin', jenisKelaminTampil) +
           barisIdent('Agama', siswa.agama) +
@@ -6483,6 +6498,7 @@
           '<div class="rapor-cetak__bar rapor-cetak__bar--sub">C. DATA WALI</div>' +
           '<table class="ident-table"><tbody>' +
           barisIdent('Nama Wali', siswa.nama_wali) +
+          (detail.wali_hubungan ? barisIdent('Hubungan dengan Siswa', detail.wali_hubungan) : '') +
           barisIdent('Alamat Wali', siswa.alamat_wali) +
           barisIdent('Nomor Telepon Rumah', siswa.no_telp_wali) +
           barisIdent('Pekerjaan Wali', siswa.pekerjaan_wali) +
@@ -6490,7 +6506,7 @@
 
           '<div class="rapor-cetak__footer">' +
           '<div class="ident-footer-row">' +
-          '<div class="ident-photo-box">Foto<br>3&times;4</div>' +
+          '<div class="ident-photo-box" style="overflow:hidden;padding:0;">' + (detail.foto ? '<img src="' + detail.foto + '" alt="Foto" style="width:100%;height:100%;object-fit:cover;">' : 'Foto<br>3&times;4') + '</div>' +
           '<div class="ident-footer-ttd"><div class="rapor-cetak__footer-date">' + escapeHtml(NAMA_KOTA_TTD) + ', ' + (TANGGAL_IDENTITAS_CETAK ? escapeHtml(TANGGAL_IDENTITAS_CETAK) : '…........' + escapeHtml(tahunAkhir)) + '</div><div>Kepala Sekolah</div>' + ruangTtdKepalaSekolah(profilSekolah, 'rapor') + '<div><strong>' + escapeHtml(NAMA_KEPALA_SEKOLAH) + '</strong></div></div>' +
           '</div>' +
           '</div>' +

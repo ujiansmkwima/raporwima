@@ -1,0 +1,27 @@
+# Buku Induk — cara pasang
+
+## Alur pakai
+Login (index.html) → **Menu Utama** (portal.html): Buku Induk · E-Rapor · Supervisi.
+- Admin  → bukuinduk-admin.html
+- Guru   → bukuinduk-guru.html (khusus **wali kelas**; guru biasa melihat pesan "khusus wali kelas")
+
+## Pasang
+1. Supabase → SQL Editor → jalankan **migrasi_buku_induk.sql** (aman diulang).
+2. Upload ke GitHub Pages file baru/diubah:
+   - baru: portal.html, bukuinduk-admin.html, bukuinduk-guru.html, bukuinduk-core.js, bukuinduk-fields.js, migrasi_buku_induk.sql
+   - diubah: index.html, guru.html, admin.html, supervisi.html, supervisi-admin.html
+
+## Sinkron dengan E-Rapor
+- Biodata dasar (nama, NIS/NISN, TTL, alamat, orang tua, wali, asal sekolah, tanggal masuk, status) memakai tabel `siswa` yang SAMA dengan E-Rapor → diubah di mana pun, langsung sama di aplikasi satunya.
+- Isian tambahan Buku Induk (NIK, kesehatan, pendidikan/penghasilan orang tua, data lulus/keluar, foto, catatan khusus) → tabel `bi_siswa_detail`.
+- Nilai rapor, kehadiran, ekskul, PKL tiap semester ditarik dari E-Rapor → arsip `bi_riwayat_semester` (menu "Sinkron dari E-Rapor", atau otomatis saat tab Perkembangan Belajar siswa dibuka). Semester yang diisi manual dikunci dan tidak ditimpa.
+
+## Hak akses
+- Admin: semua siswa. Wali kelas: hanya siswa kelasnya pada tahun ajaran aktif (NIS/NISN & status hanya bisa diubah admin di layar).
+- Guru lain tidak bisa membaca data Buku Induk.
+
+## Excel (template & impor)
+Menu **Excel** (admin & wali kelas): Template Isian (berisi daftar siswa), Template Kosong (admin, siswa baru), Data Saat Ini, lalu Impor.
+File Excel berformat tabel bergaris: judul, pita bagian, header (oranye = isian pokok), dropdown pilihan, filter, baris beku, sheet Petunjuk.
+Impor mencocokkan lewat NIS (cadangan NISN), menampilkan ringkasan + peringatan sebelum "Terapkan". Admin bisa mencentang "tambahkan siswa baru bila NIS belum ada".
+Butuh library ExcelJS dari cdnjs (sudah ditambahkan di bukuinduk-admin.html & bukuinduk-guru.html).
