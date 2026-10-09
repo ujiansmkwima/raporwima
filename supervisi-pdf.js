@@ -235,27 +235,24 @@ var SvPdf = (function () {
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
 
-  async function unduh(j, f, id, opsi) {
-    opsi = opsi || {};
-    if (!window.jspdf || !window.jspdf.jsPDF) throw new Error('Pustaka PDF (jsPDF) belum termuat. Periksa koneksi internet lalu muat ulang halaman.');
+  // Menyusun halaman satu jadwal (seluruh form dalam paket) ke dalam doc.
+  // ctx = { profil, logo, spv, sudahAda }: sudahAda=false berarti halaman pertama dokumen yang masih kosong dipakai dulu.
+  function halamanJadwal(doc, j, f, id, opsi, ctx) {
+    var profil = ctx.profil, spv = ctx.spv || {}, logo = ctx.logo;
     var jw = opsi.jawaban !== undefined ? (opsi.jawaban || {}) : (j.jawaban || {});
     var catatan = opsi.catatan !== undefined ? opsi.catatan : (j.catatan || '');
-    var data = await ambilData(j, opsi.profil), profil = data.profil, spv = data.spv || {};
-    var logo = await muatLogo();
-    var doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait', compress: true });
-    if (typeof doc.autoTable !== 'function') throw new Error('Pustaka tabel PDF (jspdf-autotable) belum termuat.');
     var jenisLabel = id.jenis || (j.jenis === 'pra' ? 'Pra-Supervisi Akademik' : 'Supervisi');
 
-    doc.setProperties({ title: bersih(jenisLabel) + ' - ' + bersih(id.guru), author: bersih(id.spv), subject: bersih(f.judul) });
     // Paket form: tiap form dicetak di halaman baru (kop, identitas, isian, rekap, catatan, tanda tangan), semuanya dalam satu file PDF.
     var daftar = opsi.paket && opsi.paket.length ? opsi.paket : [{ form: f, jawaban: jw, catatan: catatan }];
-    daftar.forEach(function (it, k) {
+    daftar.forEach(function (it) {
       var f = it.form, jw = it.jawaban || {}, catatan = it.catatan;
       // Form Pra-Supervisi di dalam paket jadwal Supervisi: tanggal dokumennya H-1 (Minggu -> Sabtu)
       var praPaket = f.jenis === 'pra' && j.jenis === 'supervisi';
       var tglDok = praPaket ? tanggalPra(j.tanggal) : j.tanggal;
       var idf = praPaket ? Object.assign({}, id, { tanggal: tglId(tglDok), jenis: 'Pra-Supervisi Akademik' }) : id;
-      if (k > 0) doc.addPage();
+      if (ctx.sudahAda) doc.addPage();
+      ctx.sudahAda = true;
       var y = kop(doc, profil, logo);
       y = judul(doc, y, praPaket ? 'Pra-Supervisi Akademik' : jenisLabel, f.judul);
       y = tabelIdentitas(doc, y + 3, idf) + 5;
@@ -303,21 +300,116 @@ var SvPdf = (function () {
         namaSpv: id.spv && id.spv !== '—' ? id.spv : '', nipSpv: spv.nip, ttdSpv: spv.ttd
       });
     });
+  }
+
+  function cekPustaka() {
+    if (!window.jspdf || !window.jspdf.jsPDF) throw new Error('Pustaka PDF (jsPDF) belum termuat. Periksa koneksi internet lalu muat ulang halaman.');
+  }
+
+  // mode 'cetak': PDF dibuka di tab baru dan dialog cetak browser langsung muncul.
+  // mode lain (default): PDF diunduh sebagai file. Mengembalikan teks peringatan bila jendela cetak diblokir.
+  function keluaran(doc, namaFile, mode, jendela) {
+    if (mode === 'cetak') {
+      if (jendela && !jendela.closed) {
+        doc.autoPrint();
+        jendela.location.href = doc.output('bloburl');
+        return null;
+      }
+      doc.save(namaFile);
+      return 'Jendela cetak diblokir browser, jadi PDF diunduh sebagai file. Buka file tersebut lalu cetak.';
+    }
+    doc.save(namaFile);
+    return null;
+  }
+
+  async function unduh(j, f, id, opsi) {
+    opsi = opsi || {};
+    cekPustaka();
+    var data = await ambilData(j, opsi.profil), profil = data.profil;
+    var logo = await muatLogo();
+    var doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait', compress: true });
+    if (typeof doc.autoTable !== 'function') throw new Error('Pustaka tabel PDF (jspdf-autotable) belum termuat.');
+    var jenisLabel = id.jenis || (j.jenis === 'pra' ? 'Pra-Supervisi Akademik' : 'Supervisi');
+
+    doc.setProperties({ title: bersih(jenisLabel) + ' - ' + bersih(id.guru), author: bersih(id.spv), subject: bersih(f.judul) });
+    halamanJadwal(doc, j, f, id, opsi, { profil: profil, logo: logo, spv: data.spv || {}, sudahAda: false });
     footer(doc, bersih(jenisLabel) + ' - ' + bersih(id.guru));
 
-    doc.save('Hasil_' + namaFileAman(jenisLabel) + '_' + namaFileAman(id.guru) + '_' + namaFileAman(j.tanggal) + '.pdf');
-    return data.peringatan;
+    var info = keluaran(doc, 'Hasil_' + namaFileAman(jenisLabel) + '_' + namaFileAman(id.guru) + '_' + namaFileAman(j.tanggal) + '.pdf', opsi.mode, opsi.jendela);
+    return info ? data.peringatan.concat([info]) : data.peringatan;
+  }
+
+  // Beberapa hasil sekaligus dalam SATU PDF. items = [{ j, f, id, paket }] (urutan = urutan halaman).
+  async function unduhGabung(items, opsi) {
+    opsi = opsi || {};
+    cekPustaka();
+    var siap = items.filter(function (it) { return it.f; });
+    var peringatan = [];
+    if (siap.length < items.length) peringatan.push((items.length - siap.length) + ' hasil dilewati karena form-nya sudah tidak tersedia.');
+    if (!siap.length) throw new Error('Tidak ada hasil yang bisa dicetak.');
+
+    var d0 = await ambilData(siap[0].j, opsi.profil), profil = d0.profil;
+    var logo = await muatLogo();
+    var doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait', compress: true });
+    if (typeof doc.autoTable !== 'function') throw new Error('Pustaka tabel PDF (jspdf-autotable) belum termuat.');
+    doc.setProperties({ title: 'Hasil Supervisi - ' + bersih(profil.nama_sekolah || ''), subject: siap.length + ' hasil supervisi' });
+
+    var ctx = { profil: profil, logo: logo, spv: {}, sudahAda: false };
+    var spvCache = {};
+    for (var i = 0; i < siap.length; i++) {
+      var it = siap[i], kunci = it.j.supervisor_id;
+      if (!spvCache[kunci]) spvCache[kunci] = (i === 0 && kunci === siap[0].j.supervisor_id) ? d0 : await ambilData(it.j, profil);
+      var d = spvCache[kunci];
+      d.peringatan.forEach(function (p) { if (peringatan.indexOf(p) < 0) peringatan.push(p); });
+      ctx.spv = d.spv || {};
+      halamanJadwal(doc, it.j, it.f, it.id, it.paket || {}, ctx);
+    }
+    footer(doc, 'Hasil Supervisi - ' + bersih(profil.nama_sekolah || ''));
+
+    var tgl = siap.map(function (it) { return it.j.tanggal; }).sort();
+    var rentang = tgl[0] === tgl[tgl.length - 1] ? tgl[0] : tgl[0] + '_sd_' + tgl[tgl.length - 1];
+    var info = keluaran(doc, 'Hasil_Supervisi_' + siap.length + 'guru_' + namaFileAman(rentang) + '.pdf', opsi.mode, opsi.jendela);
+    if (info) peringatan.push(info);
+    return peringatan;
+  }
+
+  // Untuk mode cetak, tab baru harus dibuka SEKARANG (di dalam klik), sebelum proses async,
+  // supaya tidak dianggap pop-up oleh browser.
+  function bukaJendelaCetak(opsi) {
+    if (!opsi || opsi.mode !== 'cetak' || opsi.jendela) return opsi;
+    var w = null;
+    try { w = window.open('', '_blank'); } catch (e) { w = null; }
+    if (w) { try { w.document.write('<title>Menyiapkan cetak...</title><p style="font-family:sans-serif;padding:24px">Menyiapkan dokumen cetak...</p>'); } catch (e) { /* abaikan */ } }
+    return Object.assign({}, opsi, { jendela: w });
   }
 
   // Pembungkus untuk tombol: nonaktifkan tombol saat proses, tampilkan pesan bila gagal / ada peringatan.
   async function unduhAman(j, f, id, opsi, tombol) {
     if (!f) { alert('Form untuk jadwal ini tidak tersedia, PDF tidak bisa dibuat.'); return; }
+    opsi = bukaJendelaCetak(opsi);
     var teks = tombol ? tombol.textContent : '';
-    if (tombol) { tombol.disabled = true; tombol.textContent = 'Membuat PDF...'; }
+    if (tombol) { tombol.disabled = true; tombol.textContent = 'Menyiapkan...'; }
     try {
       var peringatan = await unduh(j, f, id, opsi);
       if (peringatan && peringatan.length) alert('PDF berhasil dibuat.\n\nCatatan:\n- ' + peringatan.join('\n- '));
-    } catch (e) { alert('Gagal membuat PDF: ' + (e.message || e)); }
+    } catch (e) {
+      if (opsi && opsi.jendela && !opsi.jendela.closed) opsi.jendela.close();
+      alert('Gagal membuat PDF: ' + (e.message || e));
+    }
+    finally { if (tombol) { tombol.disabled = false; tombol.textContent = teks; } }
+  }
+
+  async function unduhGabungAman(items, opsi, tombol) {
+    opsi = bukaJendelaCetak(opsi);
+    var teks = tombol ? tombol.textContent : '';
+    if (tombol) { tombol.disabled = true; tombol.textContent = 'Menyiapkan...'; }
+    try {
+      var peringatan = await unduhGabung(items, opsi);
+      if (peringatan && peringatan.length) alert('PDF berhasil dibuat.\n\nCatatan:\n- ' + peringatan.join('\n- '));
+    } catch (e) {
+      if (opsi && opsi.jendela && !opsi.jendela.closed) opsi.jendela.close();
+      alert('Gagal membuat PDF: ' + (e.message || e));
+    }
     finally { if (tombol) { tombol.disabled = false; tombol.textContent = teks; } }
   }
 
@@ -415,5 +507,5 @@ var SvPdf = (function () {
     finally { if (tombol) { tombol.disabled = false; tombol.textContent = teks; } }
   }
 
-  return { unduh: unduh, unduhAman: unduhAman, unduhJadwal: unduhJadwal, unduhJadwalAman: unduhJadwalAman };
+  return { unduh: unduh, unduhAman: unduhAman, unduhGabung: unduhGabung, unduhGabungAman: unduhGabungAman, unduhJadwal: unduhJadwal, unduhJadwalAman: unduhJadwalAman };
 })();
