@@ -382,16 +382,16 @@ var SvPdf = (function () {
 
     var body = urut.map(function (j, i) {
       var id = idnFn(j);
-      return [String(i + 1), hariId(j.tanggal), tglId(j.tanggal), nilai(id.guru), nilai(id.mapel), nilai(id.kelas), nilai(id.jenis), nilai(id.spv)];
+      return [String(i + 1), hariId(j.tanggal), tglId(j.tanggal), nilai(id.guru), nilai(id.mapel), nilai(id.kelas), nilai(id.jenis), nilai(id.spv) + (bersih(profil.kepala_sekolah).trim() ? ' / ' + bersih(profil.kepala_sekolah).trim() : '')];
     });
     doc.autoTable({
       startY: y, margin: { left: M.kiri, right: M.kanan, top: M.atas, bottom: M.bawah }, theme: 'grid',
-      head: [['No', 'Hari', 'Tanggal', 'Nama Guru yang Disupervisi', 'Mata Pelajaran', 'Kelas', 'Jenis', 'Supervisor']],
+      head: [['No', 'Hari', 'Tanggal', 'Nama Guru yang Disupervisi', 'Mata Pelajaran', 'Kelas', 'Jenis', 'Supervisor / Kepala Sekolah']],
       body: body, rowPageBreak: 'avoid', showHead: 'everyPage',
       styles: { font: 'helvetica', fontSize: 9, cellPadding: { top: 2.2, bottom: 2.2, left: 2.5, right: 2.5 }, lineColor: GARIS, lineWidth: 0.2, textColor: [30, 30, 30], valign: 'middle', overflow: 'linebreak' },
       headStyles: { fillColor: BIRU, textColor: 255, fontStyle: 'bold', halign: 'center', valign: 'middle' },
       alternateRowStyles: { fillColor: [246, 248, 252] },
-      columnStyles: { 0: { cellWidth: 10, halign: 'center' }, 1: { cellWidth: 22, halign: 'center' }, 2: { cellWidth: 34, halign: 'center' }, 3: { cellWidth: 62 }, 4: { cellWidth: 45 }, 5: { cellWidth: 26, halign: 'center' }, 6: { cellWidth: 34 }, 7: { cellWidth: 34 } }
+      columnStyles: { 0: { cellWidth: 10, halign: 'center' }, 1: { cellWidth: 20, halign: 'center' }, 2: { cellWidth: 32, halign: 'center' }, 3: { cellWidth: 52 }, 4: { cellWidth: 42 }, 5: { cellWidth: 24, halign: 'center' }, 6: { cellWidth: 28 }, 7: { cellWidth: 59 } }
     });
     y = doc.lastAutoTable.finalY + 10;
 
