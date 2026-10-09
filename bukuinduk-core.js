@@ -786,41 +786,41 @@
       var css = [
         '@page{size:A4;margin:12mm 13mm 14mm}',
         '*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}',
-        'body{font-family:"Segoe UI",Calibri,Arial,Helvetica,sans-serif;font-size:10pt;color:#111827;margin:0;line-height:1.35}',
+        'body{font-family:"Segoe UI",Calibri,Arial,Helvetica,sans-serif;font-size:10pt;color:#000;margin:0;line-height:1.35}',
         '.hal{page-break-after:always}.hal:last-child{page-break-after:auto}',
         /* kop surat */
         '.kop{display:flex;align-items:center;gap:14px;padding-bottom:9px;border-bottom:2.5px solid ' + NAVY + ';position:relative;margin-bottom:10px}',
         '.kop:after{content:"";position:absolute;left:0;right:0;bottom:-6px;border-bottom:.8px solid ' + NAVY + '}',
         '.kop img,.kop .sp{width:64px;height:64px;flex:0 0 64px}.kop img{object-fit:contain}',
-        '.kop .tx{flex:1;text-align:center}.kop .nm{font-size:15pt;font-weight:800;letter-spacing:.5px;color:' + NAVY + '}.kop .al{font-size:8.5pt;color:#374151;margin-top:2px}',
+        '.kop .tx{flex:1;text-align:center}.kop .nm{font-size:15pt;font-weight:800;letter-spacing:.5px;color:' + NAVY + '}.kop .al{font-size:8.5pt;color:#000;margin-top:2px}',
         /* judul */
         '.judul{text-align:center;margin:16px 0 12px}.judul .t{display:inline-block;background:' + NAVY + ';color:#fff;font-weight:800;font-size:12pt;letter-spacing:2.5px;padding:5px 28px;border-radius:3px}',
-        '.judul .n{margin-top:6px;font-size:9pt;color:#4b5563}.judul .n b{color:#111827}',
+        '.judul .n{margin-top:6px;font-size:9pt;color:#000}.judul .n b{color:#000}',
         /* kartu identitas + 2 foto */
         '.kartu{display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid #c7d0e4;border-radius:6px;padding:10px 12px;background:#f6f8fd;margin-bottom:4px}',
         '.fw{width:32mm;flex:0 0 32mm;text-align:center}',
-        '.foto{width:30mm;height:40mm;margin:0 auto;border:1px solid #6b7280;background:#fff;display:flex;align-items:center;justify-content:center;font-size:7.5pt;line-height:1.3;color:#9ca3af;text-align:center;overflow:hidden}',
+        '.foto{width:30mm;height:40mm;margin:0 auto;border:1px solid #6b7280;background:#fff;display:flex;align-items:center;justify-content:center;font-size:7.5pt;line-height:1.3;color:#000;text-align:center;overflow:hidden}',
         '.foto.kosong{border:1px dashed #9ca3af}.foto img{width:100%;height:100%;object-fit:cover}',
-        '.fw .cap{font-size:8pt;font-weight:700;color:' + NAVY + ';margin-top:5px;text-transform:uppercase;letter-spacing:.4px}.fw .tg{font-size:7.5pt;color:#6b7280;min-height:1em}',
+        '.fw .cap{font-size:8pt;font-weight:700;color:' + NAVY + ';margin-top:5px;text-transform:uppercase;letter-spacing:.4px}.fw .tg{font-size:7.5pt;color:#000;min-height:1em}',
         '.ringkas{flex:1;min-width:0}.ringkas .nama{font-size:14pt;font-weight:800;color:' + NAVY + ';line-height:1.2;text-align:center;margin-bottom:7px}',
-        '.ringkas table{width:100%;border-collapse:collapse}.ringkas td{padding:2px 3px;font-size:9.5pt;vertical-align:top}.ringkas td.l{color:#4b5563;width:36%}.ringkas td.c{width:3%}.ringkas td.v{font-weight:600}',
+        '.ringkas table{width:100%;border-collapse:collapse}.ringkas td{padding:2px 3px;font-size:9.5pt;vertical-align:top}.ringkas td.l{color:#000;width:36%}.ringkas td.c{width:3%}.ringkas td.v{font-weight:600}',
         '.lencana{display:inline-block;padding:0 8px;border-radius:9px;font-size:8.5pt;font-weight:700;border:1px solid ' + NAVY + ';color:' + NAVY + ';background:#fff}',
         /* bagian isian */
         '.sec{margin-top:10px;page-break-inside:avoid}',
         '.sec h4{margin:0 0 4px;font-size:10pt;font-weight:800;letter-spacing:.2px;color:' + NAVY + ';border-left:4px solid ' + NAVY + ';border-bottom:1.5px solid ' + NAVY + ';padding:1px 0 2px 7px;page-break-after:avoid}',
         '.kv{display:grid;grid-template-columns:1fr 1fr;column-gap:20px}',
         '.kv .r{display:flex;gap:4px;padding:2.4px 0;border-bottom:.5px dotted #9ca3af;page-break-inside:avoid}.kv .r.full{grid-column:1/-1}',
-        '.kv .l{flex:0 0 41%;color:#4b5563;font-size:9pt}.kv .r.full .l{flex-basis:20.5%}',
+        '.kv .l{flex:0 0 41%;color:#000;font-size:9pt}.kv .r.full .l{flex-basis:20.5%}',
         '.kv .v{flex:1;min-width:0;font-weight:600;word-break:break-word;white-space:pre-wrap;min-height:1.1em}',
-        '.kv .v:before{content:": ";color:#9ca3af;font-weight:400}.kv .v.kosong{color:#c0c6d2;font-weight:400}',
+        '.kv .v:before{content:": ";color:#000;font-weight:400}.kv .v.kosong{color:#000;font-weight:400}',
         /* tabel nilai & catatan */
         'table.g{width:100%;border-collapse:collapse;font-size:8.5pt;margin-top:4px}',
         'table.g th{background:' + NAVY + ';color:#fff;font-weight:700;padding:3px 4px;border:1px solid ' + NAVY + ';text-align:center}',
         'table.g td{border:1px solid #c3cad9;padding:2.5px 4px}table.g tbody tr:nth-child(even) td{background:#f3f6fb}',
-        'table.g tr{page-break-inside:avoid}.kosongnote{font-size:9pt;color:#6b7280;font-style:italic;padding:3px 0}',
+        'table.g tr{page-break-inside:avoid}.kosongnote{font-size:9pt;color:#000;font-style:italic;padding:3px 0}',
         /* tanda tangan & footer */
         '.ttd{display:flex;justify-content:space-between;margin-top:20px;page-break-inside:avoid;font-size:9.5pt}.ttd>div{text-align:center;width:44%}.ttd .sp{height:58px}',
-        '.ft{margin-top:14px;padding-top:4px;border-top:.5px solid #cbd5e1;font-size:7.5pt;color:#6b7280;display:flex;justify-content:space-between}'
+        '.ft{margin-top:14px;padding-top:4px;border-top:.5px solid #cbd5e1;font-size:7.5pt;color:#000;display:flex;justify-content:space-between}'
       ].join('');
       w.document.open();
       w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Buku Induk</title><style>' + css + '</style></head><body>' + halaman + '</body></html>');
