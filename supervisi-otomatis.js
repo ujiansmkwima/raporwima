@@ -13,7 +13,8 @@
    4. Kalimat yang sama tidak dipakai dua kali dalam satu formulir selama masih ada pilihan lain.
    5. Kesimpulan (kelebihan, hal yang ditingkatkan, rekomendasi, refleksi) diambil dari butir yang benar-benar dinilai
       tinggi / rendah pada formulir yang sama, jadi isinya konsisten dengan nilai.
-   Kalau admin mengubah pertanyaan, butir yang topiknya tak dikenali memakai kumpulan kalimat umum. */
+   Kalau admin mengubah pertanyaan, butir yang topiknya tak dikenali memakai kumpulan kalimat umum.
+   Bank kalimat topik SMK + pola kalimat + jawaban sudut pandang guru ada di supervisi-bank.js (wajib dimuat SEBELUM file ini). */
 var SvOto = (function () {
   var AMBANG = [[86, 'Sangat Baik'], [71, 'Baik'], [56, 'Cukup']], TERENDAH = 'Perlu Pembinaan', MIN_PERSEN = 25;
   function kategori(persen) { for (var i = 0; i < AMBANG.length; i++) if (persen >= AMBANG[i][0]) return AMBANG[i][1]; return TERENDAH; }
@@ -181,9 +182,33 @@ var SvOto = (function () {
   var CAT_SB = ['Sangat baik dan layak menjadi contoh praktik baik', 'Sudah sangat baik; pertahankan', 'Kualitasnya sangat baik dan konsisten', 'Sangat baik, tinggal disempurnakan pada hal-hal kecil'];
   var CAT_EKOR_SB = ['Silakan dibagikan kepada rekan guru sebagai praktik baik', 'Layak didokumentasikan untuk dibagikan dalam forum berbagi praktik baik', 'Pertahankan konsistensinya pada pertemuan berikutnya'];
 
+  /* ====================== GABUNGKAN BANK BARU ====================== */
+  var BK = window.SvBank || { SUP: [], TELAAH: [], TAMBAH: {}, P: {}, GURU: {} }, P = BK.P, G = BK.GURU;
+  ASPEK.forEach(function (a) {   // topik lama: skema obs/ok/kurang/aksi -> s/p/w/ak
+    var t = BK.TAMBAH[a.k] || {};
+    a.s = (a.obs || []).concat(t.s || []); a.p = t.p || []; a.w = t.w || []; a.ak = a.aksi;
+  });
+  UMUM.s = UMUM.obs; UMUM.p = []; UMUM.w = []; UMUM.ak = UMUM.aksi;
+  BK.SUP.forEach(function (a) { a.aksiI = a.ak; a.ok = a.ok || a.s; a.kurang = a.kurang || a.p; a.aksi = a.ak; });
+  BK.TELAAH.forEach(function (a) { a.kurang = a.kr; a.aksi = a.ak; });
+  var SUPALL = BK.SUP.concat(ASPEK);   // topik baru (lebih spesifik) dicocokkan lebih dulu
+  var TUMUM = { k: 't_umum', nama: 'bagian ini', ok: UMUM.ok, kr: UMUM.kurang, ak: UMUM.aksi };
+
+  var CAT_CUKUP = ['Secara umum cukup, tetapi masih banyak ruang untuk perbaikan', 'Sudah cukup memadai; perlu penguatan pada beberapa bagian', 'Hasilnya cukup, dengan sejumlah hal yang perlu dibenahi', 'Cukup baik sebagai langkah awal, namun belum konsisten'];
+  var CAT_KURANG = ['Masih memerlukan pembinaan dan pendampingan yang lebih intensif', 'Belum memenuhi harapan; perlu perbaikan pada banyak bagian', 'Perlu pendampingan lanjutan agar kualitasnya meningkat', 'Banyak komponen yang belum tampak sehingga perlu dibina secara bertahap'];
+  var KAT_SUM = {
+    'Sangat Baik': ['Secara keseluruhan pembelajaran berjalan sangat baik dan layak dibagikan sebagai praktik baik.', 'Pembelajaran ini menunjukkan kualitas yang konsisten dari awal sampai akhir.', 'Kualitas pembelajarannya sangat baik; tinggal dijaga konsistensinya.'],
+    'Baik': ['Secara keseluruhan pembelajaran sudah baik dan tinggal disempurnakan pada beberapa bagian.', 'Pembelajaran berjalan baik; beberapa catatan di bawah dapat menjadi bahan penyempurnaan.', 'Sudah baik secara umum, dengan beberapa bagian yang masih bisa diperkuat.'],
+    'Cukup': ['Secara keseluruhan pembelajaran sudah cukup, namun masih membutuhkan penguatan di beberapa bagian.', 'Pembelajaran berjalan cukup baik, tetapi belum konsisten pada beberapa aspek penting.'],
+    'Perlu Pembinaan': ['Secara keseluruhan pembelajaran masih memerlukan pembinaan yang terarah.', 'Banyak aspek yang belum tampak, sehingga perlu pendampingan bertahap.']
+  };
+  var EKSTRA_GURU = ['Saya juga menyiapkan alternatif kegiatan bila waktu tidak mencukupi.', 'Semua perangkat sudah saya siapkan sebelum pertemuan.', 'Rencana ini saya diskusikan dulu dengan rekan sejawat.', 'Saya akan menyesuaikan di kelas bila respons murid berbeda dari perkiraan.', 'Saya berusaha agar setiap murid mendapat kesempatan terlibat.'];
+  var PJ = ['Guru bersangkutan bersama supervisor', 'Supervisor', 'Waka Kurikulum', 'Kepala sekolah dan guru bersangkutan', 'Ketua MGMP dan Waka Kurikulum', 'Guru dan rekan sejawat (peer coaching)'];
+  var INDIKATOR = ['tampak pada observasi ulang', 'dibuktikan dengan perangkat yang sudah direvisi', 'terlihat pada catatan asesmen formatif', 'dinilai dengan instrumen supervisi yang sama dan skor meningkat', 'terdokumentasi pada jurnal mengajar'];
+  var BULAN = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+
   /* ====================== UTILITAS ====================== */
-  var dipakai = {};   // kalimat yang sudah terpakai pada pengisian ini (agar tidak berulang)
-  var RENDAH = false;   // butir bernilai 1–2: komentar murni temuan, tanpa pujian
+  var dipakai = {}, MODE = 'pra', ST = {};
   function rn(n) { return Math.floor(Math.random() * n); }
   function ada(p) { return Math.random() < p; }
   function acak(a) { a = a.slice(); for (var i = a.length - 1; i > 0; i--) { var j = rn(i + 1), t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
@@ -194,7 +219,10 @@ var SvOto = (function () {
   }
   function pilihN(a, n) { var h = [], i; for (i = 0; i < n && i < a.length; i++) h.push(pilih(a.filter(function (x) { return h.indexOf(x) < 0; }))); return h; }
   function kap(s) { s = String(s || ''); return s.charAt(0).toUpperCase() + s.slice(1); }
+  function lc(s) { s = String(s || ''); return /^[A-Z]{2}/.test(s) ? s : s.charAt(0).toLowerCase() + s.slice(1); }
   function daftar(a) { return a.length < 2 ? (a[0] || '') : a.length === 2 ? a[0] + ' dan ' + a[1] : a.slice(0, -1).join(', ') + ', dan ' + a[a.length - 1]; }
+  // Seperti daftar(), tetapi memakai "serta" bila ada butir yang sudah memuat kata "dan"
+  function daftarN(a) { return a.some(function (x) { return / dan /.test(x); }) ? (a.length < 3 ? a.join(' serta ') : a.slice(0, -1).join(', ') + ', serta ' + a[a.length - 1]) : daftar(a); }
   function akhiri(s, gaya) {
     s = String(s || '').replace(/\s+/g, ' ').trim();
     if (!s) return s;
@@ -203,69 +231,205 @@ var SvOto = (function () {
     if (gaya === 'ringkas' && s.length < 90 && ada(0.4)) return s;   // catatan singkat sering tanpa titik
     return s + '.';
   }
-  var MODE = 'pra';   // 'pra' = form perencanaan (skala), 'sup' = form implementasi (bukti + catatan)
-  function kOk(A) { return MODE === 'sup' ? pilih(OK_I).replace('{n}', A.nama) : pilih(A.ok); }
-  function kKurang(A) { return MODE === 'sup' ? pilih(KURANG_I).replace('{n}', A.nama) : pilih(A.kurang); }
-  function kAksi(A) { return pilih(MODE === 'sup' ? A.aksiI : A.aksi); }
-  function aspekDari(teks) {
-    var t = String(teks || '').toLowerCase();
-    for (var i = 0; i < ASPEK.length; i++) if (ASPEK[i].re.test(t)) return ASPEK[i];
-    return UMUM;
+  // Token {mapel} {kelas} {r} {sapa} + sebutan "murid" yang konsisten dalam satu formulir
+  function done(s) {
+    s = String(s || '').replace(/\{mapel\}/g, ST.mapel || 'mata pelajaran ini').replace(/\{kelas\}/g, ST.kelas || 'ini').replace(/\{r\}/g, ST.ruang || 'kelas').replace(/\{sapa\}/g, ST.sapa || 'Bapak/Ibu');
+    if (ST.sebut && ST.sebut !== 'murid') s = s.replace(/\bmurid\b/g, ST.sebut).replace(/\bMurid\b/g, kap(ST.sebut));
+    return s;
+  }
+  function telaahQ(q) { return q.tipe === 'pilihan' && (q.opsi || []).some(function (o) { return /^sesuai/i.test(o); }); }
+  function aspekDari(q) {
+    var t = String(q.teks || '').toLowerCase(), tel = telaahQ(q), list = tel ? BK.TELAAH : SUPALL, i;
+    for (i = 0; i < list.length; i++) if (list[i].re.test(t)) return list[i];
+    return tel ? TUMUM : UMUM;
   }
   function gayaItem(gForm) { return ada(0.7) ? gForm : pilih(['ringkas', 'biasa', 'naratif']); }
-  function bukanUmum(l) { var h = l.filter(function (a) { return a.k !== 'umum'; }); return h.length ? h : l; }
-  function unik(l) { var s = {}; return l.filter(function (a) { if (s[a.k]) return false; s[a.k] = 1; return true; }); }
+  function bukanUmum(l) { var h = l.filter(function (x) { return x.A.k !== 'umum' && x.A.k !== 't_umum'; }); return h.length ? h : l; }
+  function unikA(l) { var s = {}; return l.filter(function (x) { if (s[x.A.k]) return false; s[x.A.k] = 1; return true; }); }
+  function frame(A) { return pilih(P.FRAME) + pilih(MODE === 'sup' ? (A.aksiI || A.ak) : (A.aksi || A.ak)); }
+  function bukaObs() {
+    var l = P.OPEN_OBS.slice();
+    if (ST.mapel) l.push('Pada pelajaran ' + ST.mapel + ',');
+    if (ST.kelas) l.push('Di kelas ' + ST.kelas + ',');
+    return pilih(l);
+  }
+  function kOk(A) { return MODE === 'sup' ? pilih(P.OK_I).replace('{n}', A.nama) : pilih(A.ok); }
+  function kKurang(A) { return MODE === 'sup' ? pilih(P.KURANG_I).replace('{n}', A.nama) : pilih(A.kurang); }
+  function kAksi(A) { return pilih(MODE === 'sup' ? (A.aksiI || A.ak) : (A.aksi || A.ak)); }
+  function obsLemah(x) {
+    var A = x.A, l = (x.v <= 2 && A.w && A.w.length) ? A.w : (A.p && A.p.length ? A.p : A.kurang);
+    return pilih(l);
+  }
 
   /* ====================== KOMENTAR PER BUTIR ====================== */
-  // Kolom "Komentar Kritis" (form perencanaan, skala 1–4)
-  function komentarSkala(A, kuat, gaya) {
-    var s;
-    if (kuat) {
-      if (gaya === 'ringkas' && ada(0.45)) return akhiri(pilih(SINGKAT4), gaya);
+  // Kolom "Bukti Pembelajaran" (form pelaksanaan): apa yang terlihat di kelas, sesuai nilai 1–4
+  function bukti(A, v, gaya) {
+    var s, op = ada(gaya === 'ringkas' ? 0.15 : 0.35) ? bukaObs() + ' ' : '';
+    if (v >= 4) {
+      s = pilih(A.s);
+      if (gaya === 'naratif') {
+        if (ada(0.5)) s += pilih(P.DAMPAK4);
+        else if (A.s.length > 1 && ada(0.4)) s += pilih(P.SAMBUNG_PLUS) + pilih(A.s);
+      } else if (gaya === 'biasa' && ada(0.25)) s += pilih(P.DAMPAK4);
+    } else if (v === 3) {
+      s = (A.p && A.p.length) ? pilih(A.p) : pilih(A.s) + pilih(P.KONTRAS) + pilih(KENDALA3);
+      if (gaya === 'naratif' && ada(0.4)) s += '. ' + pilih(P.POS_RINGAN3);
+    } else {
+      s = (A.w && A.w.length) ? pilih(A.w) : ((A.p && A.p.length) ? pilih(A.p) : pilih(KENDALA3));
+      if (v === 2 && A.w && A.w.length > 1 && gaya !== 'ringkas' && ada(0.35)) s += pilih(P.SAMBUNG_PLUS) + pilih(A.w);
+    }
+    return akhiri(op + s, gaya);
+  }
+  // Kolom "Catatan" / "Bukti / Catatan" (umpan balik kepada guru) pada form pelaksanaan
+  function catatanSup(A, v, gaya) {
+    var n = A.nama, s, m;
+    if (v >= 4) {
+      if (gaya === 'ringkas' && ada(0.45)) return pilih(P.SING4);
+      s = kap(pilih(P.OK_I).replace('{n}', n));
+      if (gaya !== 'ringkas' && ada(0.35)) s += pilih(P.OK_EKOR);
+      return akhiri(s, gaya);
+    }
+    if (v === 3) {
+      m = gaya === 'ringkas' ? 0 : rn(3);
+      s = m === 0 ? pilih(P.KURANG_I).replace('{n}', n) : m === 1 ? frame(A) : pilih(P.KURANG_I).replace('{n}', n) + '. ' + frame(A);
+      return akhiri(s, gaya);
+    }
+    s = (v === 2 ? pilih(P.KURANG2_I) : pilih(P.BELUM_I)).replace('{n}', n) + '. ' + frame(A);
+    return akhiri(s, gaya);
+  }
+  // Kolom "Komentar Kritis" (telaah dokumen perencanaan)
+  function komentarPra(A, v, gaya) {
+    var s, m;
+    if (v >= 4) {
+      if (gaya === 'ringkas' && ada(0.4)) return akhiri(pilih(SINGKAT4), gaya);
       s = pilih(A.ok);
       if (gaya !== 'ringkas' && ada(gaya === 'naratif' ? 0.5 : 0.3)) s = pilih(OPEN_PRA_OK) + ' ' + s;
-      if (gaya === 'naratif' && ada(0.5)) s += ', ' + pilih(EKOR4);
+      if (gaya === 'naratif' && A.ok.length > 1 && ada(0.4)) s += pilih(P.SAMBUNG_PLUS) + pilih(A.ok);
+      else if (gaya === 'naratif' && ada(0.4)) s += ', ' + pilih(EKOR4);
       return akhiri(s, gaya);
     }
-    var m = RENDAH ? (ada(0.5) ? 0 : 2) : rn(4);
+    m = v <= 2 ? (ada(0.5) ? 0 : 2) : rn(4);
     if (gaya === 'ringkas' || m === 0) s = pilih(A.kurang);
-    else if (m === 1) s = pilih(FRAME_SARAN) + pilih(A.aksi);
-    else if (m === 2) s = pilih(A.kurang) + '; ' + kecilAwal(pilih(FRAME_SARAN)) + pilih(A.aksi);
-    else s = pilih(RINGAN) + pilih(SAMBUNG_KONTRAS) + pilih(A.kurang);
-    if (gaya !== 'ringkas' && m !== 1 && ada(gaya === 'naratif' ? 0.5 : 0.25)) s = pilih(OPEN_PRA) + ' ' + kecilAwal(s);
-    if (gaya === 'naratif' && ada(0.4)) s += ', ' + pilih(EKOR3);
+    else if (m === 1) s = frame(A);
+    else if (m === 2) s = pilih(A.kurang) + '; ' + lc(frame(A));
+    else s = pilih(RINGAN) + pilih(P.KONTRAS) + pilih(A.kurang);
+    if (v <= 2 && gaya !== 'ringkas' && ada(0.5)) s = (v === 1 ? 'Belum memadai: ' : 'Masih lemah: ') + lc(s);
+    if (gaya !== 'ringkas' && m !== 1 && v === 3 && ada(gaya === 'naratif' ? 0.5 : 0.25)) s = pilih(OPEN_PRA) + ' ' + lc(s);
+    if (gaya === 'naratif' && v === 3 && ada(0.4)) s += ', ' + pilih(EKOR3);
     return akhiri(s, gaya);
   }
-  // Kolom "Bukti Pembelajaran" (form implementasi)
-  function buktiObs(A, kuat, gaya) {
-    var s = pilih(A.obs);
-    if (gaya !== 'ringkas' && ada(gaya === 'naratif' ? 0.5 : 0.35)) s = pilih(OPEN_OBS) + ' ' + s;
-    if (kuat) { if (gaya === 'naratif' && ada(0.6)) s += ', ' + pilih(EKOR_OBS4); }
-    else if (RENDAH || ada(gaya === 'ringkas' ? 0.3 : 0.65)) s += pilih(SAMBUNG_KONTRAS) + pilih(KENDALA3);
-    return akhiri(s, gaya);
-  }
-  // Kolom "Catatan" (form implementasi)
-  function catatanButir(A, kuat, gaya) {
-    var s, m;
-    if (kuat) {
-      if (gaya === 'ringkas' && ada(0.4)) return akhiri(pilih(SINGKAT_CAT4), gaya);
-      s = kOk(A);
-      if (gaya !== 'ringkas' && ada(0.3)) s = pilih(OPEN_CAT) + ' ' + kecilAwal(s);
-      if (gaya === 'naratif' && ada(0.4)) s += ', ' + pilih(EKOR4);
+  // Kolom "Catatan" pada telaah perangkat (Ada / Sesuai / Perlu perbaikan)
+  function catatanTelaah(A, v, gaya) {
+    var s;
+    if (v >= 4) {
+      s = pilih(A.ok);
+      if (gaya !== 'ringkas' && ada(0.4)) s = pilih(['Sudah sesuai; ', 'Baik, ', 'Lengkap dan jelas: ']) + lc(s);
       return akhiri(s, gaya);
     }
-    m = RENDAH ? rn(2) : rn(3);
-    if (m === 0 || gaya === 'ringkas') s = kKurang(A);
-    else if (m === 1) s = pilih(FRAME_SARAN) + kAksi(A);
-    else s = pilih(RINGAN) + pilih(SAMBUNG_KONTRAS) + kKurang(A);
-    if (gaya === 'naratif' && ada(0.3) && m !== 1) s = pilih(OPEN_CAT) + ' ' + kecilAwal(s);
+    if (v === 3) {
+      s = pilih(['Secara umum sudah ada, namun ', 'Sudah cukup, hanya saja ', 'Perangkat tersedia, tetapi ']) + lc(pilih(A.kr));
+      if (gaya !== 'ringkas' && ada(0.6)) s += '. ' + frame(A);
+      return akhiri(s, gaya);
+    }
+    s = (v === 1 ? pilih(['Perlu perbaikan: ', 'Belum memadai: ']) : pilih(['Perlu perbaikan: ', 'Masih lemah, ', ''])) + lc(pilih(A.kr)) + '. ' + frame(A);
     return akhiri(s, gaya);
   }
-  function kecilAwal(s) { return s.charAt(0).toLowerCase() + s.slice(1); }
 
-  /* ====================== KESIMPULAN & REFLEKSI ====================== */
+  /* ====================== KESIMPULAN: PENGAMAT (SUPERVISOR) ====================== */
+  function sebutKat(kat, g) { return ada(g === 'ringkas' ? 0.3 : 0.55) ? ' ' + pilih(KAT_SUM[kat]) : ''; }
+  var KUAT_MINIM = ['murid tetap mengikuti kegiatan dengan tertib', 'guru berupaya menyelesaikan materi sesuai waktu yang tersedia', 'ada niat baik guru untuk melibatkan murid dalam kegiatan', 'perangkat dan bahan ajar sudah disiapkan sebelum pelajaran', 'guru tetap menjaga suasana kelas agar bisa dilanjutkan'];
+  function kekuatanSup(kuat, kat, g) {
+    if (!kuat.length) return akhiri('Kekuatan yang tampak masih terbatas: ' + daftar(pilihN(KUAT_MINIM, 2)) + '.' + sebutKat(kat, g), g);
+    var c = kuat.slice(0, g === 'ringkas' ? 2 : 3).map(function (x) { return pilih(x.A.s); }), s, a = rn(5);
+    if (c.length === 1) return akhiri(akhiri(pilih(['Kekuatan yang tampak: ', 'Yang paling menonjol, ', '']) + (a % 2 ? c[0] : lc(c[0])), g) + sebutKat(kat, g), g);
+    if (a === 0 && c.some(function (x) { return /;/.test(x); })) a = 2;
+    if (a === 0) s = 'Kekuatan yang tampak: ' + c.join('; ') + '.';
+    else if (a === 1) s = kap(c[0]) + '. Selain itu, ' + c[1] + (c[2] ? ', dan ' + c[2] : '') + '.';
+    else if (a === 2) s = c.map(function (x, i) { return (i + 1) + ') ' + kap(x) + '.'; }).join(' ');
+    else if (a === 3) s = 'Yang paling menonjol, ' + c[0] + '. Hal baik lainnya, ' + c[1] + (c[2] ? '; ' + c[2] : '') + '.';
+    else s = kap(c[0]) + pilih(P.DAMPAK4) + '. ' + kap(c[1]) + '.';
+    return akhiri(s + sebutKat(kat, g), g);
+  }
+  function areaSup(lemah, kat, g) {
+    var c, s, a;
+    if (!lemah.length) return akhiri('Tidak ada kelemahan yang berarti; hal kecil yang masih bisa dikembangkan adalah ' + pilih(P.KECIL_SUP), g);
+    c = lemah.slice(0, g === 'ringkas' ? 2 : 3).map(obsLemah);
+    a = rn(4);
+    if ((a === 0 || a === 3) && c.some(function (x) { return /;/.test(x); })) a = 2;
+    if (a === 0) s = 'Area pengembangan: ' + c.join('; ') + '. ' + frame(lemah[0].A);
+    else if (a === 1) s = kap(c[0]) + (c[1] ? '. Selain itu, ' + c[1] : '') + '. Untuk itu, ' + lc(frame(lemah[0].A));
+    else if (a === 2) s = c.map(function (x, i) { return (i + 1) + ') ' + kap(x) + ' (saran: ' + kAksi(lemah[i].A) + ').'; }).join(' ');
+    else s = 'Beberapa hal yang perlu dibenahi: ' + c.join('; ') + '. ' + (lemah[1] ? frame(lemah[1].A) : frame(lemah[0].A));
+    return akhiri(s, g);
+  }
+  function kesimpulanPra(kuat, lemah, kat, g) {
+    var s = pilih({ 'Sangat Baik': ['Perangkat pembelajaran sudah sangat baik dan siap diobservasi.', 'Secara umum perangkat sangat memadai dan selaras dengan prinsip pembelajaran mendalam.'], 'Baik': ['Perangkat pembelajaran sudah baik dan siap diobservasi dengan beberapa penyempurnaan kecil.', 'Secara umum perangkat sudah memadai; ada beberapa bagian yang perlu dilengkapi sebelum observasi.'], 'Cukup': ['Perangkat pembelajaran cukup memadai, tetapi beberapa komponen penting perlu diperbaiki sebelum observasi.'], 'Perlu Pembinaan': ['Perangkat pembelajaran masih perlu banyak perbaikan; disepakati pendampingan sebelum observasi dilaksanakan.'] }[kat]);
+    if (lemah.length) s += ' Yang perlu dilengkapi: ' + daftarN(lemah.slice(0, 2).map(function (x) { return lc(x.A.nama); })) + '.';
+    if (lemah.length) s += ' Disepakati bahwa guru akan ' + kAksi(lemah[0].A) + (lemah[1] && ada(0.6) ? ', serta ' + kAksi(lemah[1].A) : '') + '.';
+    else s += ' Tidak ada revisi mendasar; guru cukup merapikan bagian kecil dan mempertahankan kualitas yang ada.';
+    s += pilih([' Observasi difokuskan pada ', ' Fokus pengamatan nanti: ']) + (kuat.length || lemah.length ? daftarN(unikA(lemah.concat(kuat)).slice(0, 2).map(function (x) { return lc(x.A.nama); })) : 'praktik pedagogis dan asesmen') + '.';
+    return s;
+  }
+  function pembinaan(k) {
+    if (/digital|x_digital|t_tek/.test(k)) return 'Pelatihan teknologi/AI';
+    if (/^t_(cp|tp|modul|kerangka|jenjang|dpl)/.test(k)) return pilih(['Pendampingan penyusunan modul ajar', 'Lokakarya perangkat dan asesmen']);
+    if (/x_kolab|x_produk|x_lingk|t_dudi|t_media/.test(k)) return ST.kejuruan ? pilih(['Magang/industry attachment guru produktif', 'Kunjungan kelas timbal balik']) : 'Komunitas belajar (KKG/MGMP)';
+    if (/x_formatif|x_rubrik|x_umpan|asesmen|t_diag|t_sumatif|kriteria/.test(k)) return 'Lokakarya perangkat dan asesmen';
+    if (/x_diferensiasi|x_nalar|x_model/.test(k)) return pilih(['Kunjungan kelas timbal balik', 'Komunitas belajar (KKG/MGMP)']);
+    return pilih(['Coaching/mentoring sejawat', 'Kunjungan kelas timbal balik', 'Komunitas belajar (KKG/MGMP)']);
+  }
+  function waktuTindak() {
+    var m = /^(\d{4})-(\d{1,2})/.exec(ST.tglISO || ''), pil = ['Minggu ke-2 setelah supervisi', '2–3 minggu setelah supervisi', 'Dalam 1 bulan', 'Sebelum akhir semester'];
+    if (m) { var i = parseInt(m[2], 10) % 12; pil.push(BULAN[i] + ' ' + (parseInt(m[2], 10) === 12 ? parseInt(m[1], 10) + 1 : m[1])); }
+    return pilih(pil);
+  }
+  function rtlN(n, lemah, kuat) {
+    var it = lemah[n - 1], temuan, bentuk, target;
+    if (it) {
+      temuan = kap(obsLemah(it));
+      bentuk = pembinaan(it.A.k);
+      target = 'Pada observasi berikutnya guru ' + kAksi(it.A) + '; ' + pilih(INDIKATOR);
+    } else {
+      var kk = kuat[n - 1 - lemah.length];
+      temuan = kk ? 'Praktik baik pada ' + kk.A.nama + ' perlu dipertahankan dan dibagikan' : pilih(P.KECIL_SUP);
+      bentuk = kk ? 'Komunitas belajar (KKG/MGMP)' : pilih(['Coaching/mentoring sejawat', 'Kunjungan kelas timbal balik']);
+      target = kk ? 'Guru membagikan praktiknya dalam satu forum berbagi; ' + pilih(INDIKATOR) : 'Penyempurnaan terlihat pada pertemuan berikutnya; ' + pilih(INDIKATOR);
+    }
+    return [temuan, bentuk, target, pilih(PJ), waktuTindak()].join(' | ');
+  }
+  function pemantauan(lemah) {
+    var tgl = '(tanggal diisi saat monitoring)', m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(ST.tglISO || '');
+    if (m) { var d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3] + 21 + rn(15))); tgl = d.getUTCDate() + ' ' + BULAN[d.getUTCMonth()] + ' ' + d.getUTCFullYear(); }
+    var fokus = lemah.length ? daftarN(lemah.slice(0, 2).map(function (x) { return lc(x.A.nama); })) : 'konsistensi praktik baik';
+    return [tgl, pilih(['Kunjungan kelas ulang dan pemeriksaan perangkat', 'Observasi lanjutan dan diskusi reflektif', 'Pemeriksaan perangkat dan pengamatan singkat di kelas']) + ' untuk melihat ' + fokus, 'Belum (diisi saat monitoring)', pilih(['Lanjutkan pembinaan sesuai hasil monitoring', 'Evaluasi capaian lalu tetapkan target berikutnya', 'Sesuaikan bentuk pembinaan dengan perkembangan guru'])].join(' | ');
+  }
+
+  /* ====================== JAWABAN SUDUT PANDANG GURU ====================== */
+  function guruTulis(pool, lanjut) { var s = pilih(pool); if (lanjut && ada(0.6)) s += ' ' + pilih(lanjut); if (ada(0.3)) s += ' ' + pilih(EKSTRA_GURU); return s; }
+  function guruBerhasil(kuat) {
+    var a = kuat.length ? lc(kuat[0].A.nama) : 'keterlibatan murid dalam kegiatan', t = pilih(G.berhasil);
+    return t.replace('{a}', a).replace('{A}', kap(a)).replace('{b}', pilih(G.bukti));
+  }
+  function guruUbah(lemah) {
+    if (!lemah.length) return pilih(G.ubahKecil);
+    return pilih(G.ubah).replace('{a}', daftarN(lemah.slice(0, 2).map(function (x) { return lc(x.A.nama); })));
+  }
+  function guruHasil(kat, lemah) {
+    var x, a = lemah.length ? lc(lemah[0].A.nama) : 'beberapa bagian kecil';
+    if (kat === 'Sangat Baik') { x = 85 + rn(11); return pilih(['Sebagian besar murid (sekitar ' + x + '%) mencapai TP dengan hasil kerja yang sesuai kriteria; hanya sedikit yang masih perlu perbaikan.', 'Hasil asesmen menunjukkan sekitar ' + x + '% murid sudah mencapai TP, dan produk mereka umumnya memenuhi kriteria yang ditetapkan.']); }
+    if (kat === 'Baik') { x = 70 + rn(15); return pilih(['Sekitar ' + x + '% murid sudah mencapai TP; sisanya perlu pendampingan tambahan, terutama pada ' + a + '.', 'Hasil asesmen cukup baik: kira-kira ' + x + '% murid tuntas, sedangkan yang lain akan saya beri remedial singkat.']); }
+    if (kat === 'Cukup') { x = 55 + rn(15); return pilih(['Baru sekitar ' + x + '% murid yang mencapai TP; saya perlu memperkuat ' + a + ' dan menyiapkan remedial.', 'Hasilnya sedang: sekitar ' + x + '% murid tuntas, dan sisanya masih kesulitan sehingga akan saya dampingi.']); }
+    x = 35 + rn(20);
+    return pilih(['Hasilnya belum memuaskan: hanya sekitar ' + x + '% murid yang mencapai TP, sehingga saya perlu merancang remedial dan memperbaiki ' + a + '.', 'Sebagian besar murid belum mencapai TP (yang tuntas sekitar ' + x + '%); saya akan mengulang bagian yang belum dipahami.']);
+  }
+  function guruKomitmen(lemah) {
+    var a = lemah.length ? daftarN(lemah.slice(0, 2).map(function (x) { return lc(x.A.nama); })) : 'peningkatan kualitas pembelajaran';
+    return pilih(G.komitmen).replace('{a}', a).replace('{ak}', lemah.length ? kAksi(lemah[0].A) : 'mempertahankan dan mengembangkan praktik yang sudah baik');
+  }
+
+  /* ====================== KESIMPULAN: FORM PERENCANAAN / IMPLEMENTASI VERSI AWAL ====================== */
   function tulisKelebihan(kuat, gaya) {
-    var o = kuat.map(kOk).slice(0, gaya === 'ringkas' ? 2 : 3), fr;
+    var o = kuat.map(function (x) { return kOk(x.A); }).slice(0, gaya === 'ringkas' ? 2 : 3), fr;
     if (!o.length) o = pilihN(UMUM.ok, 2);
     if (o.length === 1) return akhiri(pilih(['Kelebihannya: ' + o[0], 'Perencanaan ini kuat karena ' + o[0], kap(o[0])]), gaya);
     fr = rn(3);
@@ -275,7 +439,7 @@ var SvOto = (function () {
     return akhiri(o[0] + '. Selain itu, ' + o[1] + (o[2] ? ', dan ' + o[2] : '') + (gaya === 'naratif' && ada(0.6) ? ', ' + pilih(EKOR_KEL) : ''), gaya);
   }
   function tulisDitingkatkan(lemah, gaya) {
-    var k = lemah.length ? pilihN(lemah.map(kKurang), 3).slice(0, gaya === 'ringkas' ? 2 : 3) : [kecilAwal(pilih(KECIL_PRA))], fr;
+    var k = lemah.length ? pilihN(lemah.map(function (x) { return kKurang(x.A); }), 3).slice(0, gaya === 'ringkas' ? 2 : 3) : [lc(pilih(KECIL_PRA))], fr;
     if (k.length === 1) return akhiri(k[0], gaya);
     fr = rn(3);
     if (fr === 0) return akhiri('Hal yang perlu ditingkatkan: ' + k.join('; '), gaya);
@@ -285,7 +449,7 @@ var SvOto = (function () {
   function tulisRekomendasi(lemah, gaya) {
     var a, fr;
     if (!lemah.length) return pilih(REKOM_BAIK);
-    a = lemah.slice(0, gaya === 'naratif' ? 3 : 2).map(kAksi);
+    a = lemah.slice(0, gaya === 'naratif' ? 3 : 2).map(function (x) { return kAksi(x.A); });
     if (a.length === 1) return akhiri(pilih(['Disarankan untuk ' + a[0] + ', agar prinsip pembelajaran mendalam semakin tergambar pada setiap pengalaman belajar', 'Revisi sebaiknya difokuskan pada satu hal: ' + a[0]]), gaya);
     fr = rn(4);
     if (fr === 0) return akhiri('Disarankan untuk ' + daftar(a) + ', lalu merevisi perencanaan sesuai prinsip pembelajaran mendalam', gaya);
@@ -297,31 +461,42 @@ var SvOto = (function () {
     var p = pilih(PELAJARAN), h = pilihN(PENDUKUNG, gaya === 'naratif' ? 3 : 2), fr = rn(3), s;
     if (gaya === 'ringkas') return akhiri(p + '. Pendukung: ' + h.join(', '), gaya);
     s = fr === 0 ? p + '. Faktor pendukung: ' + daftar(h) : fr === 1 ? p + ', didukung oleh ' + daftar(h) : 'Faktor pendukung utamanya ' + daftar(h) + '. ' + p;
-    if (kuat.length && ada(0.45)) s += '. Hal yang paling terasa berhasil: ' + kOk(kuat[rn(kuat.length)]);
+    if (kuat.length && ada(0.5)) s += '. Hal yang paling terasa berhasil: ' + lc(kuat[0].A.nama);
     return akhiri(s, gaya);
   }
   function tulisBelum(lemah, sangatBaik, gaya) {
     var b = [], h = pilihN(PENGHAMBAT, 2), s;
-    if (lemah.length) b = pilihN(lemah.map(kKurang), 2);
-    if (!b.length || ada(0.4)) b.push(kecilAwal(pilih(BELUM_UMUM)));
+    if (lemah.length) b = pilihN(lemah.map(function (x) { return kKurang(x.A); }), 2);
+    if (!b.length || ada(0.4)) b.push(lc(pilih(BELUM_UMUM)));
     b = b.slice(0, gaya === 'ringkas' ? 1 : 2);
     s = kap(b[0]) + (b[1] ? '; ' + b[1] : '');
-    if (sangatBaik && ada(0.5)) s = 'Hampir seluruh target tercapai; ' + kecilAwal(s);
+    if (sangatBaik && ada(0.5)) s = 'Hampir seluruh target tercapai; ' + lc(s);
     s += (gaya === 'ringkas' ? '. Penghambat: ' + h[0] : '. Faktor penghambat: ' + daftar(h.slice(0, gaya === 'naratif' ? 2 : 1)));
     return akhiri(s, gaya);
   }
   function tulisRtl(lemah, gaya) {
-    var a = lemah.map(kAksi).slice(0, 2).concat(pilihN(RTL_UMUM, 2));
+    var a = lemah.map(function (x) { return kAksi(x.A); }).slice(0, 2).concat(pilihN(RTL_UMUM, 2));
     a = a.slice(0, gaya === 'ringkas' ? 2 : gaya === 'naratif' ? 4 : 3);
     return akhiri(pilih(['Ke depan: ', 'Rencana tindak lanjut: ', 'Langkah berikutnya: ', '']) + daftar(a), gaya);
   }
-  var CAT_CUKUP = ['Secara umum cukup, tetapi masih banyak ruang untuk perbaikan', 'Sudah cukup memadai; perlu penguatan pada beberapa bagian', 'Hasilnya cukup, dengan sejumlah hal yang perlu dibenahi'];
-  var CAT_KURANG = ['Masih memerlukan pembinaan dan pendampingan yang lebih intensif', 'Belum memenuhi harapan; perlu perbaikan pada banyak bagian', 'Perlu pendampingan lanjutan agar kualitasnya meningkat'];
+  // Isian "Catatan / Tindak Lanjut" di bawah tiap form
+  var CAT_PRA = { 'Sangat Baik': ['Perencanaan sudah sangat baik dan layak dijadikan contoh', 'Perangkat sangat memadai; pertahankan'], 'Baik': ['Perencanaan sudah baik dan siap dipakai dengan sedikit penyempurnaan', 'Perangkat secara umum sudah baik'], 'Cukup': ['Perencanaan cukup memadai, tetapi beberapa bagian perlu diperbaiki', 'Perangkat sudah cukup, namun belum lengkap'], 'Perlu Pembinaan': ['Perencanaan masih perlu banyak perbaikan', 'Perangkat belum memadai dan perlu didampingi'] };
   function catatanUmum(kat, lemah, gaya) {
-    var s = pilih(kat === 'Sangat Baik' ? CAT_SB : kat === 'Baik' ? CAT_BAIK : kat === 'Cukup' ? CAT_CUKUP : CAT_KURANG);
-    if (lemah.length && (kat !== 'Sangat Baik' || ada(0.5))) s += '. Ke depan, perlu ' + kAksi(lemah[rn(lemah.length)]);
+    var s = pilih(MODE === 'pra' ? CAT_PRA[kat] : kat === 'Sangat Baik' ? CAT_SB : kat === 'Baik' ? CAT_BAIK : kat === 'Cukup' ? CAT_CUKUP : CAT_KURANG);
+    if (lemah.length && (kat !== 'Sangat Baik' || ada(0.5))) s += '. ' + pilih(['Tindak lanjut: ', 'Ke depan, perlu ', 'Disepakati untuk ']) + kAksi(lemah[rn(Math.min(2, lemah.length))].A);
     else if (kat === 'Sangat Baik' && ada(0.6)) s += '. ' + pilih(CAT_EKOR_SB);
     return akhiri(s, gaya);
+  }
+  // Isian identitas pada form (info)
+  function infoIsi(t, ctx, kat) {
+    var m, y;
+    if (/mata pelajaran/.test(t)) return (ctx.mapel && ctx.mapel !== '—') ? ctx.mapel : '';
+    if (/^fase/.test(t)) return /^xii?(\s|$|-|\.)|^xi(\s|$)/i.test(ST.kelas) ? (/^x(\s|$|-)/i.test(ST.kelas) ? 'E' : 'F') : '';
+    if (/semester/.test(t) && (m = /^(\d{4})-(\d{1,2})/.exec(ST.tglISO || ''))) { y = +m[1]; return +m[2] >= 7 ? 'Gasal / ' + y + '/' + (y + 1) : 'Genap / ' + (y - 1) + '/' + y; }
+    if (/hari, tanggal/.test(t) && ST.tglISO) { try { return new Date(ST.tglISO + 'T00:00:00').toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); } catch (e) { return ''; } }
+    if (/fokus supervisi/.test(t)) return pilihN(['Praktik pedagogis', 'Kemitraan', 'Lingkungan belajar', 'Pemanfaatan digital', 'Asesmen'].concat(ST.kejuruan ? ['Pembelajaran kejuruan TEFA-DUDI'] : []), 2).join(', ');
+    if (/^kelas/.test(t)) return ST.kelas || '';
+    return '';
   }
 
   /* ====================== FUNGSI UTAMA ====================== */
@@ -340,66 +515,106 @@ var SvOto = (function () {
     for (t = 0; t < Math.floor(m / 3); t++) { var x = rn(m), y = rn(m); if (x !== y && a[x] < 4 && a[y] > 1) { a[x]++; a[y]--; } }
     return acak(a);
   }
+  function pilihanKat(op, kat) {
+    var ix = -1;
+    op.forEach(function (o, i) { if (ix < 0 && o.toLowerCase().indexOf(kat.toLowerCase()) === 0) ix = i; });
+    if (ix < 0) op.forEach(function (o, i) { if (ix < 0 && /^sesuai/i.test(o)) ix = i; });
+    return ix >= 0 ? String(ix + 1) : '';
+  }
   function isi(f, target, ctx) {
     var tg = (target && typeof target === 'object') ? target : baca(target);
     if (!tg) throw new Error('Target nilai harus berupa angka ' + MIN_PERSEN + '–100 (persen) atau 1–4 (rata-rata).');
     ctx = ctx || {}; dipakai = {};
     var awal = ctx.jawabanAwal || {}, tetap = ctx.tetap || {}, pen = window.SvForm ? SvForm.penentu(f) : null, kat = tg.kat;
     if (window.SvForm) f = SvForm.aktif(f, awal);   // mapel non-kejuruan: indikator (K) dilewati
+    var kej = !!(pen && String(awal[pen.id]) === '1');
+    ST = { mapel: (ctx.mapel && ctx.mapel !== '—') ? ctx.mapel : '', kelas: ctx.kelas || '', tglISO: ctx.tanggal || '', kejuruan: kej,
+      ruang: kej ? ['bengkel', 'ruang praktik', 'laboratorium'][rn(3)] : 'kelas',
+      sebut: ['murid', 'murid', 'murid', 'murid', 'siswa', 'siswa', 'peserta didik'][rn(7)], sapa: ['Bapak/Ibu', 'Bapak/Ibu', 'guru'][rn(3)] };
     var jw = {}, gForm = pilih(['ringkas', 'biasa', 'biasa', 'naratif']), pq = f.pertanyaan;
     var skala = pq.filter(function (q) { return q.tipe === 'skala'; });
-    // Skala dengan kolom "Bukti ..." = form observasi (implementasi), bukan telaah perencanaan
-    MODE = (skala.length && !skala.some(function (q) { return /bukti/i.test(q.komentar || ''); })) ? 'pra' : 'sup';
-    var butir = pq.filter(function (q) { return q.tipe === 'skala' || q.tipe === 'bukti_catatan'; });
-    var nb = {}, asp = {}, S = 0, c = 0, bebas = [], bukti = [];
+    var bc = pq.filter(function (q) { return q.tipe === 'bukti_catatan'; });
+    var telaah = pq.filter(telaahQ);
+    // Skala dengan kolom "Bukti ..." (atau butir bukti_catatan) = form pelaksanaan; selain itu telaah perencanaan
+    MODE = (skala.some(function (q) { return /bukti/i.test(q.komentar || ''); }) || (!skala.length && bc.length)) ? 'sup' : 'pra';
+    var nb = {}, asp = {}, S = 0, c = 0, bebas = [];
     skala.forEach(function (q) {
       var v = parseInt(tetap[q.id], 10);
       if (v >= 1 && v <= 4) { nb[q.id] = v; S += v; c++; } else bebas.push(q);
     });
     var sk = sebar(bebas.length, c, S, tg);
     bebas.forEach(function (q, i) { nb[q.id] = sk[i]; });
-    pq.forEach(function (q) { if (q.tipe === 'bukti_catatan') bukti.push(q); });
-    var bk = sebar(bukti.length, 0, 0, tg);
-    bukti.forEach(function (q, i) { nb[q.id] = bk[i]; });
-    butir.forEach(function (q) { asp[q.id] = aspekDari(q.teks); });
-    var kuat = unik(bukanUmum(butir.filter(function (q) { return nb[q.id] === 4; }).map(function (q) { return asp[q.id]; })));
-    var lemah = unik(bukanUmum(butir.filter(function (q) { return nb[q.id] <= 3; }).map(function (q) { return asp[q.id]; })));
-    if (!butir.filter(function (q) { return nb[q.id] === 4; }).length) kuat = [];
-    if (!butir.filter(function (q) { return nb[q.id] <= 3; }).length) lemah = [];
-    var acKuat = acak(kuat), acLemah = acak(lemah), total = 0;
+    var bk = sebar(bc.length, 0, 0, tg); bc.forEach(function (q, i) { nb[q.id] = bk[i]; });
+    var tk = sebar(telaah.length, 0, 0, tg); telaah.forEach(function (q, i) { nb[q.id] = tk[i]; });
+    var butir = pq.filter(function (q) { return nb[q.id] !== undefined; });
+    butir.forEach(function (q) { asp[q.id] = aspekDari(q); });
+    var daftarB = butir.map(function (q) { return { A: asp[q.id], v: nb[q.id] }; });
+    var kuat = acak(unikA(bukanUmum(daftarB.filter(function (x) { return x.v === 4; }))));
+    var lemah = unikA(bukanUmum(acak(daftarB.filter(function (x) { return x.v <= 3; })).sort(function (a, b) { return a.v - b.v; })));
+    if (!daftarB.some(function (x) { return x.v === 4; })) kuat = [];
+    if (!daftarB.some(function (x) { return x.v <= 3; })) lemah = [];
+    var total = 0; skala.forEach(function (q) { total += nb[q.id]; });
+    var katAkhir = skala.length ? kategori(Math.round(total / (skala.length * 4) * 100)) : kat;
 
     pq.forEach(function (q) {
-      var t = q.teks.toLowerCase(), g = gayaItem(gForm), v, k;
+      var t = q.teks.toLowerCase(), g = gayaItem(gForm), v;
       if (q.tipe === 'skala') {
-        v = nb[q.id]; k = v === 4; RENDAH = v <= 2; total += v; jw[q.id] = String(v);
-        if (q.komentar) jw[q.id + '_k'] = MODE === 'sup' ? buktiObs(asp[q.id], k, g) : komentarSkala(asp[q.id], k, g);
+        v = nb[q.id]; jw[q.id] = String(v);
+        if (q.komentar) jw[q.id + '_k'] = MODE === 'sup' ? (/bukti/i.test(q.komentar) ? bukti(asp[q.id], v, g) : catatanSup(asp[q.id], v, g)) : komentarPra(asp[q.id], v, g);
+        // Bila kolomnya "Bukti / Catatan" (satu kolom), gabungkan pengamatan dan saran singkat agar tetap relevan
+        if (MODE === 'sup' && /bukti/i.test(q.komentar || '') && v <= 3 && ada(0.55)) jw[q.id + '_k'] = akhiri(jw[q.id + '_k'].replace(/\.$/, '') + '. ' + frame(asp[q.id]), g);
+        else if (MODE === 'sup' && /bukti/i.test(q.komentar || '') && v === 4 && g !== 'ringkas' && ada(0.25)) jw[q.id + '_k'] = akhiri(jw[q.id + '_k'].replace(/\.$/, '') + '. ' + pilih(P.SING4), g);
       } else if (q.tipe === 'pilihan') {
-        // Pilihan tanpa skor: cocokkan dengan target nilai (Baik / Sangat Baik); telaah perangkat -> "Sesuai"
-        var op = q.opsi || [], ix = -1;
-        op.forEach(function (o, i) { if (ix < 0 && o.toLowerCase() === kat.toLowerCase()) ix = i; });
-        if (ix < 0) op.forEach(function (o, i) { if (ix < 0 && /^sesuai/i.test(o)) ix = i; });
-        jw[q.id] = ix >= 0 ? String(ix + 1) : '';
-        if (q.komentar) jw[q.id + '_k'] = '';
+        var op = q.opsi || [];
+        if (telaahQ(q)) {
+          v = nb[q.id]; var A = asp[q.id], iS = -1, iA = -1, iP = -1;
+          op.forEach(function (o, i) { if (/^sesuai/i.test(o)) iS = i; else if (/^ada/i.test(o)) iA = i; else if (/perlu|kurang/i.test(o)) iP = i; });
+          var ix = v >= 4 ? iS : v === 3 ? (iA >= 0 ? iA : iS) : (iP >= 0 ? iP : iS);
+          jw[q.id] = ix >= 0 ? String(ix + 1) : '';
+          if (q.komentar) jw[q.id + '_k'] = catatanTelaah(A, v, g);
+        } else if (/hasil supervisi/.test(t)) {
+          jw[q.id] = pilihanKat(op, katAkhir); if (q.komentar) jw[q.id + '_k'] = '';
+        } else {
+          jw[q.id] = pilihanKat(op, kat); if (q.komentar) jw[q.id + '_k'] = '';
+        }
       } else if (q.tipe === 'ya_tidak') jw[q.id] = 'Ya';
       else if (q.tipe === 'bukti_catatan') {
-        k = nb[q.id] === 4; RENDAH = nb[q.id] <= 2;
-        jw[q.id + '_b'] = buktiObs(asp[q.id], k, g);
-        jw[q.id + '_c'] = catatanButir(asp[q.id], k, g);
-      } else if (q.tipe === 'info') jw[q.id] = (/mata pelajaran/.test(t) && ctx.mapel && ctx.mapel !== '—') ? ctx.mapel : '';
+        v = nb[q.id];
+        jw[q.id + '_b'] = bukti(asp[q.id], v, g);
+        jw[q.id + '_c'] = catatanSup(asp[q.id], v, g);
+      } else if (q.tipe === 'info') jw[q.id] = infoIsi(t, ctx, kat);
       else if (q.tipe === 'teks') {
-        jw[q.id] = /kelebihan/.test(t) ? tulisKelebihan(acKuat, g) :
-          /ditingkatkan/.test(t) ? tulisDitingkatkan(acLemah, g) :
-          /rekomendasi/.test(t) ? tulisRekomendasi(acLemah, g) :
-          /pelajaran apa/.test(t) ? tulisPelajaran(acKuat, g) :
-          /belum memuaskan/.test(t) ? tulisBelum(acLemah, kat === 'Sangat Baik', g) :
-          /tindak lanjut/.test(t) ? tulisRtl(acLemah, g) : catatanUmum(kat, acLemah, g);
+        var m;
+        jw[q.id] =
+          (m = /rencana tindak lanjut (\d)/.exec(t)) ? rtlN(parseInt(m[1], 10), lemah, kuat) :
+          /pemantauan tindak lanjut/.test(t) ? pemantauan(lemah) :
+          /komitmen guru/.test(t) ? guruKomitmen(lemah) :
+          /kekuatan yang tampak/.test(t) ? kekuatanSup(kuat, katAkhir, g) :
+          /area pengembangan/.test(t) ? areaSup(lemah, katAkhir, g) :
+          /tujuan pembelajaran hari ini/.test(t) ? guruTulis(G.tujuan, G.lanjutTujuan) :
+          /kondisi awal murid/.test(t) ? guruTulis(G.kondisi, G.lanjutKondisi) :
+          /pengalaman belajar apa yang membuat/.test(t) ? guruTulis(G.bermakna, G.lanjutBermakna) :
+          /mengecek pemahaman dan memberi umpan balik/.test(t) ? guruTulis(G.cek, G.lanjutCek) :
+          /tantangan apa yang anda antisipasi/.test(t) ? (pilih(G.tantanganA) + ' ' + pilih(G.tantanganB)) :
+          /kesimpulan pra-supervisi/.test(t) ? kesimpulanPra(kuat, lemah, katAkhir, g) :
+          /bagian mana yang paling berhasil/.test(t) ? guruBerhasil(kuat) :
+          /ingin anda ubah/.test(t) ? guruUbah(lemah) :
+          /dibandingkan tp|hasil asesmen\/produk/.test(t) ? guruHasil(katAkhir, lemah) :
+          /apa kendala \(waktu|kendala.*dukungan/.test(t) ? (pilih(G.kendalaA) + ' ' + pilih(G.kendalaB)) :
+          /kelebihan/.test(t) ? tulisKelebihan(kuat, g) :
+          /ditingkatkan/.test(t) ? tulisDitingkatkan(lemah, g) :
+          /rekomendasi/.test(t) ? tulisRekomendasi(lemah, g) :
+          /pelajaran apa/.test(t) ? tulisPelajaran(kuat, g) :
+          /belum memuaskan/.test(t) ? tulisBelum(lemah, katAkhir === 'Sangat Baik', g) :
+          /tindak lanjut/.test(t) ? tulisRtl(lemah, g) : catatanUmum(katAkhir, lemah, g);
       }
     });
     if (pen && awal[pen.id]) jw[pen.id] = String(awal[pen.id]);   // pilihan jenis mapel dari supervisor dipertahankan
-    RENDAH = false;
+    Object.keys(jw).forEach(function (k) { if (typeof jw[k] === 'string') jw[k] = done(jw[k]); });
     var skor = skala.length ? { rata: (total / skala.length).toFixed(2).replace('.', ','), persen: Math.round(total / (skala.length * 4) * 100) } : null;
     if (skor) skor.kat = kategori(skor.persen);
-    return { jawaban: jw, catatan: catatanUmum(kat, acLemah, gForm), skor: skor };
+    var cat = done(catatanUmum(katAkhir, lemah, gForm));
+    return { jawaban: jw, catatan: cat, skor: skor };
   }
   return { isi: isi, baca: baca, kategori: kategori, AMBANG: AMBANG, TERENDAH: TERENDAH, MIN_PERSEN: MIN_PERSEN };
 })();

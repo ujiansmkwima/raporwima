@@ -16,7 +16,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="supervisi-excel.js?v=4"></script>
-<script src="supervisi-otomatis.js?v=5"></script>
+<script src="supervisi-bank.js?v=1"></script>
+<script src="supervisi-otomatis.js?v=6"></script>
 <script src="supervisi-ttd.js?v=1"></script>
 <script src="supervisi-pdf.js?v=7"></script>
 <script src="mobile.js?v=1" defer></script>
@@ -166,7 +167,7 @@
         if (i < mulai) return;
         var cur = SvForm.baca(pn(i)), tetap = {};
         if (!ganti) Object.keys(manual[i]).forEach(function (k) { if (cur[k] !== undefined && cur[k] !== '') tetap[k] = cur[k]; });
-        var r = SvOto.isi(f, tg, { mapel: nm(mapelList, j.mapel_id), jawabanAwal: cur, tetap: tetap });
+        var r = SvOto.isi(f, tg, { mapel: nm(mapelList, j.mapel_id), kelas: j.kelas || '', tanggal: j.tanggal, jawabanAwal: cur, tetap: tetap });
         var jw = Object.assign({}, r.jawaban, tetap);
         pn(i).querySelector('.svBody').innerHTML = SvForm.render(f, jw, idn(j));
         if (ganti || !manual[i]['\u0000cat'] || !cat(i).value) { cat(i).value = r.catatan; if (ganti) manual[i] = {}; }
