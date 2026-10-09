@@ -813,6 +813,7 @@
       '3. Kolom berjudul ORANYE = isian pokok yang dihitung dalam "Kelengkapan Data". Kolom biru = isian tambahan.',
       '4. Tanggal ditulis dd/mm/yyyy (contoh 17/05/2008). Isian berdropdown dipilih dari daftar yang tersedia.',
       '5. Sel yang dibiarkan kosong TIDAK menghapus data yang sudah ada di sistem.',
+      '5b. Kolom Kelas (khusus admin): siswa baru, atau siswa yang belum punya kelas di tahun ajaran aktif, akan otomatis ditempatkan ke kelas yang dipilih. Siswa yang sudah punya kelas tidak dipindahkan.',
       '6. Setelah selesai, simpan file, lalu di aplikasi pilih menu Excel → Impor Excel dan periksa ringkasannya sebelum menekan "Terapkan".'
     ];
     petunjuk.forEach(function (t, i) { wp.mergeCells(3 + i, 1, 3 + i, 3); var c = wp.getCell(3 + i, 1); c.value = t; c.alignment = { wrapText: true, vertical: 'top' }; wp.getRow(3 + i).height = 32; });
@@ -828,6 +829,13 @@
         var c = wp.getCell(r, j + 1); c.value = t; c.border = BORDER; c.alignment = { wrapText: true, vertical: 'top' };
       });
     });
+
+    // Daftar kelas untuk dropdown kolom Kelas (sheet tersembunyi, supaya tidak terbatas 255 karakter)
+    var kelasNama = (o.kelasNama || []).slice();
+    if (kelasNama.length) {
+      var wd = wb.addWorksheet('Daftar', { state: 'hidden' });
+      kelasNama.forEach(function (n, i) { wd.getCell(i + 1, 1).value = n; });
+    }
 
     // ===== Sheet Data Siswa =====
     var ws = wb.addWorksheet('Data Siswa', {
@@ -881,7 +889,11 @@
       var r = BARIS_DATA + i, s = list[i] || null;
       var c0 = ws.getCell(r, 1); c0.value = i + 1; c0.alignment = { horizontal: 'center', vertical: 'top' }; c0.border = BORDER;
       var c1 = ws.getCell(r, 2); c1.value = s && s.kelas ? s.kelas.nama : null; c1.border = BORDER; c1.alignment = { vertical: 'top' };
-      c0.fill = c1.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: WARNA.kunci } };
+      c0.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: WARNA.kunci } };
+      if (s) c1.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: WARNA.kunci } };
+      if (kelasNama.length && !(s && s.kelas)) {
+        c1.dataValidation = { type: 'list', allowBlank: true, formulae: ['Daftar!$A$1:$A$' + kelasNama.length], showErrorMessage: true, errorStyle: 'warning', errorTitle: 'Kelas', error: 'Pilih kelas dari daftar.' };
+      }
       H.forEach(function (h, j) {
         var f = h.f, c = ws.getCell(r, KOL0 + 1 + j), v = s ? s[f.k] : null;
         c.border = BORDER;
@@ -975,7 +987,18 @@
     var H = headerExcel();
     var byNis = {}, byNisn = {};
     semuaSiswa.forEach(function (s) { if (s.nis) byNis[String(s.nis).trim()] = s; if (s.nisn) byNisn[String(s.nisn).trim()] = s; });
-    var hasil = { cocok: [], tidakDitemukan: [], baru: [], totalBaris: baris.length, tambahBaru: !!o.tambahBaru, peringatan: [] };
+    var hasil = { cocok: [], tidakDitemukan: [], baru: [], penempatan: [], totalBaris: baris.length, tambahBaru: !!o.tambahBaru, peringatan: [] };
+    var kelasByNama = {};
+    (o.kelasList || []).forEach(function (k) { kelasByNama[String(k.nama).trim().toLowerCase()] = k; });
+    // Cari kelas dari kolom Kelas; mengembalikan objek kelas atau null (dan memberi peringatan bila tak dikenal)
+    function kelasDariBaris(r) {
+      if (!o.tempatkan) return null;
+      var t = String(r['Kelas'] === undefined ? '' : r['Kelas']).trim();
+      if (!t) return null;
+      var k = kelasByNama[t.toLowerCase()];
+      if (!k) hasil.peringatan.push('Baris ' + r.__baris + ': kelas "' + t + '" tidak ditemukan di data Kelas E-Rapor (penempatan dilewati).');
+      return k || null;
+    }
 
     function ambil(r, h) {
       var f = h.f, v = r[h.hdr];
@@ -1007,17 +1030,32 @@
         if (s && String(s[f.k] === null || s[f.k] === undefined ? '' : s[f.k]) === String(out)) return; // sama
         (f.t === 'siswa' ? si : de)[f.k] = out; n++;
       });
-      if (s) { if (n) hasil.cocok.push({ siswa: s, si: si, de: de, jumlah: n, baris: r.__baris }); return; }
+      if (s) {
+        if (n) hasil.cocok.push({ siswa: s, si: si, de: de, jumlah: n, baris: r.__baris });
+        var ks = kelasDariBaris(r);
+        if (ks) {
+          if (!s.kelas) hasil.penempatan.push({ siswaId: s.id, nama: s.nama, kelasId: ks.id, kelasNama: ks.nama });
+          else if (s.kelas.id !== ks.id) hasil.peringatan.push('Baris ' + r.__baris + ': ' + s.nama + ' sudah berada di kelas ' + s.kelas.nama + ' — tidak dipindah ke ' + ks.nama + '.');
+        }
+        return;
+      }
       if (!nis && !nisn && !nama) return;
-      if (o.tambahBaru && nama && (nis || nisn)) { si.status = 'aktif'; hasil.baru.push({ si: si, de: de, nama: nama, baris: r.__baris }); return; }
+      if (o.tambahBaru && nama && (nis || nisn)) { si.status = 'aktif'; var kb = kelasDariBaris(r); hasil.baru.push({ si: si, de: de, nama: nama, baris: r.__baris, kelasId: kb ? kb.id : null, kelasNama: kb ? kb.nama : null }); return; }
       hasil.tidakDitemukan.push('Baris ' + r.__baris + ': ' + (nama || '(tanpa nama)') + ' — NIS ' + (nis || '—'));
     });
     return hasil;
   };
 
   BI.terapkanImpor = async function (hasil, onProgress) {
-    var ok = 0, baru = 0, gagal = [];
-    var total = hasil.cocok.length + hasil.baru.length, done = 0;
+    var ok = 0, baru = 0, ditempatkan = 0, gagal = [];
+    var taId = BI.ctx.ta ? BI.ctx.ta.id : null;
+    var total = hasil.cocok.length + hasil.baru.length + (hasil.penempatan || []).length, done = 0;
+    async function tempatkan(siswaId, kelasId, nama) {
+      if (!taId) { gagal.push(nama + ': belum ada tahun ajaran aktif, penempatan kelas dilewati.'); return; }
+      var rk = await sb().from('siswa_kelas').insert({ siswa_id: siswaId, kelas_id: kelasId, tahun_ajaran_id: taId });
+      if (rk.error) throw rk.error;
+      ditempatkan++;
+    }
     for (var i = 0; i < hasil.cocok.length; i++) {
       var c = hasil.cocok[i];
       try {
@@ -1040,10 +1078,16 @@
           if (r3.error) throw r3.error;
         }
         baru++;
+        if (b.kelasId) await tempatkan(ins.data.id, b.kelasId, b.nama);
       } catch (e) { gagal.push(b.nama + ' (baru): ' + pesanError(e)); }
       if (onProgress) onProgress(++done, total);
     }
-    return { ok: ok, baru: baru, gagal: gagal };
+    var pen = hasil.penempatan || [];
+    for (var q = 0; q < pen.length; q++) {
+      try { await tempatkan(pen[q].siswaId, pen[q].kelasId, pen[q].nama); } catch (e) { gagal.push(pen[q].nama + ' (kelas): ' + pesanError(e)); }
+      if (onProgress) onProgress(++done, total);
+    }
+    return { ok: ok, baru: baru, ditempatkan: ditempatkan, gagal: gagal };
   };
 
   // ================= Tampilan bersama =================
@@ -1238,12 +1282,13 @@
         btn.disabled = false; btn.textContent = teks;
       });
     }
+    async function namaKelasAdmin() { return opts.admin ? (await BI.muatKelas()).map(function (k) { return k.nama; }) : []; }
     jalankan('#exTemplate', async function () {
       var list = await ambilList();
-      await BI.unduhTemplate(list, 'template_buku_induk' + sufiks + '.xlsx', { judul: 'TEMPLATE ISIAN BUKU INDUK PESERTA DIDIK', subjudul: (namaKelas ? 'Kelas ' + namaKelas + ' · ' : '') + taTeks + ' · SMK Widya Mandala Tambak' });
+      await BI.unduhTemplate(list, 'template_buku_induk' + sufiks + '.xlsx', { kelasNama: await namaKelasAdmin(), judul: 'TEMPLATE ISIAN BUKU INDUK PESERTA DIDIK', subjudul: (namaKelas ? 'Kelas ' + namaKelas + ' · ' : '') + taTeks + ' · SMK Widya Mandala Tambak' });
     });
     if (opts.admin) jalankan('#exKosong', async function () {
-      await BI.unduhTemplate([], 'template_buku_induk_kosong.xlsx', { kosong: 50, judul: 'TEMPLATE ISIAN BUKU INDUK PESERTA DIDIK', subjudul: 'Siswa baru · SMK Widya Mandala Tambak' });
+      await BI.unduhTemplate([], 'template_buku_induk_kosong.xlsx', { kosong: 50, kelasNama: await namaKelasAdmin(), judul: 'TEMPLATE ISIAN BUKU INDUK PESERTA DIDIK', subjudul: 'Siswa baru · SMK Widya Mandala Tambak' });
     });
     jalankan('#exUnduh', async function () {
       var list = await ambilList();
@@ -1257,18 +1302,19 @@
       try {
         var semua = await BI.muatSiswa({ kelasId: opts.kelasId || null });
         var tambahBaru = !!(root.querySelector('#exBaru') || {}).checked;
-        var h = await BI.bacaExcel(fileEl.files[0], semua, { tambahBaru: tambahBaru });
+        var h = await BI.bacaExcel(fileEl.files[0], semua, { tambahBaru: tambahBaru, tempatkan: !!opts.admin, kelasList: opts.admin ? await BI.muatKelas() : [] });
         var isian = h.cocok.reduce(function (t, c) { return t + c.jumlah; }, 0);
         hasil.innerHTML = '<div class="import-summary">' + h.totalBaris + ' baris berisi data dibaca\n' + h.cocok.length + ' siswa punya perubahan (' + isian + ' isian)\n' +
           (h.baru.length ? h.baru.length + ' siswa baru akan ditambahkan\n' : '') +
+          (h.penempatan.length || h.baru.some(function (x) { return x.kelasId; }) ? (h.penempatan.length + h.baru.filter(function (x) { return x.kelasId; }).length) + ' siswa akan ditempatkan ke kelas (tahun ajaran aktif)\n' : '') +
           (h.tidakDitemukan.length ? h.tidakDitemukan.length + ' baris tidak cocok dengan siswa manapun (periksa NIS' + (opts.admin ? ', atau centang "tambahkan siswa baru"' : '') + '):\n' + esc(h.tidakDitemukan.slice(0, 15).join('\n')) + (h.tidakDitemukan.length > 15 ? '\n...' : '') : 'Semua baris dikenali.') +
           (h.peringatan.length ? '\n\nPeringatan (isian ini dilewati):\n' + esc(h.peringatan.slice(0, 15).join('\n')) + (h.peringatan.length > 15 ? '\n... dan ' + (h.peringatan.length - 15) + ' lagi' : '') : '') + '</div>' +
-          ((h.cocok.length || h.baru.length) ? '<div class="toolbar"><button class="btn-small btn-small--primary" id="exTerapkan">Terapkan Perubahan</button></div>' : '');
+          ((h.cocok.length || h.baru.length || h.penempatan.length) ? '<div class="toolbar"><button class="btn-small btn-small--primary" id="exTerapkan">Terapkan Perubahan</button></div>' : '');
         var t = hasil.querySelector('#exTerapkan');
         if (t) t.addEventListener('click', async function () {
           t.disabled = true;
           var r = await BI.terapkanImpor(h, function (n, tot) { t.textContent = 'Menyimpan ' + n + '/' + tot + '...'; });
-          hasil.innerHTML = '<div class="import-summary">Selesai: ' + r.ok + ' siswa diperbarui' + (r.baru ? ', ' + r.baru + ' siswa baru ditambahkan' : '') + '.' + (r.gagal.length ? '\nGagal ' + r.gagal.length + ':\n' + esc(r.gagal.slice(0, 10).join('\n')) : '') + '</div>';
+          hasil.innerHTML = '<div class="import-summary">Selesai: ' + r.ok + ' siswa diperbarui' + (r.baru ? ', ' + r.baru + ' siswa baru ditambahkan' : '') + (r.ditempatkan ? ', ' + r.ditempatkan + ' siswa ditempatkan ke kelas' : '') + '.' + (r.gagal.length ? '\nGagal ' + r.gagal.length + ':\n' + esc(r.gagal.slice(0, 10).join('\n')) : '') + '</div>';
         });
       } catch (e) { hasil.innerHTML = '<div class="import-summary" style="color:var(--danger);">Gagal membaca file: ' + esc(pesanError(e)) + '</div>'; }
       fileEl.value = '';

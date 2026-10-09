@@ -25,3 +25,9 @@ Menu **Excel** (admin & wali kelas): Template Isian (berisi daftar siswa), Templ
 File Excel berformat tabel bergaris: judul, pita bagian, header (oranye = isian pokok), dropdown pilihan, filter, baris beku, sheet Petunjuk.
 Impor mencocokkan lewat NIS (cadangan NISN), menampilkan ringkasan + peringatan sebelum "Terapkan". Admin bisa mencentang "tambahkan siswa baru bila NIS belum ada".
 Butuh library ExcelJS dari cdnjs (sudah ditambahkan di bukuinduk-admin.html & bukuinduk-guru.html).
+
+## Admin E-Rapor: Tarik dari Buku Induk
+admin.html → menu **Tarik dari Buku Induk**: menarik nilai & kehadiran semester yang diisi MANUAL di Buku Induk (tahun lama / pindahan) ke tabel E-Rapor (nilai, rekap_presensi). Biodata tidak perlu ditarik (tabel siswa sama). Mapel dicocokkan lewat nama, tahun ajaran harus sudah ada di E-Rapor; nilai yang sudah ada tidak ditimpa kecuali dicentang.
+
+## Penempatan kelas lewat impor Excel (admin)
+Kolom **Kelas** di template dibaca saat impor: siswa baru, atau siswa yang belum punya kelas di tahun ajaran aktif, otomatis ditempatkan (tabel siswa_kelas). Siswa yang sudah punya kelas tidak dipindah (muncul peringatan). Nama kelas harus sama dengan data Kelas E-Rapor; di template kolom ini berupa dropdown.

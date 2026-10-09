@@ -57,6 +57,7 @@
       <a href="#" class="menu-item" data-view="rekapNilai"><i data-lucide="bar-chart-3" class="menu-icon"></i><span class="menu-item__title">Rekap Nilai Semester</span></a>
       <a href="#" class="menu-item" data-view="leger"><i data-lucide="layers" class="menu-icon"></i><span class="menu-item__title">Leger Nilai (6 Semester)</span></a>
       <a href="#" class="menu-item menu-item--nested" data-view="urutanLeger"><i data-lucide="corner-down-right" class="menu-icon"></i><span class="menu-item__title">Urutan Mapel Leger</span></a>
+      <a href="#" class="menu-item" data-view="tarikBukuInduk"><i data-lucide="book-user" class="menu-icon"></i><span class="menu-item__title">Tarik dari Buku Induk</span></a>
     </nav>
 
     <div class="sidebar__footer">
@@ -5776,7 +5777,124 @@
     });
   }
 
-  var views = { dashboard: renderDashboard, profilSekolah: renderProfilSekolah, slideshowLogin: renderSlideshowLogin, tahunAjaran: renderTahunAjaran, siswa: renderSiswa, rekapNilai: renderRekapNilai, leger: renderLeger, urutanLeger: renderUrutanLeger, kelas: renderKelas, mapel: renderMapel, mapelTingkat: renderMapelTingkat, penugasan: renderPenugasan, tujuanPembelajaran: renderTujuanPembelajaran, guru: renderGuru, ekskul: renderEkstrakurikuler, pkl: renderPkl };
+  // ================= Tarik data dari Buku Induk =================
+  // 1) Biodata siswa memakai tabel `siswa` yang sama dengan Buku Induk, jadi
+  //    otomatis sudah sama (tidak ada yang perlu ditarik).
+  // 2) Nilai rapor & kehadiran per semester yang DIISI MANUAL di Buku Induk
+  //    (tahun lama / siswa pindahan) bisa ditarik ke tabel E-Rapor di sini,
+  //    asalkan tahun ajarannya sudah ada di E-Rapor. Pencocokan mapel lewat nama.
+  async function renderTarikBukuInduk() {
+    content.innerHTML =
+      '<div class="panel-head"><div><div class="panel-head__title">Tarik dari Buku Induk</div>' +
+      '<div class="panel-head__desc">Menarik nilai & kehadiran semester yang diisi manual di Buku Induk (tahun lama / siswa pindahan) ke E-Rapor, sehingga muncul di Leger & Rekap.</div></div></div>' +
+      '<div class="panel-note"><b>Biodata siswa tidak perlu ditarik</b> — Buku Induk dan E-Rapor memakai tabel Siswa yang sama, jadi perubahan di Buku Induk (nama, alamat, orang tua, status lulus, dll) langsung terlihat di sini.</div>' +
+      '<div class="toolbar" style="align-items:center;"><button class="btn-small btn-small--primary" id="tbiPeriksa">Periksa Data Buku Induk</button>' +
+      '<label style="display:flex;gap:6px;align-items:center;font-size:12.5px;"><input type="checkbox" id="tbiTimpa"> timpa nilai/kehadiran yang sudah ada di E-Rapor</label></div>' +
+      '<div id="tbiHasil"></div>';
+
+    function norm(n) {
+      return String(n || '').toLowerCase().replace(/pendidikan agama\s+(islam|kristen|katolik|hindu|buddha|budha|konghucu)/g, 'pendidikan agama').replace(/[^a-z0-9]+/g, ' ').trim();
+    }
+    async function semua(build) {
+      var out = [], from = 0;
+      for (;;) {
+        var r = await build(from, from + 999);
+        if (r.error) throw r.error;
+        out = out.concat(r.data || []);
+        if (!r.data || r.data.length < 1000) break;
+        from += 1000;
+      }
+      return out;
+    }
+
+    var rencana = null;
+    var hasil = document.getElementById('tbiHasil');
+
+    document.getElementById('tbiPeriksa').addEventListener('click', async function () {
+      var btn = this; btn.disabled = true; hasil.innerHTML = '<div class="panel-note">Memeriksa...</div>';
+      try {
+        var timpa = document.getElementById('tbiTimpa').checked;
+        var riwayat = await semua(function (a, b) {
+          return supabaseClient.from('bi_riwayat_semester').select('id, siswa_id, ta_nama, ta_semester, kelas_nama, nilai, jumlah_sakit, jumlah_izin, jumlah_alpha, catatan_wali').eq('sumber', 'manual').order('id').range(a, b);
+        });
+        if (!riwayat.length) { hasil.innerHTML = '<div class="empty-state"><div class="empty-state__mark">！</div><div class="empty-state__title">Belum ada data manual di Buku Induk</div><div class="empty-state__desc">Tambahkan lewat Buku Induk → siswa → tab Perkembangan Belajar → Tambah Semester Manual.</div></div>'; btn.disabled = false; return; }
+
+        var taRes = await supabaseClient.from('tahun_ajaran').select('id, nama, semester');
+        var taMap = {}; (taRes.data || []).forEach(function (t) { taMap[t.nama + '|' + t.semester] = t; });
+        var mapelRows = await semua(function (a, b) { return supabaseClient.from('mata_pelajaran').select('id, nama').order('id').range(a, b); });
+        var mapelByNorm = {}; mapelRows.forEach(function (m) { mapelByNorm[norm(m.nama)] = m; });
+        var siswaIds = Array.from(new Set(riwayat.map(function (r) { return r.siswa_id; })));
+        var siswaRows = [];
+        for (var i = 0; i < siswaIds.length; i += 80) {
+          var rs = await supabaseClient.from('siswa').select('id, nama').in('id', siswaIds.slice(i, i + 80));
+          siswaRows = siswaRows.concat(rs.data || []);
+        }
+        var namaSiswa = {}; siswaRows.forEach(function (x) { namaSiswa[x.id] = x.nama; });
+
+        var skRows = [], nilaiAda = [], presAda = [];
+        for (var k = 0; k < siswaIds.length; k += 60) {
+          var ids = siswaIds.slice(k, k + 60);
+          skRows = skRows.concat(await semua(function (a, b) { return supabaseClient.from('siswa_kelas').select('siswa_id, kelas_id, tahun_ajaran_id').in('siswa_id', ids).order('id').range(a, b); }));
+          nilaiAda = nilaiAda.concat(await semua(function (a, b) { return supabaseClient.from('nilai').select('siswa_id, mapel_id, tahun_ajaran_id, nilai').in('siswa_id', ids).eq('jenis', 'rapor').order('id').range(a, b); }));
+          presAda = presAda.concat(await semua(function (a, b) { return supabaseClient.from('rekap_presensi').select('siswa_id, kelas_id, tahun_ajaran_id').in('siswa_id', ids).order('id').range(a, b); }));
+        }
+        var skMap = {}; skRows.forEach(function (r) { skMap[r.siswa_id + '|' + r.tahun_ajaran_id] = r; });
+        var nilaiAdaSet = {}; nilaiAda.forEach(function (r) { if (r.nilai !== null && r.nilai !== undefined) nilaiAdaSet[r.siswa_id + '|' + r.mapel_id + '|' + r.tahun_ajaran_id] = true; });
+        var presAdaSet = {}; presAda.forEach(function (r) { presAdaSet[r.siswa_id + '|' + r.tahun_ajaran_id] = true; });
+
+        var nilaiBaru = [], presBaru = [], lewatAda = 0, taHilang = {}, mapelHilang = {}, tanpaKelas = 0, semesterOk = 0;
+        riwayat.forEach(function (r) {
+          var ta = taMap[r.ta_nama + '|' + r.ta_semester];
+          if (!ta) { taHilang[r.ta_nama + ' ' + r.ta_semester] = (taHilang[r.ta_nama + ' ' + r.ta_semester] || 0) + 1; return; }
+          semesterOk++;
+          (r.nilai || []).forEach(function (n) {
+            var m = mapelByNorm[norm(n.mapel)];
+            if (!m) { mapelHilang[n.mapel] = (mapelHilang[n.mapel] || 0) + 1; return; }
+            var key = r.siswa_id + '|' + m.id + '|' + ta.id;
+            if (nilaiAdaSet[key] && !timpa) { lewatAda++; return; }
+            nilaiBaru.push({ siswa_id: r.siswa_id, mapel_id: m.id, tahun_ajaran_id: ta.id, jenis: 'rapor', nilai: Number(n.nilai), updated_at: new Date().toISOString() });
+          });
+          var sk = skMap[r.siswa_id + '|' + ta.id];
+          if (!sk) { tanpaKelas++; return; }
+          if (presAdaSet[r.siswa_id + '|' + ta.id] && !timpa) { return; }
+          presBaru.push({ siswa_id: r.siswa_id, kelas_id: sk.kelas_id, tahun_ajaran_id: ta.id, jumlah_sakit: r.jumlah_sakit || 0, jumlah_izin: r.jumlah_izin || 0, jumlah_alpha: r.jumlah_alpha || 0, catatan_wali_kelas: r.catatan_wali || null, updated_at: new Date().toISOString() });
+        });
+        rencana = { nilaiBaru: nilaiBaru, presBaru: presBaru };
+
+        var daftar = function (o) { return Object.keys(o).map(function (x) { return escapeHtml(x) + ' (' + o[x] + 'x)'; }).join(', '); };
+        hasil.innerHTML = '<div class="import-summary">' + riwayat.length + ' semester manual ditemukan untuk ' + siswaIds.length + ' siswa\n' + semesterOk + ' semester cocok dengan tahun ajaran di E-Rapor\n' +
+          nilaiBaru.length + ' nilai mapel akan ditambahkan/diperbarui' + (lewatAda ? ' (' + lewatAda + ' dilewati karena sudah ada nilainya)' : '') + '\n' +
+          presBaru.length + ' rekap kehadiran akan ditambahkan/diperbarui' + (tanpaKelas ? ' (' + tanpaKelas + ' semester dilewati: siswa belum ditempatkan di kelas pada tahun ajaran itu)' : '') +
+          (Object.keys(taHilang).length ? '\n\nTahun ajaran belum ada di E-Rapor (buat dulu di menu Tahun Ajaran):\n' + daftar(taHilang) : '') +
+          (Object.keys(mapelHilang).length ? '\n\nNama mapel tidak cocok dengan Mata Pelajaran E-Rapor (dilewati):\n' + daftar(mapelHilang) : '') + '</div>' +
+          ((nilaiBaru.length || presBaru.length) ? '<div class="toolbar"><button class="btn-small btn-small--primary" id="tbiTerapkan">Terapkan ke E-Rapor</button></div>' : '');
+        var t = document.getElementById('tbiTerapkan');
+        if (t) t.addEventListener('click', async function () {
+          if (!confirm('Tulis ' + rencana.nilaiBaru.length + ' nilai dan ' + rencana.presBaru.length + ' rekap kehadiran ke E-Rapor?')) return;
+          t.disabled = true; t.textContent = 'Menyimpan...';
+          try {
+            for (var a = 0; a < rencana.nilaiBaru.length; a += 200) {
+              var r1 = await supabaseClient.from('nilai').upsert(rencana.nilaiBaru.slice(a, a + 200), { onConflict: 'siswa_id,mapel_id,tahun_ajaran_id,jenis' });
+              if (r1.error) throw r1.error;
+            }
+            for (var c = 0; c < rencana.presBaru.length; c += 200) {
+              var r2 = await supabaseClient.from('rekap_presensi').upsert(rencana.presBaru.slice(c, c + 200), { onConflict: 'siswa_id,kelas_id,tahun_ajaran_id' });
+              if (r2.error) throw r2.error;
+            }
+            hasil.innerHTML = '<div class="import-summary">Selesai. ' + rencana.nilaiBaru.length + ' nilai dan ' + rencana.presBaru.length + ' rekap kehadiran ditulis ke E-Rapor.</div>';
+          } catch (e) {
+            hasil.innerHTML = '<div class="import-summary" style="color:var(--danger);">Gagal: ' + escapeHtml(e && e.message ? e.message : e) + '</div>';
+          }
+        });
+      } catch (e) {
+        hasil.innerHTML = '<div class="import-summary" style="color:var(--danger);">Gagal memeriksa: ' + escapeHtml(e && e.message ? e.message : e) + '\n(Pastikan migrasi_buku_induk.sql sudah dijalankan.)</div>';
+      }
+      btn.disabled = false;
+    });
+  }
+
+
+  var views = { dashboard: renderDashboard, profilSekolah: renderProfilSekolah, slideshowLogin: renderSlideshowLogin, tahunAjaran: renderTahunAjaran, siswa: renderSiswa, rekapNilai: renderRekapNilai, leger: renderLeger, urutanLeger: renderUrutanLeger, kelas: renderKelas, mapel: renderMapel, mapelTingkat: renderMapelTingkat, penugasan: renderPenugasan, tujuanPembelajaran: renderTujuanPembelajaran, guru: renderGuru, ekskul: renderEkstrakurikuler, pkl: renderPkl, tarikBukuInduk: renderTarikBukuInduk };
 
   document.querySelectorAll('#menuAdmin .menu-item').forEach(function (item) {
     item.addEventListener('click', function (e) {
