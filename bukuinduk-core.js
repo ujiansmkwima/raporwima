@@ -400,6 +400,144 @@
     });
   };
 
+  // ================= Detail siswa (popup baca-saja) =================
+  // Menampilkan data Buku Induk yang SUDAH TERSIMPAN dalam popup. opts: { bolehUbah, onBuka }
+  var CSS_DETAIL =
+    '.bi-dt-overlay{align-items:center;padding:24px 16px;animation:biDtFade .18s ease-out;}' +
+    '@keyframes biDtFade{from{opacity:0}to{opacity:1}}@keyframes biDtUp{from{opacity:0;transform:translateY(14px) scale(.985)}to{opacity:1;transform:none}}' +
+    '.bi-dt{max-width:880px;padding:0;overflow:hidden;display:flex;flex-direction:column;max-height:calc(100vh - 48px);animation:biDtUp .22s ease-out;}' +
+    '.bi-dt__hero{position:relative;display:flex;gap:18px;align-items:center;padding:26px 30px 22px;color:#fff;background:linear-gradient(135deg,#1e3a8a 0%,#2563eb 55%,#7c3aed 120%);}' +
+    '.bi-dt__hero::after{content:"";position:absolute;right:-60px;top:-70px;width:220px;height:220px;border-radius:50%;background:rgba(255,255,255,.08);pointer-events:none;}' +
+    '.bi-dt__x{position:absolute;right:14px;top:12px;border:none;background:rgba(255,255,255,.16);color:#fff;width:32px;height:32px;border-radius:50%;font-size:20px;line-height:1;cursor:pointer;z-index:2;}' +
+    '.bi-dt__x:hover{background:rgba(255,255,255,.3);}' +
+    '.bi-dt__fotos{display:flex;gap:10px;flex-shrink:0;}' +
+    '.bi-dt__foto{width:84px;height:112px;border-radius:12px;overflow:hidden;background:rgba(255,255,255,.14);border:2px solid rgba(255,255,255,.55);display:flex;align-items:center;justify-content:center;text-align:center;font-size:11px;color:rgba(255,255,255,.8);position:relative;box-shadow:0 8px 18px -6px rgba(0,0,0,.4);}' +
+    '.bi-dt__foto img{width:100%;height:100%;object-fit:cover;display:block;}' +
+    '.bi-dt__foto small{position:absolute;left:0;right:0;bottom:0;background:rgba(15,23,42,.62);font-size:9.5px;padding:2px 0;letter-spacing:.3px;}' +
+    '.bi-dt__who{min-width:0;position:relative;z-index:1;}' +
+    '.bi-dt__nama{font-size:21px;font-weight:800;letter-spacing:-.01em;line-height:1.25;margin:0 0 6px;word-break:break-word;}' +
+    '.bi-dt__meta{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;}' +
+    '.bi-dt__pill{background:rgba(255,255,255,.17);border:1px solid rgba(255,255,255,.28);padding:3px 10px;border-radius:999px;font-size:11.5px;font-weight:600;white-space:nowrap;}' +
+    '.bi-dt__prog{max-width:320px;}' +
+    '.bi-dt__prog-top{display:flex;justify-content:space-between;font-size:11.5px;font-weight:600;margin-bottom:5px;opacity:.95;}' +
+    '.bi-dt__bar{height:7px;background:rgba(255,255,255,.22);border-radius:99px;overflow:hidden;}' +
+    '.bi-dt__bar>i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#6ee7b7,#34d399);}' +
+    '.bi-dt__tabs{display:flex;gap:6px;padding:12px 24px 0;border-bottom:1px solid var(--border);overflow-x:auto;background:var(--surface-tint);flex-shrink:0;}' +
+    '.bi-dt__tab{border:none;background:none;font-family:var(--font-body);font-size:13px;font-weight:600;color:var(--ink-soft);padding:9px 14px 11px;cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap;display:flex;gap:7px;align-items:center;}' +
+    '.bi-dt__tab:hover{color:var(--ink);}' +
+    '.bi-dt__tab.on{color:var(--primary-dim);border-bottom-color:var(--primary);}' +
+    '.bi-dt__cnt{font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:99px;background:var(--surface-tint-strong);color:var(--ink-soft);}' +
+    '.bi-dt__tab.on .bi-dt__cnt{background:var(--primary-tint-strong);color:var(--primary-dim);}' +
+    '.bi-dt__body{padding:8px 30px 24px;overflow-y:auto;flex:1;}' +
+    '.bi-dt__sec{margin-top:20px;}' +
+    '.bi-dt__sec-t{font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--primary-dim);display:flex;align-items:center;gap:8px;margin-bottom:10px;}' +
+    '.bi-dt__sec-t::after{content:"";flex:1;height:1px;background:var(--border);}' +
+    '.bi-dt__grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}' +
+    '.bi-dt__it{background:var(--surface-tint);border:1px solid var(--border);border-radius:10px;padding:10px 13px;min-width:0;}' +
+    '.bi-dt__it--full{grid-column:1/-1;}' +
+    '.bi-dt__l{font-size:10.5px;font-weight:700;letter-spacing:.3px;color:var(--ink-faint);text-transform:uppercase;margin-bottom:3px;}' +
+    '.bi-dt__v{font-size:13.5px;font-weight:600;color:var(--ink);word-break:break-word;white-space:pre-wrap;}' +
+    '.bi-dt__v--kosong{font-weight:500;font-style:italic;color:var(--ink-faint);font-size:12.5px;}' +
+    '.bi-dt__foot{display:flex;justify-content:flex-end;gap:10px;padding:14px 24px;border-top:1px solid var(--border);background:var(--surface);flex-shrink:0;}' +
+    '@media(max-width:640px){.bi-dt__hero{flex-direction:column;align-items:flex-start;padding:22px 18px 18px;}.bi-dt__nama{font-size:18px;padding-right:30px;}' +
+    '.bi-dt__body{padding:4px 16px 20px;}.bi-dt__tabs{padding:10px 10px 0;}.bi-dt__grid{grid-template-columns:1fr;}.bi-dt__foot{padding:12px 14px;flex-wrap:wrap;}.bi-dt__foot .btn-small{flex:1 1 auto;}}';
+
+  function pasangCssDetail() {
+    if (document.getElementById('biDtCss')) return;
+    var st = document.createElement('style');
+    st.id = 'biDtCss'; st.textContent = CSS_DETAIL;
+    document.head.appendChild(st);
+  }
+
+  function nilaiTampil(f, v) {
+    if (kosong(v)) return '';
+    if (f.tipe === 'date') return fmtTgl(v);
+    if (f.tipe === 'select') return LABEL_OPSI[v] || v;
+    if (f.k === 'jarak_sekolah' && /^[\d.,]+$/.test(String(v).trim())) return v + ' km';
+    if (f.k === 'tinggi_badan') return v + ' cm';
+    if (f.k === 'berat_badan') return v + ' kg';
+    return v;
+  }
+
+  BI.detailSiswa = async function (s, opts) {
+    opts = opts || {};
+    pasangCssDetail();
+    var foto = { masuk: null, lulus: null };
+    var kel = BI.kelengkapan(s);
+
+    var o = document.createElement('div');
+    o.className = 'modal-overlay bi-dt-overlay';
+    var tabs = F.TAB;
+
+    function panelHtml(tb) {
+      return tb.bagian.map(function (bg) {
+        return '<div class="bi-dt__sec"><div class="bi-dt__sec-t">' + esc(bg.judul) + '</div><div class="bi-dt__grid">' +
+          bg.fields.map(function (f) {
+            var v = nilaiTampil(f, s[f.k]);
+            var penuh = f.full || f.tipe === 'textarea';
+            return '<div class="bi-dt__it' + (penuh ? ' bi-dt__it--full' : '') + '"><div class="bi-dt__l">' + esc(f.l) + '</div>' +
+              (v === '' ? '<div class="bi-dt__v bi-dt__v--kosong">Belum diisi</div>' : '<div class="bi-dt__v">' + esc(v) + '</div>') + '</div>';
+          }).join('') + '</div></div>';
+      }).join('');
+    }
+    function hitungTab(tb) {
+      var n = 0, t = 0;
+      tb.bagian.forEach(function (bg) { bg.fields.forEach(function (f) { t++; if (!kosong(s[f.k])) n++; }); });
+      return n + '/' + t;
+    }
+    var warna = kel.persen >= 90 ? '' : (kel.persen >= 60 ? 'background:linear-gradient(90deg,#fde68a,#fbbf24)' : 'background:linear-gradient(90deg,#fecaca,#f87171)');
+
+    o.innerHTML =
+      '<div class="modal-box bi-dt" role="dialog" aria-modal="true" aria-label="Detail data siswa">' +
+      '<div class="bi-dt__hero"><button type="button" class="bi-dt__x" data-x aria-label="Tutup">×</button>' +
+      '<div class="bi-dt__fotos"><div class="bi-dt__foto" id="biDtFotoMasuk">Foto<br>3 × 4</div><div class="bi-dt__foto" id="biDtFotoLulus" hidden></div></div>' +
+      '<div class="bi-dt__who"><h2 class="bi-dt__nama">' + esc(s.nama) + '</h2><div class="bi-dt__meta">' +
+      (s.kelas ? '<span class="bi-dt__pill">' + esc(s.kelas.nama) + '</span>' : '') +
+      '<span class="bi-dt__pill">NIS ' + esc(s.nis || '—') + '</span><span class="bi-dt__pill">NISN ' + esc(s.nisn || '—') + '</span>' +
+      '<span class="bi-dt__pill">Status: ' + esc(LABEL_OPSI[s.status] || s.status || '—') + '</span></div>' +
+      '<div class="bi-dt__prog"><div class="bi-dt__prog-top"><span>Kelengkapan data</span><span>' + kel.persen + '%</span></div>' +
+      '<div class="bi-dt__bar"><i style="width:' + kel.persen + '%;' + warna + '"></i></div></div></div></div>' +
+      '<div class="bi-dt__tabs" role="tablist">' + tabs.map(function (tb, i) {
+        return '<button type="button" role="tab" class="bi-dt__tab' + (i === 0 ? ' on' : '') + '" data-t="' + tb.id + '">' + esc(tb.judul) + '<span class="bi-dt__cnt">' + hitungTab(tb) + '</span></button>';
+      }).join('') + '</div>' +
+      '<div class="bi-dt__body">' + tabs.map(function (tb, i) {
+        return '<div data-p="' + tb.id + '"' + (i === 0 ? '' : ' hidden') + '>' + panelHtml(tb) + '</div>';
+      }).join('') + '</div>' +
+      '<div class="bi-dt__foot"><button type="button" class="btn-small" id="biDtCetak">🖨 Cetak</button>' +
+      (opts.bolehUbah ? '<button type="button" class="btn-small btn-small--primary" id="biDtBuka">✏️ Buka & Ubah Data</button>' : '') +
+      '<button type="button" class="btn-small" data-x>Tutup</button></div></div>';
+
+    document.body.appendChild(o);
+    var overflowLama = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    function tutup() { document.body.style.overflow = overflowLama; document.removeEventListener('keydown', onKey); o.remove(); }
+    function onKey(e) { if (e.key === 'Escape') tutup(); }
+    document.addEventListener('keydown', onKey);
+    o.addEventListener('mousedown', function (e) { if (e.target === o) tutup(); });
+    o.querySelectorAll('[data-x]').forEach(function (b) { b.addEventListener('click', tutup); });
+    o.querySelectorAll('.bi-dt__tab').forEach(function (b) {
+      b.addEventListener('click', function () {
+        o.querySelectorAll('.bi-dt__tab').forEach(function (x) { x.classList.toggle('on', x === b); });
+        o.querySelectorAll('[data-p]').forEach(function (p) { p.hidden = p.dataset.p !== b.dataset.t; });
+        o.querySelector('.bi-dt__body').scrollTop = 0;
+      });
+    });
+    o.querySelector('#biDtCetak').addEventListener('click', function () { BI.cetak([s]); });
+    var bBuka = o.querySelector('#biDtBuka');
+    if (bBuka) bBuka.addEventListener('click', function () { tutup(); if (opts.onBuka) opts.onBuka(); });
+
+    // Foto dimuat belakangan supaya popup langsung muncul.
+    try {
+      foto = await BI.muatFotoSemua(s.id);
+      function isiFoto(id, src, ket) {
+        var el = o.querySelector(id); if (!el || !src) return;
+        el.hidden = false; el.innerHTML = '<img src="' + src + '" alt="' + ket + '"><small>' + ket + '</small>';
+      }
+      isiFoto('#biDtFotoMasuk', foto.masuk, 'SAAT MASUK');
+      isiFoto('#biDtFotoLulus', foto.lulus, 'SAAT LULUS');
+    } catch (e) { /* foto tidak wajib */ }
+  };
+
   // ================= Perkembangan belajar (ditarik dari E-Rapor) =================
   var cacheMapel = null;
   async function ambilMapel() {
@@ -1265,12 +1403,18 @@
         var k = BI.kelengkapan(s);
         return '<tr><td data-label="Nama">' + esc(s.nama) + '</td><td data-label="NIS">' + esc(s.nis || '—') + '</td><td data-label="NISN">' + esc(s.nisn || '—') + '</td>' +
           '<td data-label="Kelas">' + esc(s.kelas ? s.kelas.nama : '—') + '</td><td data-label="Status">' + chipStatus(s.status) + '</td><td data-label="Kelengkapan">' + chipKelengkapan(k.persen) + '</td>' +
-          '<td><button class="btn-small btn-small--primary" data-buka="' + s.id + '">Buka</button></td></tr>';
+          '<td style="white-space:nowrap;"><button class="btn-small" data-detail="' + s.id + '">👁 Detail</button> <button class="btn-small btn-small--primary" data-buka="' + s.id + '">Buka</button></td></tr>';
       }).join('') : '<tr><td colspan="7">Tidak ada siswa yang cocok.</td></tr>';
+      function bukaForm(s) {
+        BI.bukaSiswa(s, { root: root, bolehUbah: opts.bolehUbah !== false, labelKembali: 'Kembali ke Daftar', onKembali: function () { BI.renderDaftar(Object.assign({}, opts, { filterAwal: filter })); } });
+      }
       root.querySelectorAll('[data-buka]').forEach(function (b) {
+        b.addEventListener('click', function () { bukaForm(list.find(function (x) { return x.id === b.dataset.buka; })); });
+      });
+      root.querySelectorAll('[data-detail]').forEach(function (b) {
         b.addEventListener('click', function () {
-          var s = list.find(function (x) { return x.id === b.dataset.buka; });
-          BI.bukaSiswa(s, { root: root, bolehUbah: opts.bolehUbah !== false, labelKembali: 'Kembali ke Daftar', onKembali: function () { BI.renderDaftar(Object.assign({}, opts, { filterAwal: filter })); } });
+          var s = list.find(function (x) { return x.id === b.dataset.detail; });
+          BI.detailSiswa(s, { bolehUbah: opts.bolehUbah !== false, onBuka: function () { bukaForm(s); } });
         });
       });
       root._biTersaring = f;
