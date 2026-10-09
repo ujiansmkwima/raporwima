@@ -6,7 +6,7 @@
 <title>Dashboard Guru — E-Rapor SMK Widya Mandala Tambak</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=9">
+<link rel="stylesheet" href="style.css?v=11">
 <script src="https://unpkg.com/lucide@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -838,7 +838,7 @@
             '<td><button class="btn-small" data-nilai-idx="' + rowsNilai.indexOf(r) + '">Isi Nilai</button></td></tr>';
         }).join('');
 
-        sectionNilaiHtml = statHtml + taskSectionHtml({
+        sectionNilaiHtml = taskSectionHtml({
           icon: 'clipboard-list',
           title: 'Input Nilai Rapor',
           desc: 'Progres pengisian nilai rapor per mapel & kelas yang kamu ampu. Nilai diisi per Tujuan Pembelajaran ditambah Tengah Semester & Akhir Semester, lalu dihitung otomatis sesuai bobot yang kamu tetapkan.',
@@ -1017,26 +1017,99 @@
       }
 
       // ---------- Rangkai semua section jadi satu halaman ----------
+      // ================= RINGKASAN: hero + tugas berikutnya ==============
+      var semuaTugas = []; // setiap item: { kind, label, filled, total, sel }
+      var gabFilled = 0, gabTotal = 0;
+      rowsNilai.forEach(function (r) {
+        gabFilled += r.filled; gabTotal += r.total;
+        semuaTugas.push({ kind: 'Nilai rapor', label: r.mapel + ' · ' + r.kelas, filled: r.filled, total: r.total, sel: 'button[data-nilai-idx="' + rowsNilai.indexOf(r) + '"]' });
+      });
+      rowsEkskul.forEach(function (r, i) {
+        gabFilled += r.filled; gabTotal += r.total;
+        semuaTugas.push({ kind: 'Ekstrakurikuler', label: r.ekskul.nama, filled: r.filled, total: r.total, sel: 'button[data-ekskul-idx="' + i + '"]' });
+      });
+      rowsKoku.forEach(function (r, i) {
+        gabFilled += r.filled; gabTotal += r.total;
+        semuaTugas.push({ kind: 'Kokurikuler', label: r.namaKegiatan + ' · ' + r.labelKelas, filled: r.filled, total: r.total, sel: 'button[data-koku-idx="' + i + '"]' });
+      });
+      if (waliKelas) {
+        gabFilled += filledWali; gabTotal += totalWali;
+        semuaTugas.push({ kind: 'Presensi', label: 'Kelas ' + waliKelas.kelas.nama, filled: filledWali, total: totalWali, sel: '#btnDashPresensi' });
+      }
+      var tugasBelum = semuaTugas.filter(function (t) { return t.total > 0 && t.filled < t.total; })
+        .sort(function (a, b) { return pctOf(a.filled, a.total) - pctOf(b.filled, b.total) || b.total - a.total; });
+      // TP yang belum dibuat/diaktifkan menahan input nilai, jadi ditaruh paling atas.
+      var tugasTp = rowsTpBank.map(function (r, i) {
+        return { kind: 'Tujuan Pembelajaran', label: r.mapel.nama, tp: true, aktif: r.aktif, total: r.total, sel: 'button[data-tpbank-idx="' + i + '"]' };
+      }).filter(function (t) { return t.aktif === 0; });
+      var antrean = tugasTp.concat(tugasBelum);
+      var antreanTampil = antrean.slice(0, 5);
+
+      var pctGab = pctOf(gabFilled, gabTotal);
+      var namaDepan = String(nama || '').trim().split(/\s+/)[0] || 'Bapak/Ibu';
+      var selesaiKelas = rowsNilai.filter(function (r) { return r.total > 0 && r.filled === r.total; }).length;
+      var judulHero = antrean.length === 0
+        ? 'Halo, ' + namaDepan + '. Semua tugasmu sudah beres'
+        : 'Halo, ' + namaDepan + '. ' + antrean.length + ' tugas menunggu';
+      var subHero = gabTotal > 0
+        ? gabFilled + ' dari ' + gabTotal + ' isian nilai sudah tersimpan — Tahun Ajaran ' + tahunAktif.nama + ' Semester ' + tahunAktif.semester + '.'
+        : 'Tahun Ajaran ' + tahunAktif.nama + ' Semester ' + tahunAktif.semester + '. Belum ada isian nilai yang perlu dihitung.';
+
+      function dxRingG(p) {
+        var circ = 2 * Math.PI * 54, off = circ * (1 - p / 100);
+        return '<svg class="dx-ring dx-tone-' + dxToneG(p) + '" viewBox="0 0 140 140" role="img" aria-label="Progres keseluruhan ' + p + ' persen">' +
+          '<circle class="dx-ring__track" cx="70" cy="70" r="54"/>' +
+          '<circle class="dx-ring__fill" cx="70" cy="70" r="54" style="stroke-dasharray:' + circ.toFixed(1) + ';stroke-dashoffset:' + off.toFixed(1) + ';--dx-circ:' + circ.toFixed(1) + ';"/>' +
+          '<text x="70" y="69" class="dx-ring__pct">' + p + '%</text><text x="70" y="89" class="dx-ring__cap">terisi</text></svg>';
+      }
+      function dxToneG(p) { return p >= 80 ? 'ok' : (p >= 50 ? 'mid' : (p > 0 ? 'low' : 'none')); }
+      function dxFactG(icon, angka, label) {
+        return '<div class="dx-fact"><i data-lucide="' + icon + '" class="dx-fact__icon"></i>' +
+          '<div><div class="dx-fact__num">' + angka + '</div><div class="dx-fact__lbl">' + label + '</div></div></div>';
+      }
+      var peran = ['<span class="dx-role">Guru mapel</span>'];
+      if (waliKelas) peran.push('<span class="dx-role">Wali kelas ' + escapeHtml(waliKelas.kelas.nama) + '</span>');
+      if (daftarPembinaEkskul.length) peran.push('<span class="dx-role">Pembina ekskul</span>');
+      if (daftarPjKoku.length) peran.push('<span class="dx-role">PJ kokurikuler</span>');
+      if (!penugasan.length) peran.shift();
+
       var ringkasanPeranHtml =
-        '<div class="stat-grid">' +
-        '<div class="stat-card"><div class="stat-card__label"><i data-lucide="book-open"></i>Mapel Diampu</div>' +
-        '<div class="stat-card__value">' + mapelIds.length + '</div>' +
-        '<div class="stat-card__sub">' + rowsNilai.length + ' kombinasi mapel &amp; kelas</div></div>' +
-        '<div class="stat-card"><div class="stat-card__label"><i data-lucide="users"></i>Wali Kelas</div>' +
-        '<div class="stat-card__value">' + (waliKelas ? waliKelas.kelas.nama : '—') + '</div>' +
-        '<div class="stat-card__sub">' + (waliKelas ? 'kamu wali kelas ini' : 'bukan wali kelas') + '</div></div>' +
-        '<div class="stat-card"><div class="stat-card__label"><i data-lucide="medal"></i>Pembina Ekskul</div>' +
-        '<div class="stat-card__value">' + daftarPembinaEkskul.length + '</div>' +
-        '<div class="stat-card__sub">kegiatan dibina</div></div>' +
-        '<div class="stat-card"><div class="stat-card__label"><i data-lucide="sprout"></i>PJ Kokurikuler</div>' +
-        '<div class="stat-card__value">' + daftarPjKoku.length + '</div>' +
-        '<div class="stat-card__sub">penugasan PJ</div></div>' +
-        '</div>';
+        '<section class="dx-hero">' + dxRingG(pctGab) +
+        '<div class="dx-hero__main"><h2 class="dx-hero__title">' + escapeHtml(judulHero) + '</h2>' +
+        '<p class="dx-hero__sub">' + escapeHtml(subHero) + '</p>' +
+        '<div class="dx-roles">' + peran.join('') + '</div></div>' +
+        '<div class="dx-facts">' +
+        dxFactG('book-open', mapelIds.length, 'mapel diampu') +
+        dxFactG('check-check', selesaiKelas + '/' + rowsNilai.length, 'mapel-kelas selesai') +
+        dxFactG('medal', daftarPembinaEkskul.length, 'ekskul dibina') +
+        dxFactG('sprout', daftarPjKoku.length, 'PJ kokurikuler') +
+        '</div></section>';
+
+      var antreanHtml = '<section class="dx-card dx-todo" style="margin-bottom:20px;">' +
+        '<div class="dx-card__head"><h3 class="dx-card__title"><i data-lucide="list-todo"></i>Kerjakan berikutnya</h3>' +
+        '<span class="dx-card__hint">' + (antrean.length > antreanTampil.length ? antreanTampil.length + ' teratas dari ' + antrean.length : 'urut dari yang paling kosong') + '</span></div>' +
+        (antreanTampil.length === 0
+          ? '<div class="dx-allgood"><i data-lucide="circle-check"></i>Semua nilai sudah terisi penuh. Tidak ada yang perlu dikerjakan.</div>'
+          : '<ul class="dx-list">' + antreanTampil.map(function (t, i) {
+              var kanan = t.tp
+                ? '<span class="dx-chip dx-chip--belum">' + (t.total === 0 ? 'Belum ada TP' : 'Belum ada TP aktif') + '</span>'
+                : dxBarG(t.filled, t.total) + '<span class="dx-fig">' + t.filled + '/' + t.total + ' · ' + pctOf(t.filled, t.total) + '%</span>';
+              return '<li class="dx-item"><div class="dx-item__name">' + escapeHtml(t.label) + '</div>' +
+                '<div class="dx-item__meta">' + escapeHtml(t.kind) + '</div>' +
+                '<div class="dx-item__prog">' + kanan + '</div>' +
+                '<button type="button" class="btn-small dx-item__go" data-go="' + i + '">Buka</button></li>';
+            }).join('') + '</ul>') +
+        '</section>';
+      function dxBarG(filled, total) {
+        var p = pctOf(filled, total);
+        return '<div class="dx-bar dx-tone-' + dxToneG(p) + '" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + p + '"><span style="width:' + p + '%"></span></div>';
+      }
 
       content.innerHTML =
         '<div class="panel-head"><div><div class="panel-head__title">Dashboard Saya</div>' +
         '<div class="panel-head__desc">Semua tugas kamu — Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + ' Semester ' + escapeHtml(tahunAktif.semester) + '.</div></div></div>' +
         ringkasanPeranHtml +
+        antreanHtml +
         sectionTpBankHtml +
         sectionNilaiHtml +
         sectionEkskulHtml +
@@ -1045,6 +1118,13 @@
         '<div class="panel-note">Progres nilai rapor dihitung per mapel/kelas yang kamu ampu, dari nilai rapor akhir yang sudah tersimpan. Capaian Pembelajaran tidak lagi dicentang manual — sistem menyusunnya sendiri dari nilai TP (terbaik = nilai tertinggi, kurang = di bawah KKM). Progres ekstrakurikuler & kokurikuler dihitung dari peserta/siswa yang jadi tanggung jawabmu. Progres presensi dihitung dari siswa yang datanya sudah pernah disimpan.</div>';
 
       lucide.createIcons();
+
+      content.querySelectorAll('button[data-go]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var tujuan = content.querySelector(antreanTampil[parseInt(btn.dataset.go, 10)].sel);
+          if (tujuan) tujuan.click();
+        });
+      });
 
       content.querySelectorAll('button[data-nilai-idx]').forEach(function (btn) {
         btn.addEventListener('click', function () {

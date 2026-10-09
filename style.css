@@ -2715,3 +2715,16 @@ a { color: inherit; text-decoration: none; }
   .dx-ring__fill, .dx-seg > span { animation: none; }
   .dx-guru__chev { transition: none; }
 }
+
+/* ---------- Dashboard Guru: peran & daftar tugas ---------- */
+.dx-roles { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0 18px; }
+.dx-role { font-size: 12px; font-weight: 600; color: #cbd5e1; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.14); border-radius: 999px; padding: 4px 12px; }
+.dx-todo .dx-item { grid-template-columns: minmax(0, 1fr) 170px auto; }
+.dx-todo .dx-item__prog { grid-column: 2; }
+.dx-todo .dx-item__go { grid-column: 3; grid-row: 1 / span 2; }
+@media (max-width: 760px) {
+  .dx-roles { justify-content: center; }
+  .dx-todo .dx-item { grid-template-columns: 1fr; }
+  .dx-todo .dx-item__prog, .dx-todo .dx-item__go { grid-column: 1; grid-row: auto; }
+  .dx-todo .dx-item__go { justify-self: start; }
+}
