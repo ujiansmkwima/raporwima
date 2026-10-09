@@ -11,6 +11,17 @@ Login (index.html) → **Menu Utama** (portal.html): Buku Induk · E-Rapor · Su
    - baru: portal.html, bukuinduk-admin.html, bukuinduk-guru.html, bukuinduk-core.js, bukuinduk-fields.js, migrasi_buku_induk.sql
    - diubah: index.html, guru.html, admin.html, supervisi.html, supervisi-admin.html
 
+## Foto Saat Masuk & Saat Lulus
+Tab Identitas Siswa punya dua foto 3×4: **Foto Saat Masuk** (kolom `foto`) dan **Foto Saat Lulus** (kolom `foto_lulus`). Keduanya tampil di kartu identitas pada hasil cetak; bila belum ada foto, cetak menampilkan kotak putus-putus "Tempel foto 3 × 4".
+Pasang: jalankan ulang **migrasi_buku_induk.sql** (menambah kolom `foto_lulus`, aman diulang), lalu upload bukuinduk-core.js, bukuinduk-admin.html, bukuinduk-guru.html.
+
+## PKL di Buku Induk
+PKL diperlakukan sebagai **mata pelajaran**: nilai akhirnya (rata-rata nilai DUDI & penguji, sama dengan E-Rapor; kosong bila salah satu belum diisi) masuk sebagai baris "Praktik Kerja Lapangan (PKL)" pada **semester 6** di tabel nilai, ikut dihitung dalam rata-rata semester 6. Tidak ada lagi kolom PKL terpisah. Klik **Tarik Ulang dari E-Rapor** agar nilai PKL muncul. Untuk semester manual, tulis di kolom Nilai Mapel semester 6: `Praktik Kerja Lapangan (PKL) | 85`.
+
+## Kokurikuler di Buku Induk
+Nilai kokurikuler dari E-Rapor (tabel `nilai_kokurikuler`: nama kegiatan + deskripsi capaian) ikut diarsipkan per semester di kolom `kokurikuler` pada `bi_riwayat_semester`. Tampil di tab Perkembangan Belajar dan di cetak sebagai bagian "L. Kokurikuler" (Tahun Ajaran, Semester, Nama Kegiatan, Deskripsi). Untuk semester yang sudah terarsip, klik **Tarik Ulang dari E-Rapor** (atau menu Sinkron dari E-Rapor) supaya kokurikuler terisi. Semester manual bisa mengisi kokurikuler lewat kolom "Kokurikuler" (format `Nama Kegiatan | Deskripsi`).
+Pasang: jalankan ulang migrasi_buku_induk.sql, lalu upload bukuinduk-core.js.
+
 ## Sinkron dengan E-Rapor
 - Biodata dasar (nama, NIS/NISN, TTL, alamat, orang tua, wali, asal sekolah, tanggal masuk, status) memakai tabel `siswa` yang SAMA dengan E-Rapor → diubah di mana pun, langsung sama di aplikasi satunya.
 - Isian tambahan Buku Induk (NIK, kesehatan, pendidikan/penghasilan orang tua, data lulus/keluar, foto, catatan khusus) → tabel `bi_siswa_detail`.

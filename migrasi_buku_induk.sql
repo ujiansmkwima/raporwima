@@ -62,11 +62,13 @@ grant execute on function public.bi_is_wali_siswa(uuid) to authenticated;
 -- ---------------------------------------------------------
 create table if not exists public.bi_siswa_detail (
   siswa_id uuid primary key references public.siswa(id) on delete cascade,
-  foto text,                         -- foto 3x4 (data URL JPEG kecil)
+  foto text,                         -- foto 3x4 SAAT MASUK (data URL JPEG kecil)
   updated_by uuid references public.profiles(id),
   updated_at timestamptz default now()
 );
 
+-- foto 3x4 SAAT LULUS / meninggalkan sekolah (pasangan kolom foto = saat masuk)
+alter table public.bi_siswa_detail add column if not exists foto_lulus text;
 alter table public.bi_siswa_detail add column if not exists nik text;
 alter table public.bi_siswa_detail add column if not exists no_kk text;
 alter table public.bi_siswa_detail add column if not exists kewarganegaraan text;
@@ -149,6 +151,9 @@ create table if not exists public.bi_riwayat_semester (
 );
 
 create index if not exists idx_bi_riwayat_siswa on public.bi_riwayat_semester (siswa_id);
+
+-- kokurikuler per semester: [{nama, deskripsi}] (nama kegiatan + deskripsi capaian)
+alter table public.bi_riwayat_semester add column if not exists kokurikuler jsonb not null default '[]'::jsonb;
 
 alter table public.bi_riwayat_semester enable row level security;
 
