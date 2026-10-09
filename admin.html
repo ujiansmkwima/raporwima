@@ -1961,7 +1961,14 @@
     { key: 'agama', label: 'Agama', type: 'select', options: ['Islam', 'Kristen', 'Katolik', 'Hindu', 'Buddha', 'Konghucu'], allowEmpty: true, section: 'Data Peserta Didik' },
     { key: 'status_keluarga', label: 'Status Keluarga', type: 'text', section: 'Data Peserta Didik' },
     { key: 'anak_ke', label: 'Anak Ke', type: 'number', section: 'Data Peserta Didik' },
-    { key: 'alamat_siswa', label: 'Alamat Peserta Didik', type: 'text', section: 'Data Peserta Didik', full: true },
+    // Format alamat SAMA dengan Buku Induk (bukuinduk-fields.js, bagian "B. Tempat Tinggal").
+    // 'detail: true' = disimpan di tabel bi_siswa_detail (bukan tabel siswa), sama seperti Buku Induk.
+    { key: 'alamat_siswa', label: 'Alamat (Jalan / Dusun / RT RW)', alias: 'Alamat Peserta Didik', type: 'text', section: 'Data Peserta Didik', full: true },
+    { key: 'kelurahan', label: 'Desa / Kelurahan', type: 'text', section: 'Data Peserta Didik', detail: true },
+    { key: 'kecamatan', label: 'Kecamatan', type: 'text', section: 'Data Peserta Didik', detail: true },
+    { key: 'kab_kota', label: 'Kabupaten / Kota', type: 'text', section: 'Data Peserta Didik', detail: true },
+    { key: 'provinsi', label: 'Provinsi', type: 'text', section: 'Data Peserta Didik', detail: true },
+    { key: 'kode_pos', label: 'Kode Pos', type: 'text', section: 'Data Peserta Didik', detail: true },
     { key: 'no_telp_siswa', label: 'No Telp', type: 'text', section: 'Data Peserta Didik' },
     { key: 'status', label: 'Status Siswa', type: 'select', options: ['aktif', 'lulus', 'pindah', 'keluar'], section: 'Data Peserta Didik' },
 
@@ -2052,6 +2059,27 @@
     async function ambilSiswaTerfilter() {
       var siswaRes = await supabaseClient.from('siswa').select('*').order('nama');
       var siswaListAsli = siswaRes.data || [];
+
+      // Tempelkan kolom alamat tambahan (Desa/Kec/Kab/Prov/Kode Pos) dari bi_siswa_detail
+      // — tabel yang sama dengan Buku Induk. Kalau migrasi_buku_induk.sql belum
+      // dijalankan, kolom ini dibiarkan kosong (tidak mengganggu fitur lain).
+      var KOLOM_ALAMAT_DETAIL = SISWA_FIELDS.filter(function (f) { return f.detail; }).map(function (f) { return f.key; });
+      var detailMap = {};
+      try {
+        for (var dari = 0; ; dari += 1000) {
+          var dRes = await supabaseClient.from('bi_siswa_detail')
+            .select('siswa_id, ' + KOLOM_ALAMAT_DETAIL.join(', '))
+            .order('siswa_id').range(dari, dari + 999);
+          if (dRes.error) break;
+          (dRes.data || []).forEach(function (d) { detailMap[d.siswa_id] = d; });
+          if (!dRes.data || dRes.data.length < 1000) break;
+        }
+      } catch (e) { /* abaikan */ }
+      siswaListAsli.forEach(function (sw) {
+        var d = detailMap[sw.id] || {};
+        KOLOM_ALAMAT_DETAIL.forEach(function (k) { sw[k] = d[k] === undefined ? null : d[k]; });
+      });
+
       var skRes = await supabaseClient.from('siswa_kelas').select('siswa_id, kelas_id').eq('tahun_ajaran_id', tahunAktif.id);
       var skMap = {};
       (skRes.data || []).forEach(function (r) { skMap[r.siswa_id] = r.kelas_id; });
@@ -2267,13 +2295,15 @@
         }
 
         var payload = { nama: nama, nis: nis, nisn: nisn };
+        var detailPayload = {};
         SISWA_FIELDS.forEach(function (f) {
           var el = document.getElementById('f_' + f.key);
           var v = el.value;
+          var tgt = f.detail ? detailPayload : payload;
           if (f.type === 'number') {
-            payload[f.key] = v === '' ? null : parseInt(v, 10);
+            tgt[f.key] = v === '' ? null : parseInt(v, 10);
           } else {
-            payload[f.key] = v === '' ? null : v;
+            tgt[f.key] = v === '' ? null : v.trim();
           }
         });
 
@@ -2286,6 +2316,14 @@
         }
         if (res.error) { alert('Gagal menyimpan: ' + res.error.message); return; }
         siswaId = isEdit ? siswaId : res.data.id;
+
+        if (Object.keys(detailPayload).length) {
+          var detRes = await supabaseClient.from('bi_siswa_detail').upsert(
+            Object.assign({ siswa_id: siswaId }, detailPayload),
+            { onConflict: 'siswa_id' }
+          );
+          if (detRes.error) { alert('Data siswa tersimpan, tapi alamat lengkap (Desa/Kec/Kab/Prov/Kode Pos) gagal disimpan: ' + detRes.error.message + '\n(Pastikan migrasi_buku_induk.sql sudah dijalankan.)'); }
+        }
 
         var skRes = await supabaseClient.from('siswa_kelas').upsert(
           { siswa_id: siswaId, kelas_id: kelasId, tahun_ajaran_id: tahunAktif.id },
@@ -2523,11 +2561,17 @@
           }
 
           var payload = { nama: nama, nis: nis, nisn: nisn, agama: agama };
+          var detailPayload = {};
           SISWA_FIELDS.forEach(function (f) {
             if (f.key === 'agama') return; // sudah diisi di atas dari kolom wajib
             var raw = row[f.label];
+            if (raw === undefined && f.alias) raw = row[f.alias]; // dukung header lama
+            // Kolom alamat tambahan: kalau kolomnya tidak ada di file Excel (mis. template lama),
+            // jangan timpa data yang sudah diisi di Buku Induk.
+            if (f.detail && raw === undefined) return;
+            var tgt = f.detail ? detailPayload : payload;
             if (raw === undefined || raw === '') {
-              payload[f.key] = (f.key === 'status') ? 'aktif' : null; // kolom status NOT NULL di database
+              tgt[f.key] = (f.key === 'status') ? 'aktif' : null; // kolom status NOT NULL di database
               return;
             }
             if (f.type === 'date') {
@@ -2538,7 +2582,7 @@
             }
             else if (f.type === 'number') payload[f.key] = parseInt(raw, 10) || null;
             else if (f.key === 'jenis_kelamin') payload[f.key] = normalisasiJenisKelamin(raw);
-            else payload[f.key] = String(raw).trim();
+            else tgt[f.key] = String(raw).trim();
           });
 
           var existing = siswaByNis[nis];
@@ -2559,6 +2603,12 @@
             { siswa_id: siswaId, kelas_id: kelasId, tahun_ajaran_id: tahunAktif.id },
             { onConflict: 'siswa_id,tahun_ajaran_id' }
           );
+
+          if (Object.keys(detailPayload).length) {
+            var detUp = await supabaseClient.from('bi_siswa_detail').upsert(
+              Object.assign({ siswa_id: siswaId }, detailPayload), { onConflict: 'siswa_id' });
+            if (detUp.error) pesan.push('Baris ' + (i + 2) + ' (' + nama + '): alamat lengkap gagal disimpan — ' + detUp.error.message);
+          }
         }
 
         var ringkasan = ditambah + ' siswa ditambahkan, ' + diperbarui + ' siswa diperbarui, ' + dilewati + ' baris dilewati.';

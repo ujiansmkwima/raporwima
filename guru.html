@@ -6455,7 +6455,7 @@
         // (mis. migrasi_buku_induk.sql belum dijalankan) — cetak tetap jalan.
         var detail = {};
         try {
-          var detRes = await supabaseClient.from('bi_siswa_detail').select('nik, foto, wali_hubungan').eq('siswa_id', siswaId).maybeSingle();
+          var detRes = await supabaseClient.from('bi_siswa_detail').select('nik, foto, wali_hubungan, kelurahan, kecamatan, kab_kota, provinsi, kode_pos').eq('siswa_id', siswaId).maybeSingle();
           if (!detRes.error && detRes.data) detail = detRes.data;
         } catch (e) { /* abaikan */ }
 
@@ -6477,7 +6477,13 @@
           barisIdent('Agama', siswa.agama) +
           barisIdent('Status dalam Keluarga', siswa.status_keluarga) +
           barisIdent('Anak Ke', siswa.anak_ke === null || siswa.anak_ke === undefined ? '' : String(siswa.anak_ke)) +
-          barisIdent('Alamat Peserta Didik', siswa.alamat_siswa) +
+          // Format alamat sama dengan Buku Induk (B. Tempat Tinggal)
+          barisIdent('Alamat (Jalan / Dusun / RT RW)', siswa.alamat_siswa) +
+          barisIdent('Desa / Kelurahan', detail.kelurahan) +
+          barisIdent('Kecamatan', detail.kecamatan) +
+          barisIdent('Kabupaten / Kota', detail.kab_kota) +
+          barisIdent('Provinsi', detail.provinsi) +
+          barisIdent('Kode Pos', detail.kode_pos) +
           barisIdent('Nomor Telepon Rumah', siswa.no_telp_siswa) +
           barisIdent('Sekolah Asal', siswa.sekolah_asal) +
           barisIdentKosong('Diterima di Sekolah Ini') +
