@@ -245,6 +245,10 @@ a { color: inherit; text-decoration: none; }
   margin-top: 1px;
 }
 
+.menu-list .sidebar__section-label {
+  margin: 16px 0 6px;
+}
+
 .menu-item--nested {
   padding-left: 22px;
   margin-top: -2px;

@@ -6,7 +6,7 @@
 <title>Dashboard Admin — E-Rapor SMK Widya Mandala Tambak</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=9">
+<link rel="stylesheet" href="style.css?v=10">
 <script src="https://unpkg.com/lucide@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -39,25 +39,30 @@
       <a href="bukuinduk-admin.html" class="menu-item"><i data-lucide="book-user" class="menu-icon"></i><span class="menu-item__title">Buku Induk</span></a>
     </nav>
 
-    <div class="sidebar__section-label">Menu</div>
     <nav class="menu-list" id="menuAdmin">
       <a href="#" class="menu-item" data-view="dashboard"><i data-lucide="layout-dashboard" class="menu-icon"></i><span class="menu-item__title">Dashboard</span></a>
-      <a href="#" class="menu-item" data-view="profilSekolah"><i data-lucide="school" class="menu-icon"></i><span class="menu-item__title">Profil Sekolah</span></a>
-      <a href="#" class="menu-item" data-view="slideshowLogin"><i data-lucide="images" class="menu-icon"></i><span class="menu-item__title">Slideshow Login</span></a>
+      <div class="sidebar__section-label">Data Sekolah</div>
+      <a href="#" class="menu-item" data-view="profilSekolah"><i data-lucide="school" class="menu-icon"></i><span class="menu-item__title">Profil</span></a>
       <a href="#" class="menu-item" data-view="tahunAjaran"><i data-lucide="calendar-clock" class="menu-icon"></i><span class="menu-item__title">Tahun Ajaran</span></a>
+      <div class="sidebar__section-label">Kelola Konten</div>
       <a href="#" class="menu-item" data-view="kelas"><i data-lucide="door-open" class="menu-icon"></i><span class="menu-item__title">Kelas</span></a>
       <a href="#" class="menu-item" data-view="siswa"><i data-lucide="users" class="menu-icon"></i><span class="menu-item__title">Siswa</span></a>
       <a href="#" class="menu-item" data-view="guru"><i data-lucide="contact" class="menu-icon"></i><span class="menu-item__title">Guru</span></a>
       <a href="#" class="menu-item" data-view="mapel"><i data-lucide="book-open" class="menu-icon"></i><span class="menu-item__title">Mata Pelajaran</span></a>
-      <a href="#" class="menu-item menu-item--nested" data-view="mapelTingkat"><i data-lucide="corner-down-right" class="menu-icon"></i><span class="menu-item__title">Mata Pelajaran Per Tingkat</span></a>
-      <a href="#" class="menu-item" data-view="penugasan"><i data-lucide="briefcase" class="menu-icon"></i><span class="menu-item__title">Penugasan Guru</span></a>
-      <a href="#" class="menu-item" data-view="tujuanPembelajaran"><i data-lucide="list-checks" class="menu-icon"></i><span class="menu-item__title">Tujuan Pembelajaran</span></a>
-      <a href="#" class="menu-item" data-view="ekskul"><i data-lucide="medal" class="menu-icon"></i><span class="menu-item__title">Ekstrakurikuler</span></a>
-      <a href="#" class="menu-item" data-view="pkl"><i data-lucide="briefcase-business" class="menu-icon"></i><span class="menu-item__title">PKL</span></a>
-      <a href="#" class="menu-item" data-view="rekapNilai"><i data-lucide="bar-chart-3" class="menu-icon"></i><span class="menu-item__title">Rekap Nilai Semester</span></a>
-      <a href="#" class="menu-item" data-view="leger"><i data-lucide="layers" class="menu-icon"></i><span class="menu-item__title">Leger Nilai (6 Semester)</span></a>
+      <a href="#" class="menu-item menu-item--nested" data-view="mapelTingkat"><i data-lucide="corner-down-right" class="menu-icon"></i><span class="menu-item__title">Urutan Mata Pelajaran</span></a>
       <a href="#" class="menu-item menu-item--nested" data-view="urutanLeger"><i data-lucide="corner-down-right" class="menu-icon"></i><span class="menu-item__title">Urutan Mapel Leger</span></a>
-      <a href="#" class="menu-item" data-view="tarikBukuInduk"><i data-lucide="book-user" class="menu-icon"></i><span class="menu-item__title">Tarik dari Buku Induk</span></a>
+      <div class="sidebar__section-label">Penugasan</div>
+      <a href="#" class="menu-item" data-view="penugasan"><i data-lucide="briefcase" class="menu-icon"></i><span class="menu-item__title">Intrakurikuler (Penugasan Guru)</span></a>
+      <a href="#" class="menu-item" data-view="ekskul"><i data-lucide="medal" class="menu-icon"></i><span class="menu-item__title">Ekstrakurikuler</span></a>
+      <a href="#" class="menu-item" data-view="kokurikuler"><i data-lucide="sparkles" class="menu-icon"></i><span class="menu-item__title">Kokurikuler</span></a>
+      <a href="#" class="menu-item" data-view="pkl"><i data-lucide="briefcase-business" class="menu-icon"></i><span class="menu-item__title">PKL</span></a>
+      <div class="sidebar__section-label">Data Terinput</div>
+      <a href="#" class="menu-item" data-view="tujuanPembelajaran"><i data-lucide="list-checks" class="menu-icon"></i><span class="menu-item__title">Tujuan Pembelajaran</span></a>
+      <a href="#" class="menu-item" data-view="rekapNilai"><i data-lucide="bar-chart-3" class="menu-icon"></i><span class="menu-item__title">Rekap Nilai Semester</span></a>
+      <a href="#" class="menu-item" data-view="leger"><i data-lucide="layers" class="menu-icon"></i><span class="menu-item__title">Leger Nilai 6 Semester</span></a>
+      <div class="sidebar__section-label">Lainnya</div>
+      <a href="#" class="menu-item" data-view="slideshowLogin"><i data-lucide="images" class="menu-icon"></i><span class="menu-item__title">Slideshow Login</span></a>
+      <a href="#" class="menu-item" data-view="tarikBukuInduk"><i data-lucide="book-user" class="menu-icon"></i><span class="menu-item__title">Tarik Data Buku Induk</span></a>
     </nav>
 
     <div class="sidebar__footer">
@@ -1348,7 +1353,7 @@
 
     content.innerHTML =
       '<div class="panel-head"><div><div class="panel-head__title">Mata Pelajaran</div>' +
-      '<div class="panel-head__desc">Dibutuhkan sebagai pilihan saat menugaskan guru mengajar. "Kelas Tertentu" berguna untuk mapel produktif/kejuruan yang cuma diajarkan di kelas tertentu. Urutan di bawah ini berlaku sebagai default — untuk mengatur urutan nomor rapor yang berbeda per kelas, pakai menu "Mata Pelajaran Per Tingkat".</div></div>' +
+      '<div class="panel-head__desc">Dibutuhkan sebagai pilihan saat menugaskan guru mengajar. "Kelas Tertentu" berguna untuk mapel produktif/kejuruan yang cuma diajarkan di kelas tertentu. Urutan di bawah ini berlaku sebagai default — untuk mengatur urutan nomor rapor yang berbeda per kelas, pakai menu "Urutan Mata Pelajaran".</div></div>' +
       '<button class="btn-small" id="btnKeMapelTingkat">Atur Urutan Per Tingkat →</button></div>' +
       '<form class="add-form" id="formMapel">' +
       '<div class="field"><label>Kode</label><input type="text" id="mKode" placeholder="MTK"></div>' +
@@ -1695,7 +1700,7 @@
     }
 
     content.innerHTML =
-      '<div class="panel-head"><div><div class="panel-head__title">Mata Pelajaran Per Tingkat</div>' +
+      '<div class="panel-head"><div><div class="panel-head__title">Urutan Mata Pelajaran</div>' +
       '<div class="panel-head__desc">Atur urutan nomor mapel pada rapor, khusus untuk kelas yang dicentang. Kalau sebuah kelas tidak diatur di sini, urutannya memakai "Urutan pada Rapor" default dari menu Mata Pelajaran.</div></div></div>';
 
     if (!kelasList.length) {
@@ -3093,7 +3098,7 @@
   // Admin dan Rekap Leger milik Wali Kelas (tampilan layar + unduhan Excel),
   // untuk semua kelas dan semua siswa. Disimpan di mata_pelajaran.urutan_leger
   // (lihat migrasi_urutan_leger.sql). Terpisah dari "Urutan pada Rapor" dan
-  // "Mata Pelajaran Per Tingkat", jadi tidak mengubah urutan di rapor.
+  // "Urutan Mata Pelajaran", jadi tidak mengubah urutan di rapor.
   // Cara kerja: DOM adalah sumber kebenaran urutan — baris <tr> dipindah
   // langsung (seret / tombol ▲▼ / ketik nomor), lalu nomor dihitung ulang.
   async function renderUrutanLeger(pesanSukses) {
@@ -5894,7 +5899,17 @@
   }
 
 
-  var views = { dashboard: renderDashboard, profilSekolah: renderProfilSekolah, slideshowLogin: renderSlideshowLogin, tahunAjaran: renderTahunAjaran, siswa: renderSiswa, rekapNilai: renderRekapNilai, leger: renderLeger, urutanLeger: renderUrutanLeger, kelas: renderKelas, mapel: renderMapel, mapelTingkat: renderMapelTingkat, penugasan: renderPenugasan, tujuanPembelajaran: renderTujuanPembelajaran, guru: renderGuru, ekskul: renderEkstrakurikuler, pkl: renderPkl, tarikBukuInduk: renderTarikBukuInduk };
+  // Kokurikuler = bagian "Penanggung Jawab Kokurikuler" di halaman Penugasan:
+  // halaman dimuat, bagiannya dibuka lalu digulir ke layar.
+  async function renderKokurikuler() {
+    await renderPenugasan();
+    var body = document.getElementById('bodyKoku');
+    if (!body) return;
+    body.classList.remove('is-collapsed');
+    if (body.previousElementSibling && body.previousElementSibling.scrollIntoView) body.previousElementSibling.scrollIntoView({ block: 'start' });
+  }
+
+  var views = { dashboard: renderDashboard, kokurikuler: renderKokurikuler, profilSekolah: renderProfilSekolah, slideshowLogin: renderSlideshowLogin, tahunAjaran: renderTahunAjaran, siswa: renderSiswa, rekapNilai: renderRekapNilai, leger: renderLeger, urutanLeger: renderUrutanLeger, kelas: renderKelas, mapel: renderMapel, mapelTingkat: renderMapelTingkat, penugasan: renderPenugasan, tujuanPembelajaran: renderTujuanPembelajaran, guru: renderGuru, ekskul: renderEkstrakurikuler, pkl: renderPkl, tarikBukuInduk: renderTarikBukuInduk };
 
   document.querySelectorAll('#menuAdmin .menu-item').forEach(function (item) {
     item.addEventListener('click', function (e) {
