@@ -16,8 +16,9 @@
      - opsi.paket opsional: [{ form, jawaban, catatan }] untuk form sepaket (SvForm.isianPaket); semuanya masuk satu PDF. */
 var SvPdf = (function () {
   // Predikat dari persentase skor. Ubah angkanya di sini bila sekolah memakai patokan lain.
-  var AMBANG = [[86, 'Sangat Baik'], [71, 'Baik'], [56, 'Cukup']];
-  var PREDIKAT_TERENDAH = 'Perlu Pembinaan';
+  // Bila supervisi-otomatis.js dimuat, ambang & nama predikat mengikutinya (satu sumber, lihat SvOto.AMBANG).
+  var AMBANG = (window.SvOto && SvOto.AMBANG) || [[86, 'Sangat Baik'], [71, 'Baik'], [56, 'Cukup']];
+  var PREDIKAT_TERENDAH = (window.SvOto && SvOto.TERENDAH) || 'Perlu Pembinaan';
 
   var M = { kiri: 15, kanan: 15, atas: 15, bawah: 20 };
   var LEBAR = 210 - M.kiri - M.kanan; // 180 mm

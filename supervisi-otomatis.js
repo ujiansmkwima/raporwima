@@ -1,7 +1,9 @@
-/* supervisi-otomatis.js — isi jawaban otomatis (draft) berdasarkan TARGET NILAI: 'BAIK' atau 'SANGAT BAIK'.
-   Skala 1–4: BAIK = ±25% butir bernilai 4, sisanya 3 (rata-rata ≈ 3,27 / 82%);
-              SANGAT BAIK = ±80% butir bernilai 4, sisanya 3 (rata-rata ≈ 3,80 / 95%).
-   Ubah nilai P4 di bawah kalau ingin komposisi lain (jumlah butir 4 juga diberi selisih ±1 supaya tidak selalu sama).
+/* supervisi-otomatis.js — isi jawaban otomatis (draft) berdasarkan TARGET NILAI berupa ANGKA yang diketik pengguna.
+   Target boleh berupa persentase (25–100, mis. 88) atau rata-rata skala (1–4, mis. 3,5). Angka ≤ 4 dianggap rata-rata.
+   Kategori ditentukan dari persentase memakai AMBANG di bawah (sama dengan predikat di PDF):
+     Sangat Baik ≥ 86 · Baik 71–85 · Cukup 56–70 · Perlu Pembinaan < 56.
+   Skor tiap butir (1–4) disebar acak supaya jumlahnya pas dengan target (dan kategorinya sama dengan yang diketik).
+   Butir yang sudah diisi manual (ctx.tetap) tidak diubah; sisa butir menyesuaikan agar total tetap mengarah ke target.
 
    Supaya terbaca seperti ditulis manusia:
    1. Setiap butir dikenali topiknya (pedagogis, lingkungan, digital, asesmen awal, dst.) dari teks pertanyaan,
@@ -13,7 +15,17 @@
       tinggi / rendah pada formulir yang sama, jadi isinya konsisten dengan nilai.
    Kalau admin mengubah pertanyaan, butir yang topiknya tak dikenali memakai kumpulan kalimat umum. */
 var SvOto = (function () {
-  var P4 = { 'BAIK': 0.25, 'SANGAT BAIK': 0.8 };
+  var AMBANG = [[86, 'Sangat Baik'], [71, 'Baik'], [56, 'Cukup']], TERENDAH = 'Perlu Pembinaan', MIN_PERSEN = 25;
+  function kategori(persen) { for (var i = 0; i < AMBANG.length; i++) if (persen >= AMBANG[i][0]) return AMBANG[i][1]; return TERENDAH; }
+  // Baca target yang diketik -> { persen, rata, kat } atau null bila tidak valid
+  function baca(v) {
+    var t = String(v === null || v === undefined ? '' : v).trim().replace('%', '').replace(',', '.');
+    if (!/^\d+(\.\d+)?$/.test(t)) return null;
+    var x = parseFloat(t), pct = x <= 4 ? x / 4 * 100 : x;
+    if (pct < MIN_PERSEN - 1e-9 || pct > 100) return null;
+    pct = Math.round(pct);
+    return { persen: pct, rata: pct / 25, kat: kategori(pct) };
+  }
 
   /* ====================== BANK KALIMAT PER TOPIK ======================
      ok     = klausa pujian (tanpa titik, huruf kecil di awal)
@@ -171,6 +183,7 @@ var SvOto = (function () {
 
   /* ====================== UTILITAS ====================== */
   var dipakai = {};   // kalimat yang sudah terpakai pada pengisian ini (agar tidak berulang)
+  var RENDAH = false;   // butir bernilai 1–2: komentar murni temuan, tanpa pujian
   function rn(n) { return Math.floor(Math.random() * n); }
   function ada(p) { return Math.random() < p; }
   function acak(a) { a = a.slice(); for (var i = a.length - 1; i > 0; i--) { var j = rn(i + 1), t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
@@ -214,7 +227,7 @@ var SvOto = (function () {
       if (gaya === 'naratif' && ada(0.5)) s += ', ' + pilih(EKOR4);
       return akhiri(s, gaya);
     }
-    var m = rn(4);
+    var m = RENDAH ? (ada(0.5) ? 0 : 2) : rn(4);
     if (gaya === 'ringkas' || m === 0) s = pilih(A.kurang);
     else if (m === 1) s = pilih(FRAME_SARAN) + pilih(A.aksi);
     else if (m === 2) s = pilih(A.kurang) + '; ' + kecilAwal(pilih(FRAME_SARAN)) + pilih(A.aksi);
@@ -228,7 +241,7 @@ var SvOto = (function () {
     var s = pilih(A.obs);
     if (gaya !== 'ringkas' && ada(gaya === 'naratif' ? 0.5 : 0.35)) s = pilih(OPEN_OBS) + ' ' + s;
     if (kuat) { if (gaya === 'naratif' && ada(0.6)) s += ', ' + pilih(EKOR_OBS4); }
-    else if (ada(gaya === 'ringkas' ? 0.3 : 0.65)) s += pilih(SAMBUNG_KONTRAS) + pilih(KENDALA3);
+    else if (RENDAH || ada(gaya === 'ringkas' ? 0.3 : 0.65)) s += pilih(SAMBUNG_KONTRAS) + pilih(KENDALA3);
     return akhiri(s, gaya);
   }
   // Kolom "Catatan" (form implementasi)
@@ -241,7 +254,7 @@ var SvOto = (function () {
       if (gaya === 'naratif' && ada(0.4)) s += ', ' + pilih(EKOR4);
       return akhiri(s, gaya);
     }
-    m = rn(3);
+    m = RENDAH ? rn(2) : rn(3);
     if (m === 0 || gaya === 'ringkas') s = kKurang(A);
     else if (m === 1) s = pilih(FRAME_SARAN) + kAksi(A);
     else s = pilih(RINGAN) + pilih(SAMBUNG_KONTRAS) + kKurang(A);
@@ -302,49 +315,74 @@ var SvOto = (function () {
     a = a.slice(0, gaya === 'ringkas' ? 2 : gaya === 'naratif' ? 4 : 3);
     return akhiri(pilih(['Ke depan: ', 'Rencana tindak lanjut: ', 'Langkah berikutnya: ', '']) + daftar(a), gaya);
   }
-  function catatanUmum(target, lemah, gaya) {
-    var s = pilih(target === 'BAIK' ? CAT_BAIK : CAT_SB);
-    if (lemah.length && (target === 'BAIK' || ada(0.5))) s += '. Ke depan, perlu ' + kAksi(lemah[rn(lemah.length)]);
-    else if (target === 'SANGAT BAIK' && ada(0.6)) s += '. ' + pilih(CAT_EKOR_SB);
+  var CAT_CUKUP = ['Secara umum cukup, tetapi masih banyak ruang untuk perbaikan', 'Sudah cukup memadai; perlu penguatan pada beberapa bagian', 'Hasilnya cukup, dengan sejumlah hal yang perlu dibenahi'];
+  var CAT_KURANG = ['Masih memerlukan pembinaan dan pendampingan yang lebih intensif', 'Belum memenuhi harapan; perlu perbaikan pada banyak bagian', 'Perlu pendampingan lanjutan agar kualitasnya meningkat'];
+  function catatanUmum(kat, lemah, gaya) {
+    var s = pilih(kat === 'Sangat Baik' ? CAT_SB : kat === 'Baik' ? CAT_BAIK : kat === 'Cukup' ? CAT_CUKUP : CAT_KURANG);
+    if (lemah.length && (kat !== 'Sangat Baik' || ada(0.5))) s += '. Ke depan, perlu ' + kAksi(lemah[rn(lemah.length)]);
+    else if (kat === 'Sangat Baik' && ada(0.6)) s += '. ' + pilih(CAT_EKOR_SB);
     return akhiri(s, gaya);
   }
 
   /* ====================== FUNGSI UTAMA ====================== */
+  // Sebar skor 1–4 pada m butir bebas. Butir lain (c buah, jumlah skor S) sudah tetap. Jumlah dibuat sedekat mungkin dengan target
+  // dan bila bisa kategorinya sama dengan yang diketik.
+  function sebar(m, c, S, tg) {
+    if (!m) return [];
+    var N = m + c, d = Math.max(m, Math.min(4 * m, Math.round(tg.persen / 100 * 4 * N) - S)), g;
+    for (g = 0; g < 8 && kategori(Math.round((S + d) / (4 * N) * 100)) !== tg.kat; g++) {
+      var nd = Math.round((S + d) / (4 * N) * 100) < tg.persen ? d + 1 : d - 1;
+      if (nd < m || nd > 4 * m) break;
+      d = nd;
+    }
+    var base = Math.floor(d / m), rem = d - base * m, a = [], i, t;
+    for (i = 0; i < m; i++) a.push(i < rem ? base + 1 : base);
+    for (t = 0; t < Math.floor(m / 3); t++) { var x = rn(m), y = rn(m); if (x !== y && a[x] < 4 && a[y] > 1) { a[x]++; a[y]--; } }
+    return acak(a);
+  }
   function isi(f, target, ctx) {
-    if (!P4[target]) throw new Error('Target nilai harus dipilih: BAIK atau SANGAT BAIK.');
+    var tg = (target && typeof target === 'object') ? target : baca(target);
+    if (!tg) throw new Error('Target nilai harus berupa angka ' + MIN_PERSEN + '–100 (persen) atau 1–4 (rata-rata).');
     ctx = ctx || {}; dipakai = {};
-    var awal = ctx.jawabanAwal || {}, pen = window.SvForm ? SvForm.penentu(f) : null;
+    var awal = ctx.jawabanAwal || {}, tetap = ctx.tetap || {}, pen = window.SvForm ? SvForm.penentu(f) : null, kat = tg.kat;
     if (window.SvForm) f = SvForm.aktif(f, awal);   // mapel non-kejuruan: indikator (K) dilewati
     var jw = {}, gForm = pilih(['ringkas', 'biasa', 'biasa', 'naratif']), pq = f.pertanyaan;
     var skala = pq.filter(function (q) { return q.tipe === 'skala'; });
     // Skala dengan kolom "Bukti ..." = form observasi (implementasi), bukan telaah perencanaan
     MODE = (skala.length && !skala.some(function (q) { return /bukti/i.test(q.komentar || ''); })) ? 'pra' : 'sup';
     var butir = pq.filter(function (q) { return q.tipe === 'skala' || q.tipe === 'bukti_catatan'; });
-    var n4 = Math.round(butir.length * P4[target]);
-    if (butir.length >= 8) n4 = Math.max(0, Math.min(butir.length, n4 + rn(3) - 1));   // selisih ±1 supaya tiap hasil tidak persis sama
-    var nilai = acak(butir.map(function (_, i) { return i < n4 ? 4 : 3; })), nb = {}, asp = {};
-    butir.forEach(function (q, i) { nb[q.id] = nilai[i]; asp[q.id] = aspekDari(q.teks); });
+    var nb = {}, asp = {}, S = 0, c = 0, bebas = [], bukti = [];
+    skala.forEach(function (q) {
+      var v = parseInt(tetap[q.id], 10);
+      if (v >= 1 && v <= 4) { nb[q.id] = v; S += v; c++; } else bebas.push(q);
+    });
+    var sk = sebar(bebas.length, c, S, tg);
+    bebas.forEach(function (q, i) { nb[q.id] = sk[i]; });
+    pq.forEach(function (q) { if (q.tipe === 'bukti_catatan') bukti.push(q); });
+    var bk = sebar(bukti.length, 0, 0, tg);
+    bukti.forEach(function (q, i) { nb[q.id] = bk[i]; });
+    butir.forEach(function (q) { asp[q.id] = aspekDari(q.teks); });
     var kuat = unik(bukanUmum(butir.filter(function (q) { return nb[q.id] === 4; }).map(function (q) { return asp[q.id]; })));
-    var lemah = unik(bukanUmum(butir.filter(function (q) { return nb[q.id] === 3; }).map(function (q) { return asp[q.id]; })));
+    var lemah = unik(bukanUmum(butir.filter(function (q) { return nb[q.id] <= 3; }).map(function (q) { return asp[q.id]; })));
     if (!butir.filter(function (q) { return nb[q.id] === 4; }).length) kuat = [];
-    if (!butir.filter(function (q) { return nb[q.id] === 3; }).length) lemah = [];
+    if (!butir.filter(function (q) { return nb[q.id] <= 3; }).length) lemah = [];
     var acKuat = acak(kuat), acLemah = acak(lemah), total = 0;
 
     pq.forEach(function (q) {
       var t = q.teks.toLowerCase(), g = gayaItem(gForm), v, k;
       if (q.tipe === 'skala') {
-        v = nb[q.id]; k = v === 4; total += v; jw[q.id] = String(v);
+        v = nb[q.id]; k = v === 4; RENDAH = v <= 2; total += v; jw[q.id] = String(v);
         if (q.komentar) jw[q.id + '_k'] = MODE === 'sup' ? buktiObs(asp[q.id], k, g) : komentarSkala(asp[q.id], k, g);
       } else if (q.tipe === 'pilihan') {
         // Pilihan tanpa skor: cocokkan dengan target nilai (Baik / Sangat Baik); telaah perangkat -> "Sesuai"
         var op = q.opsi || [], ix = -1;
-        op.forEach(function (o, i) { if (ix < 0 && o.toLowerCase() === target.toLowerCase()) ix = i; });
+        op.forEach(function (o, i) { if (ix < 0 && o.toLowerCase() === kat.toLowerCase()) ix = i; });
         if (ix < 0) op.forEach(function (o, i) { if (ix < 0 && /^sesuai/i.test(o)) ix = i; });
         jw[q.id] = ix >= 0 ? String(ix + 1) : '';
         if (q.komentar) jw[q.id + '_k'] = '';
       } else if (q.tipe === 'ya_tidak') jw[q.id] = 'Ya';
       else if (q.tipe === 'bukti_catatan') {
-        k = nb[q.id] === 4;
+        k = nb[q.id] === 4; RENDAH = nb[q.id] <= 2;
         jw[q.id + '_b'] = buktiObs(asp[q.id], k, g);
         jw[q.id + '_c'] = catatanButir(asp[q.id], k, g);
       } else if (q.tipe === 'info') jw[q.id] = (/mata pelajaran/.test(t) && ctx.mapel && ctx.mapel !== '—') ? ctx.mapel : '';
@@ -353,13 +391,15 @@ var SvOto = (function () {
           /ditingkatkan/.test(t) ? tulisDitingkatkan(acLemah, g) :
           /rekomendasi/.test(t) ? tulisRekomendasi(acLemah, g) :
           /pelajaran apa/.test(t) ? tulisPelajaran(acKuat, g) :
-          /belum memuaskan/.test(t) ? tulisBelum(acLemah, target === 'SANGAT BAIK', g) :
-          /tindak lanjut/.test(t) ? tulisRtl(acLemah, g) : catatanUmum(target, acLemah, g);
+          /belum memuaskan/.test(t) ? tulisBelum(acLemah, kat === 'Sangat Baik', g) :
+          /tindak lanjut/.test(t) ? tulisRtl(acLemah, g) : catatanUmum(kat, acLemah, g);
       }
     });
     if (pen && awal[pen.id]) jw[pen.id] = String(awal[pen.id]);   // pilihan jenis mapel dari supervisor dipertahankan
+    RENDAH = false;
     var skor = skala.length ? { rata: (total / skala.length).toFixed(2).replace('.', ','), persen: Math.round(total / (skala.length * 4) * 100) } : null;
-    return { jawaban: jw, catatan: catatanUmum(target, acLemah, gForm), skor: skor };
+    if (skor) skor.kat = kategori(skor.persen);
+    return { jawaban: jw, catatan: catatanUmum(kat, acLemah, gForm), skor: skor };
   }
-  return { isi: isi };
+  return { isi: isi, baca: baca, kategori: kategori, AMBANG: AMBANG, TERENDAH: TERENDAH, MIN_PERSEN: MIN_PERSEN };
 })();
