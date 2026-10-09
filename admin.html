@@ -6,7 +6,7 @@
 <title>Dashboard Admin — E-Rapor SMK Widya Mandala Tambak</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=10">
+<link rel="stylesheet" href="style.css?v=11">
 <script src="https://unpkg.com/lucide@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -222,6 +222,45 @@
       : 'Belum ada tahun ajaran aktif — aktifkan salah satu di menu "Tahun Ajaran".';
   }
 
+  // ---------- Helper tampilan dashboard ----------
+  function dxTone(p) { return p >= 80 ? 'ok' : (p >= 50 ? 'mid' : (p > 0 ? 'low' : 'none')); }
+
+  function dxBar(filled, total) {
+    var p = pctOf(filled, total);
+    return '<div class="dx-bar dx-tone-' + dxTone(p) + '" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + p + '">' +
+      '<span style="width:' + p + '%"></span></div>';
+  }
+
+  function dxRing(p) {
+    var circ = 2 * Math.PI * 54;
+    var off = circ * (1 - p / 100);
+    return '<svg class="dx-ring dx-tone-' + dxTone(p) + '" viewBox="0 0 140 140" role="img" aria-label="Progres keseluruhan ' + p + ' persen">' +
+      '<circle class="dx-ring__track" cx="70" cy="70" r="54"/>' +
+      '<circle class="dx-ring__fill" cx="70" cy="70" r="54" style="stroke-dasharray:' + circ.toFixed(1) + ';stroke-dashoffset:' + off.toFixed(1) + ';--dx-circ:' + circ.toFixed(1) + ';"/>' +
+      '<text x="70" y="69" class="dx-ring__pct">' + p + '%</text>' +
+      '<text x="70" y="89" class="dx-ring__cap">terisi</text></svg>';
+  }
+
+  function dxStatus(r) {
+    if (r.total === 0) return 'kosong';
+    if (r.filled === r.total) return 'selesai';
+    if (r.filled === 0) return 'belum';
+    return 'jalan';
+  }
+
+  var DX_STATUS_LABEL = { selesai: 'Selesai', jalan: 'Berjalan', belum: 'Belum mulai', kosong: 'Tanpa siswa' };
+  var DX_STATUS_CHIP = { selesai: 'ok', jalan: 'jalan', belum: 'belum', kosong: 'kosong' };
+
+  function dxInisial(nama) {
+    var kata = String(nama || '?').replace(/[.,]/g, ' ').trim().split(/\s+/);
+    return ((kata[0] || '?').charAt(0) + (kata.length > 1 ? kata[1].charAt(0) : '')).toUpperCase();
+  }
+
+  function dxFact(icon, angka, label) {
+    return '<div class="dx-fact"><i data-lucide="' + icon + '" class="dx-fact__icon"></i>' +
+      '<div><div class="dx-fact__num">' + angka + '</div><div class="dx-fact__lbl">' + label + '</div></div></div>';
+  }
+
   // ================= PANEL: DASHBOARD (progres guru) =================
   function pctOf(filled, total) { return total > 0 ? Math.round((filled / total) * 100) : 0; }
 
@@ -266,119 +305,232 @@
       return;
     }
 
-    var kelasIds = Array.from(new Set(penugasan.map(function (p) { return p.kelas.id; })));
     var mapelIds = Array.from(new Set(penugasan.map(function (p) { return p.mapel.id; })));
 
-    var siswaKelasRes = await supabaseClient
-      .from('siswa_kelas').select('siswa_id, kelas_id')
-      .eq('tahun_ajaran_id', tahunAktif.id).in('kelas_id', kelasIds);
+    // Semua query dipaginasi (Supabase membatasi 1000 baris per permintaan),
+    // supaya hitungan tidak terpotong di sekolah dengan siswa banyak.
+    var siswaKelasRows = await ambilSemuaBaris(function () {
+      return supabaseClient.from('siswa_kelas').select('siswa_id, kelas_id')
+        .eq('tahun_ajaran_id', tahunAktif.id).order('id');
+    });
     var kelasSiswaMap = {};
-    (siswaKelasRes.data || []).forEach(function (r) {
+    var siswaUnik = {};
+    siswaKelasRows.forEach(function (r) {
       (kelasSiswaMap[r.kelas_id] = kelasSiswaMap[r.kelas_id] || []).push(r.siswa_id);
+      siswaUnik[r.siswa_id] = true;
     });
 
-    var nilaiRes = await supabaseClient
-      .from('nilai').select('siswa_id, mapel_id, nilai')
-      .eq('tahun_ajaran_id', tahunAktif.id).eq('jenis', 'rapor').in('mapel_id', mapelIds);
-    var nilaiMap = {}; // key: mapelId|siswaId -> true kalau nilai rapor sudah diisi
-    (nilaiRes.data || []).forEach(function (r) {
+    var nilaiRows = await ambilSemuaBaris(function () {
+      return supabaseClient.from('nilai').select('siswa_id, mapel_id, nilai')
+        .eq('tahun_ajaran_id', tahunAktif.id).eq('jenis', 'rapor').in('mapel_id', mapelIds).order('id');
+    });
+    var nilaiMap = {}; // mapelId|siswaId -> true kalau nilai rapor sudah diisi
+    nilaiRows.forEach(function (r) {
       if (r.nilai === null || r.nilai === undefined) return;
       nilaiMap[r.mapel_id + '|' + r.siswa_id] = true;
     });
 
-    // Hitung progres per baris penugasan
+    // ---------- Progres per penugasan ----------
     var rows = penugasan.map(function (p) {
       var siswaIds = kelasSiswaMap[p.kelas.id] || [];
-      var total = siswaIds.length; // 1 nilai rapor per siswa
       var filled = 0;
-      siswaIds.forEach(function (sid) {
-        if (nilaiMap[p.mapel.id + '|' + sid]) filled++;
-      });
-      return { guruId: p.guru.id, guruNama: p.guru.nama, mapel: p.mapel.nama, kelas: p.kelas.nama, jumlahSiswa: siswaIds.length, filled: filled, total: total };
+      siswaIds.forEach(function (sid) { if (nilaiMap[p.mapel.id + '|' + sid]) filled++; });
+      var r = { guruId: p.guru.id, guruNama: p.guru.nama, mapel: p.mapel.nama, kelasId: p.kelas.id, kelas: p.kelas.nama,
+        jumlahSiswa: siswaIds.length, filled: filled, total: siswaIds.length };
+      r.status = dxStatus(r);
+      return r;
     });
 
-    // Agregat per guru
     var guruMap = {};
+    var kelasMap = {};
     rows.forEach(function (r) {
-      var g = guruMap[r.guruId] || (guruMap[r.guruId] = { nama: r.guruNama, filled: 0, total: 0, jumlahPenugasan: 0 });
-      g.filled += r.filled; g.total += r.total; g.jumlahPenugasan += 1;
+      var g = guruMap[r.guruId] || (guruMap[r.guruId] = { nama: r.guruNama, filled: 0, total: 0, items: [] });
+      g.filled += r.filled; g.total += r.total; g.items.push(r);
+      var k = kelasMap[r.kelasId] || (kelasMap[r.kelasId] = { nama: r.kelas, filled: 0, total: 0, mapel: 0 });
+      k.filled += r.filled; k.total += r.total; k.mapel += 1;
     });
     var guruList = Object.keys(guruMap).map(function (k) { return guruMap[k]; });
-    guruList.sort(function (a, b) { return pctOf(a.filled, a.total) - pctOf(b.filled, b.total); });
+    guruList.sort(function (a, b) { return pctOf(a.filled, a.total) - pctOf(b.filled, b.total) || a.nama.localeCompare(b.nama); });
+    var kelasList = Object.keys(kelasMap).map(function (k) { return kelasMap[k]; });
+    kelasList.sort(function (a, b) { return a.nama.localeCompare(b.nama, 'id', { numeric: true }); });
 
     var totalFilled = rows.reduce(function (s, r) { return s + r.filled; }, 0);
     var totalSlot = rows.reduce(function (s, r) { return s + r.total; }, 0);
-    var selesaiPenuh = rows.filter(function (r) { return r.total > 0 && r.filled === r.total; }).length;
+    var hitung = { selesai: 0, jalan: 0, belum: 0, kosong: 0 };
+    rows.forEach(function (r) { hitung[r.status]++; });
+    var pctTotal = pctOf(totalFilled, totalSlot);
+    var jumlahSiswa = Object.keys(siswaUnik).length;
 
-    var statHtml =
-      '<div class="stat-grid">' +
-      '<div class="stat-card"><div class="stat-card__label"><i data-lucide="users"></i>Guru Mengajar</div>' +
-      '<div class="stat-card__value">' + guruList.length + '</div>' +
-      '<div class="stat-card__sub">' + rows.length + ' total penugasan mapel-kelas</div></div>' +
-      '<div class="stat-card"><div class="stat-card__label"><i data-lucide="percent"></i>Rata-rata Progres</div>' +
-      '<div class="stat-card__value">' + pctOf(totalFilled, totalSlot) + '%</div>' +
-      '<div class="stat-card__sub">' + totalFilled + ' dari ' + totalSlot + ' slot nilai terisi</div></div>' +
-      '<div class="stat-card"><div class="stat-card__label"><i data-lucide="check-check"></i>Penugasan Selesai 100%</div>' +
-      '<div class="stat-card__value">' + selesaiPenuh + '</div>' +
-      '<div class="stat-card__sub">dari ' + rows.length + ' penugasan mapel-kelas</div></div>' +
-      '<div class="stat-card"><div class="stat-card__label"><i data-lucide="alert-triangle"></i>Belum Mulai</div>' +
-      '<div class="stat-card__value">' + rows.filter(function (r) { return r.filled === 0 && r.total > 0; }).length + '</div>' +
-      '<div class="stat-card__sub">penugasan dengan nilai kosong</div></div>' +
-      '</div>';
-
-    var guruRowsHtml = guruList.map(function (g) {
-      return '<tr><td>' + escapeHtml(g.nama) + '</td><td>' + g.jumlahPenugasan + ' mapel-kelas</td><td>' + progressBarHtml(g.filled, g.total) + '</td></tr>';
-    }).join('');
-
-    rows.sort(function (a, b) {
-      if (a.guruNama === b.guruNama) return a.mapel.localeCompare(b.mapel);
-      return a.guruNama.localeCompare(b.guruNama);
-    });
-
-    var detailRowsHtml = rows.map(function (r) {
-      return '<tr><td>' + escapeHtml(r.guruNama) + '</td><td>' + escapeHtml(r.mapel) + '</td><td>' + escapeHtml(r.kelas) + '</td>' +
-        '<td>' + r.jumlahSiswa + ' siswa</td><td>' + progressBarHtml(r.filled, r.total) + '</td></tr>';
-    }).join('');
-
-    // Bonus: progres presensi oleh wali kelas
+    // ---------- Wali kelas: presensi & catatan ----------
     var waliRes = await supabaseClient
       .from('wali_kelas').select('id, guru:guru_id(id, nama), kelas:kelas_id(id, nama)')
       .eq('tahun_ajaran_id', tahunAktif.id);
     var waliKelas = waliRes.data || [];
-    var presensiHtml = '';
+    var waliHtml = '';
     if (waliKelas.length > 0) {
-      var waliKelasIds = waliKelas.map(function (w) { return w.kelas.id; });
-      var presensiRes = await supabaseClient
-        .from('presensi').select('kelas_id, tanggal')
-        .eq('tahun_ajaran_id', tahunAktif.id).in('kelas_id', waliKelasIds);
-      var tanggalPerKelas = {};
-      (presensiRes.data || []).forEach(function (r) {
-        (tanggalPerKelas[r.kelas_id] = tanggalPerKelas[r.kelas_id] || new Set()).add(r.tanggal);
+      var rekapRows = null;
+      try {
+        rekapRows = await ambilSemuaBaris(function () {
+          return supabaseClient.from('rekap_presensi').select('siswa_id, kelas_id, catatan_wali_kelas')
+            .eq('tahun_ajaran_id', tahunAktif.id).in('kelas_id', waliKelas.map(function (w) { return w.kelas.id; })).order('id');
+        });
+      } catch (e) { rekapRows = null; }
+
+      var rekapPerKelas = {};
+      (rekapRows || []).forEach(function (r) {
+        var x = rekapPerKelas[r.kelas_id] || (rekapPerKelas[r.kelas_id] = { presensi: 0, catatan: 0 });
+        x.presensi++;
+        if (r.catatan_wali_kelas && String(r.catatan_wali_kelas).trim() !== '') x.catatan++;
       });
-      var waliRowsHtml = waliKelas.map(function (w) {
-        var jumlahHari = (tanggalPerKelas[w.kelas.id] || new Set()).size;
-        return '<tr><td>' + escapeHtml(w.guru.nama) + '</td><td>' + escapeHtml(w.kelas.nama) + '</td>' +
-          '<td>' + jumlahHari + ' hari tercatat</td></tr>';
+
+      var waliSorted = waliKelas.slice().sort(function (a, b) { return a.kelas.nama.localeCompare(b.kelas.nama, 'id', { numeric: true }); });
+      var kartu = waliSorted.map(function (w) {
+        var total = (kelasSiswaMap[w.kelas.id] || []).length;
+        var x = rekapPerKelas[w.kelas.id] || { presensi: 0, catatan: 0 };
+        function baris(label, n) {
+          return '<div class="dx-wali__row"><span>' + label + '</span>' + dxBar(n, total) + '<span class="dx-fig">' + n + '/' + total + '</span></div>';
+        }
+        return '<div class="dx-wali__card"><div class="dx-wali__kelas">' + escapeHtml(w.kelas.nama) + '</div>' +
+          '<div class="dx-wali__nama">' + escapeHtml(w.guru.nama) + '</div>' +
+          baris('Presensi', x.presensi) + baris('Catatan', x.catatan) + '</div>';
       }).join('');
-      presensiHtml =
-        '<div class="section-title"><i data-lucide="calendar-check"></i>Presensi oleh Wali Kelas</div>' +
-        '<div class="table-wrap"><table class="data-table"><thead><tr><th>Wali Kelas</th><th>Kelas</th><th>Presensi Tercatat</th></tr></thead>' +
-        '<tbody>' + waliRowsHtml + '</tbody></table></div>';
+
+      waliHtml = '<section class="dx-section"><div class="dx-card__head"><h3 class="dx-card__title"><i data-lucide="calendar-check"></i>Wali kelas: presensi &amp; catatan</h3>' +
+        '<span class="dx-card__hint">' + (rekapRows === null ? 'Data presensi belum bisa dimuat' : 'jumlah siswa yang sudah diisi') + '</span></div>' +
+        '<div class="dx-wali">' + kartu + '</div></section>';
     }
+
+    // ---------- Perlu perhatian ----------
+    var perhatian = rows.filter(function (r) { return r.status === 'belum' || r.status === 'jalan'; })
+      .sort(function (a, b) { return pctOf(a.filled, a.total) - pctOf(b.filled, b.total) || b.total - a.total; });
+    var perhatianTotal = perhatian.length;
+    perhatian = perhatian.slice(0, 6);
+
+    var perhatianHtml = perhatian.length === 0
+      ? '<div class="dx-allgood"><i data-lucide="circle-check"></i>Semua penugasan sudah terisi penuh. Tidak ada yang perlu dikejar.</div>'
+      : '<ul class="dx-list">' + perhatian.map(function (r) {
+          var p = pctOf(r.filled, r.total);
+          return '<li class="dx-item"><div class="dx-item__name">' + escapeHtml(r.guruNama) + '</div>' +
+            '<div class="dx-item__meta">' + escapeHtml(r.mapel) + ' · ' + escapeHtml(r.kelas) + '</div>' +
+            '<div class="dx-item__prog">' + dxBar(r.filled, r.total) + '<span class="dx-fig">' + r.filled + '/' + r.total + ' siswa · ' + p + '%</span></div></li>';
+        }).join('') + '</ul>';
+
+    // ---------- Progres per kelas ----------
+    var kelasHtml = '<div class="dx-kelas">' + kelasList.map(function (k) {
+      var p = pctOf(k.filled, k.total);
+      return '<div class="dx-kelas__row"><div class="dx-kelas__name">' + escapeHtml(k.nama) + '<small>' + k.mapel + ' mapel</small></div>' +
+        dxBar(k.filled, k.total) + '<div class="dx-kelas__pct">' + p + '%</div></div>';
+    }).join('') + '</div>';
+
+    // ---------- Progres per guru (bisa dibuka per penugasan) ----------
+    var guruHtml = guruList.map(function (g) {
+      var p = pctOf(g.filled, g.total);
+      var selesai = g.total > 0 && g.filled === g.total;
+      var status = selesai ? 'selesai' : (g.filled === 0 ? 'belum' : 'jalan');
+      var items = g.items.slice().sort(function (a, b) { return a.mapel.localeCompare(b.mapel) || a.kelas.localeCompare(b.kelas, 'id', { numeric: true }); })
+        .map(function (r) {
+          return '<div class="dx-sub"><div class="dx-sub__mapel">' + escapeHtml(r.mapel) + '</div>' +
+            '<div class="dx-sub__kelas">' + escapeHtml(r.kelas) + '</div>' +
+            '<div class="dx-guru__prog">' + dxBar(r.filled, r.total) + '<span class="dx-fig">' + r.filled + '/' + r.total + '</span></div></div>';
+        }).join('');
+      return '<details class="dx-guru" data-nama="' + escapeHtml(g.nama.toLowerCase()) + '" data-selesai="' + (selesai ? '1' : '0') + '">' +
+        '<summary><span class="dx-avatar" aria-hidden="true">' + escapeHtml(dxInisial(g.nama)) + '</span>' +
+        '<span class="dx-guru__name">' + escapeHtml(g.nama) + '<small>' + g.items.length + ' mapel-kelas</small></span>' +
+        '<span class="dx-guru__prog">' + dxBar(g.filled, g.total) + '<span class="dx-fig">' + p + '%</span></span>' +
+        '<span class="dx-chip dx-chip--' + DX_STATUS_CHIP[status] + '">' + DX_STATUS_LABEL[status] + '</span>' +
+        '<i data-lucide="chevron-right" class="dx-guru__chev"></i></summary>' +
+        '<div class="dx-guru__body">' + items + '</div></details>';
+    }).join('');
+
+    // ---------- Hero ----------
+    var kalimat;
+    if (hitung.belum > 0) {
+      kalimat = hitung.belum + ' dari ' + rows.length + ' penugasan belum mulai mengisi' + (hitung.jalan > 0 ? ', ' + hitung.jalan + ' lagi masih berjalan.' : '.');
+    } else if (hitung.jalan > 0) {
+      kalimat = hitung.jalan + ' penugasan masih berjalan; semuanya sudah mulai mengisi.';
+    } else {
+      kalimat = 'Semua penugasan sudah terisi penuh.';
+    }
+    var jam = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+    var segTotal = rows.length || 1;
+
+    var heroHtml =
+      '<section class="dx-hero">' + dxRing(pctTotal) +
+      '<div class="dx-hero__main"><div class="dx-hero__top"><div>' +
+      '<h2 class="dx-hero__title">Nilai rapor terisi ' + pctTotal + '%</h2>' +
+      '<p class="dx-hero__sub">' + totalFilled + ' dari ' + totalSlot + ' nilai siswa sudah masuk untuk Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + ' Semester ' + escapeHtml(tahunAktif.semester) + '. ' + kalimat + '</p></div>' +
+      '<button type="button" class="dx-hero__refresh" id="dxRefresh"><i data-lucide="refresh-cw"></i>Diperbarui ' + jam + '</button></div>' +
+      '<div class="dx-seg" role="img" aria-label="Status penugasan: ' + hitung.selesai + ' selesai, ' + hitung.jalan + ' berjalan, ' + hitung.belum + ' belum mulai">' +
+      '<span class="dx-seg__ok" style="flex:' + hitung.selesai + '"></span>' +
+      '<span class="dx-seg__jalan" style="flex:' + hitung.jalan + '"></span>' +
+      '<span class="dx-seg__belum" style="flex:' + (hitung.belum + hitung.kosong) + '"></span></div>' +
+      '<div class="dx-legend">' +
+      '<span class="dx-legend__item"><span class="dx-legend__dot" style="background:#34d399"></span><b>' + hitung.selesai + '</b> selesai</span>' +
+      '<span class="dx-legend__item"><span class="dx-legend__dot" style="background:#60a5fa"></span><b>' + hitung.jalan + '</b> berjalan</span>' +
+      '<span class="dx-legend__item"><span class="dx-legend__dot" style="background:#f87171"></span><b>' + (hitung.belum + hitung.kosong) + '</b> belum mulai</span>' +
+      '</div></div>' +
+      '<div class="dx-facts">' +
+      dxFact('users', jumlahSiswa, 'siswa aktif') +
+      dxFact('door-open', Object.keys(kelasSiswaMap).length, 'kelas') +
+      dxFact('contact', guruList.length, 'guru mengajar') +
+      dxFact('briefcase', rows.length, 'penugasan mapel-kelas') +
+      '</div></section>';
 
     content.innerHTML =
       '<div class="panel-head"><div><div class="panel-head__title">Dashboard</div>' +
-      '<div class="panel-head__desc">Ringkasan progres guru mengisi nilai — Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + ' Semester ' + escapeHtml(tahunAktif.semester) + '.</div></div></div>' +
-      statHtml +
-      '<div class="section-title"><i data-lucide="user-check"></i>Progres per Guru</div>' +
-      '<div class="table-wrap"><table class="data-table"><thead><tr><th>Guru</th><th>Jumlah Penugasan</th><th>Progres Nilai</th></tr></thead>' +
-      '<tbody>' + guruRowsHtml + '</tbody></table></div>' +
-      '<div class="section-title"><i data-lucide="list-checks"></i>Detail per Penugasan</div>' +
-      '<div class="table-wrap"><table class="data-table"><thead><tr><th>Guru</th><th>Mapel</th><th>Kelas</th><th>Jumlah Siswa</th><th>Progres Nilai</th></tr></thead>' +
-      '<tbody>' + detailRowsHtml + '</tbody></table></div>' +
-      presensiHtml;
+      '<div class="panel-head__desc">Pantau progres guru mengisi nilai rapor — siapa yang sudah selesai dan siapa yang perlu diingatkan.</div></div></div>' +
+      heroHtml +
+      '<div class="dx-grid">' +
+      '<section class="dx-card"><div class="dx-card__head"><h3 class="dx-card__title"><i data-lucide="alert-triangle"></i>Perlu perhatian</h3>' +
+      '<span class="dx-card__hint">' + (perhatianTotal > perhatian.length ? perhatian.length + ' terendah dari ' + perhatianTotal : 'progres terendah dulu') + '</span></div>' + perhatianHtml + '</section>' +
+      '<section class="dx-card"><div class="dx-card__head"><h3 class="dx-card__title"><i data-lucide="school"></i>Progres per kelas</h3>' +
+      '<span class="dx-card__hint">gabungan semua mapel</span></div>' + kelasHtml + '</section>' +
+      '</div>' +
+      waliHtml +
+      '<section class="dx-section"><div class="dx-card__head"><h3 class="dx-card__title"><i data-lucide="user-check"></i>Progres per guru</h3>' +
+      '<span class="dx-card__hint">klik nama untuk melihat rincian mapel &amp; kelas</span></div>' +
+      '<div class="dx-tools">' +
+      '<label class="dx-search"><i data-lucide="search"></i><input type="search" id="dxCari" placeholder="Cari nama guru" aria-label="Cari nama guru"></label>' +
+      '<div class="dx-tabs" role="group" aria-label="Filter status">' +
+      '<button type="button" class="dx-tab" data-filter="semua" aria-pressed="true">Semua (' + guruList.length + ')</button>' +
+      '<button type="button" class="dx-tab" data-filter="belum" aria-pressed="false">Belum selesai (' + guruList.filter(function (g) { return !(g.total > 0 && g.filled === g.total); }).length + ')</button>' +
+      '<button type="button" class="dx-tab" data-filter="selesai" aria-pressed="false">Selesai (' + guruList.filter(function (g) { return g.total > 0 && g.filled === g.total; }).length + ')</button></div>' +
+      '<button type="button" class="dx-toggle" id="dxToggleAll">Buka semua</button></div>' +
+      '<div class="dx-gurus" id="dxGurus">' + guruHtml + '<div class="dx-empty" id="dxKosong" hidden>Tidak ada guru yang cocok dengan filter ini.</div></div></section>';
 
     lucide.createIcons();
+
+    // ---------- Interaksi ----------
+    var filterAktif = 'semua';
+    var guruEls = Array.prototype.slice.call(content.querySelectorAll('.dx-guru'));
+    var cari = document.getElementById('dxCari');
+    var kosongEl = document.getElementById('dxKosong');
+    function terapkanFilter() {
+      var kata = cari.value.trim().toLowerCase();
+      var tampil = 0;
+      guruEls.forEach(function (el) {
+        var cocokNama = !kata || el.dataset.nama.indexOf(kata) !== -1;
+        var cocokStatus = filterAktif === 'semua' || (filterAktif === 'selesai' ? el.dataset.selesai === '1' : el.dataset.selesai === '0');
+        el.hidden = !(cocokNama && cocokStatus);
+        if (!el.hidden) tampil++;
+      });
+      kosongEl.hidden = tampil > 0;
+    }
+    cari.addEventListener('input', terapkanFilter);
+    content.querySelectorAll('.dx-tab').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        filterAktif = btn.dataset.filter;
+        content.querySelectorAll('.dx-tab').forEach(function (b) { b.setAttribute('aria-pressed', b === btn ? 'true' : 'false'); });
+        terapkanFilter();
+      });
+    });
+    var toggleAll = document.getElementById('dxToggleAll');
+    toggleAll.addEventListener('click', function () {
+      var bukaSemua = toggleAll.textContent === 'Buka semua';
+      guruEls.forEach(function (el) { if (!el.hidden) el.open = bukaSemua; });
+      toggleAll.textContent = bukaSemua ? 'Tutup semua' : 'Buka semua';
+    });
+    document.getElementById('dxRefresh').addEventListener('click', function () { renderDashboard(); });
   }
 
   // ================= PANEL: TAHUN AJARAN =================
