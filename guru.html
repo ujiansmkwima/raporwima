@@ -4583,7 +4583,7 @@
           var tglSelesaiFmt = formatTanggalIndonesia(b.tanggal_selesai);
           var tanggalPklGabungan = (tglMulaiFmt || tglSelesaiFmt) ? ((tglMulaiFmt || '…........') + ' s.d. ' + (tglSelesaiFmt || '…........')) : null;
 
-          return '<div class="rapor-cetak rapor-cetak--identitas" id="cetakPkl-' + siswaId + '">' +
+          return '<div class="rapor-cetak rapor-cetak--identitas rapor-cetak--pkl rapor-cetak--f13" id="cetakPkl-' + siswaId + '">' +
             '<div class="rapor-cetak__bar" style="line-height:1.6;">DAFTAR NILAI PESERTA DIDIK MATA PELAJARAN PKL<br>' + escapeHtml(NAMA_SEKOLAH.toUpperCase()) + '<br>TAHUN AJARAN ' + escapeHtml(tahunAktif.nama) + '</div>' +
 
             '<table class="ident-table" style="margin-top:10px;"><tbody>' +
@@ -6159,7 +6159,7 @@
         }
 
         return (
-          '<div class="rapor-cetak">' +
+          '<div class="rapor-cetak rapor-cetak--f13">' +
 
           // ---------- Tabel pembungkus seluruh kartu rapor ----------
           // Identitas Siswa ditaruh di <thead> tabel ini. <thead> adalah
@@ -6491,7 +6491,7 @@
         }
 
         return (
-          '<div class="rapor-cetak">' +
+          '<div class="rapor-cetak rapor-cetak--f13">' +
 
           '<table class="rapor-cetak__print-frame"><thead><tr><td>' +
 
