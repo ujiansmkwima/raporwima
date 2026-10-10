@@ -6694,6 +6694,15 @@
 
         var jenisKelaminTampil = siswa.jenis_kelamin === 'L' ? 'Laki-laki' : (siswa.jenis_kelamin === 'P' ? 'Perempuan' : '');
         var ttlTampil = [siswa.tempat_lahir, formatTanggalIndonesia(siswa.tanggal_lahir)].filter(Boolean).join(', ');
+        // Alamat Orang Tua: bila data aplikasi kosong, otomatis memakai alamat siswa
+        // dengan format: Dusun, RT 00/ RW 00, Desa, Kecamatan, Kabupaten.
+        var alamatOrtuTampil = String(siswa.alamat_ortu || '').trim();
+        if (!alamatOrtuTampil) {
+          alamatOrtuTampil = [siswa.alamat_siswa, detail.kelurahan, detail.kecamatan, detail.kab_kota]
+            .map(function (x) { return String(x || '').trim(); })
+            .filter(Boolean)
+            .join(', ');
+        }
         var tahunAkhir = (String(tahunAktif.nama).split('/')[1] || tahunAktif.nama).trim();
 
                 var tanggalTtd = TANGGAL_IDENTITAS_CETAK ? escapeHtml(TANGGAL_IDENTITAS_CETAK) : '…........' + escapeHtml(tahunAkhir);
@@ -6702,12 +6711,12 @@
           '<div class="rapor-cetak rapor-cetak--identitas rapor-cetak--bi">' +
 
           // Judul
-          '<div class="idk-judul"><div class="idk-judul__t">KETERANGAN TENTANG PESERTA DIDIK</div>' +
+          '<div class="idk-judul"><div class="idk-judul__t">KETERANGAN SISWA</div>' +
           '<div class="idk-judul__n">NIS <b>' + escapeHtml(siswa.nis || '—') + '</b> &nbsp;|&nbsp; NISN <b>' + escapeHtml(siswa.nisn || '—') + '</b></div></div>' +
 
-          // A. Identitas Peserta Didik
-          '<div class="idk-sec"><h4>A. IDENTITAS PESERTA DIDIK</h4><div class="idk-kv">' +
-          kvIdent('Nama Peserta Didik', siswa.nama, true) +
+          // A. Identitas Siswa
+          '<div class="idk-sec"><h4>A. IDENTITAS SISWA</h4><div class="idk-kv">' +
+          kvIdent('Nama Siswa', siswa.nama, true) +
           kvIdent('NIS', siswa.nis) +
           kvIdent('NISN', siswa.nisn) +
           (detail.nik ? kvIdent('NIK', detail.nik, true) : '') +
@@ -6736,7 +6745,7 @@
           kvIdent('Nama Ibu', siswa.nama_ibu) +
           kvIdent('Pekerjaan Ayah', siswa.pekerjaan_ayah) +
           kvIdent('Pekerjaan Ibu', siswa.pekerjaan_ibu) +
-          kvIdent('Alamat Orang Tua', siswa.alamat_ortu, true) +
+          kvIdent('Alamat Orang Tua', alamatOrtuTampil, true) +
           kvIdent('Nomor Telepon Rumah', siswa.no_telp_ortu, true) +
           '</div></div>' +
 
