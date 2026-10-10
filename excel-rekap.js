@@ -191,9 +191,12 @@
     return kota + ', ' + (tgl || '..........................');
   }
 
-  async function unduhWorkbook(wb, namaFile) {
+  async function workbookKeBlob(wb) {
     var buffer = await wb.xlsx.writeBuffer();
-    var blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    return new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  }
+
+  function unduhBlob(blob, namaFile) {
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
     a.href = url;
@@ -204,8 +207,13 @@
     setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
   }
 
+  async function unduhWorkbook(wb, namaFile) {
+    unduhBlob(await workbookKeBlob(wb), namaFile);
+  }
+
   function buatWorksheet(wb, namaSheet) {
-    return wb.addWorksheet(namaSheet.slice(0, 31), {
+    // Excel melarang karakter * ? : \ / [ ] pada nama sheet.
+    return wb.addWorksheet(String(namaSheet).replace(/[*?:\\\/\[\]]/g, '-').slice(0, 31), {
       pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0, paperSize: 9, margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 } },
       views: [{ showGridLines: false }]
     });
@@ -225,7 +233,7 @@
   //   siswaList: [{ id, nama, nis, nisn, agama }],
   //   nilaiMap: { [siswaId]: { [mapelId]: { nilai } } }
   // }
-  async function unduhRekapNilaiSemester(opts) {
+  async function buatBlobRekapNilaiSemester(opts) {
     var mapelList = opts.mapelList || [];
     var siswaList = opts.siswaList || [];
     var nilaiMap = opts.nilaiMap || {};
@@ -279,7 +287,37 @@
       nipWaliKelas: opts.waliKelasNip
     });
 
-    await unduhWorkbook(wb, opts.namaFile || ('rekap_nilai_' + namaFileAman(opts.kelas.nama) + '.xlsx'));
+    return await workbookKeBlob(wb);
+  }
+
+  async function unduhRekapNilaiSemester(opts) {
+    var blob = await buatBlobRekapNilaiSemester(opts);
+    unduhBlob(blob, opts.namaFile || ('rekap_nilai_' + namaFileAman(opts.kelas.nama) + '.xlsx'));
+  }
+
+  // Unduh BANYAK kelas sekaligus -> 1 file ZIP berisi 1 file Excel per kelas.
+  // daftarOpts = array opts (format sama dengan unduhRekapNilaiSemester).
+  // onProgress(selesai, total, namaKelas) dipanggil tiap kelas selesai dibuat.
+  // Butuh library JSZip (window.JSZip).
+  async function unduhRekapNilaiSemesterZip(daftarOpts, namaZip, onProgress) {
+    if (typeof JSZip === 'undefined') throw new Error('Library JSZip belum termuat. Muat ulang halaman lalu coba lagi.');
+    var zip = new JSZip();
+    var dipakai = {};
+    for (var i = 0; i < daftarOpts.length; i++) {
+      var o = daftarOpts[i];
+      var blob = await buatBlobRekapNilaiSemester(o);
+      var nama = o.namaFile || ('rekap_nilai_' + namaFileAman(o.kelas.nama) + '.xlsx');
+      if (dipakai[nama]) { // jaga-jaga nama kelas kembar
+        var n = ++dipakai[nama];
+        nama = nama.replace(/\.xlsx$/i, '') + '_' + n + '.xlsx';
+      } else {
+        dipakai[nama] = 1;
+      }
+      zip.file(nama, blob);
+      if (onProgress) onProgress(i + 1, daftarOpts.length, o.kelas.nama);
+    }
+    var zipBlob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+    unduhBlob(zipBlob, namaZip || 'rekap_nilai_semua_kelas.zip');
   }
 
   // =========================================================
@@ -460,6 +498,7 @@
 
   global.RekapExcel = {
     unduhRekapNilaiSemester: unduhRekapNilaiSemester,
+    unduhRekapNilaiSemesterZip: unduhRekapNilaiSemesterZip,
     unduhLegerSiswa: unduhLegerSiswa,
     unduhTabel: unduhTabel,
     namaFileAman: namaFileAman,

@@ -12,6 +12,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="xlsx-autofit.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="excel-rekap.js"></script>
 <script src="unsaved-guard.js?v=1"></script>
 <script src="supabase-client.js"></script>
@@ -2918,11 +2919,19 @@
     }
 
     area.innerHTML =
+      '<div class="toolbar">' +
+      '<button class="btn-small btn-small--primary" id="btnExportRekapSemuaKelas">⬇ Unduh Semua Kelas (ZIP)</button>' +
+      '<span class="dx-card__hint" style="align-self:center;">Satu file Excel per kelas, dikemas dalam satu file ZIP — tahun ajaran/semester aktif.</span>' +
+      '</div>' +
       '<div class="table-wrap"><table class="data-table"><thead><tr><th>Kelas</th><th>Tingkat</th><th>Program Keahlian</th><th></th></tr></thead>' +
       '<tbody>' + kelasList.map(function (k) {
         return '<tr><td>' + escapeHtml(k.nama) + '</td><td>' + escapeHtml(k.tingkat) + '</td><td>' + escapeHtml(k.program_keahlian || '—') + '</td>' +
           '<td><button class="btn-small btn-small--primary" data-kelas-id="' + k.id + '">Lihat Rekap</button></td></tr>';
       }).join('') + '</tbody></table></div>';
+
+    document.getElementById('btnExportRekapSemuaKelas').addEventListener('click', function () {
+      unduhRekapSemuaKelasZip(kelasList, this);
+    });
 
     area.querySelectorAll('button[data-kelas-id]').forEach(function (btn) {
       btn.addEventListener('click', function () {
@@ -2930,6 +2939,131 @@
         renderRekapNilaiDetail(kelasObj);
       });
     });
+  }
+
+  // Unduh rekap nilai semester SEMUA kelas sekaligus -> 1 file ZIP
+  // (isi: 1 file Excel per kelas, format sama dengan tombol "Unduh Rekap
+  // Nilai (Excel)" di halaman rekap tiap kelas). Data dimuat sekali untuk
+  // semua kelas (bukan per kelas) supaya cepat, dan dipaginasi karena
+  // Supabase membatasi 1000 baris per permintaan.
+  async function unduhRekapSemuaKelasZip(kelasList, btn) {
+    if (!tahunAktif) {
+      alert('Belum ada tahun ajaran aktif. Aktifkan dulu di menu "Tahun Ajaran".');
+      return;
+    }
+    var teksAsli = btn.textContent;
+    btn.disabled = true;
+    try {
+      btn.textContent = 'Memuat data...';
+
+      var profilRes = await supabaseClient.from('profil_sekolah').select('*').maybeSingle();
+      var profilSekolah = profilRes.data || {};
+
+      var mapelSemua = await ambilSemuaBaris(function () {
+        return supabaseClient.from('mata_pelajaran')
+          .select('id, nama, kode, jenis_mapel, urutan_rapor, berlaku_untuk, berlaku_semester, agama_spesifik').order('id');
+      });
+      var mapelKelasRows = await ambilSemuaBaris(function () {
+        return supabaseClient.from('mapel_kelas').select('mapel_id, kelas_id').order('id');
+      });
+      var mapelKelasSet = {}; // kelasId -> { mapelId: true }
+      mapelKelasRows.forEach(function (r) {
+        (mapelKelasSet[r.kelas_id] = mapelKelasSet[r.kelas_id] || {})[r.mapel_id] = true;
+      });
+      var mapelSemesterRows = await ambilSemuaBaris(function () {
+        return supabaseClient.from('mapel_semester').select('mapel_id, semester_ke').order('id');
+      });
+      var mapelSemesterSet = {};
+      mapelSemesterRows.forEach(function (r) {
+        (mapelSemesterSet[r.mapel_id] = mapelSemesterSet[r.mapel_id] || []).push(r.semester_ke);
+      });
+
+      var skRows = await ambilSemuaBaris(function () {
+        return supabaseClient.from('siswa_kelas')
+          .select('kelas_id, siswa:siswa_id(id, nis, nisn, nama, agama)')
+          .eq('tahun_ajaran_id', tahunAktif.id).order('id');
+      });
+      var siswaPerKelas = {};
+      skRows.forEach(function (r) {
+        if (!r.siswa) return;
+        (siswaPerKelas[r.kelas_id] = siswaPerKelas[r.kelas_id] || []).push(r.siswa);
+      });
+
+      var nilaiRows = await ambilSemuaBaris(function () {
+        return supabaseClient.from('nilai').select('siswa_id, mapel_id, nilai')
+          .eq('tahun_ajaran_id', tahunAktif.id).eq('jenis', 'rapor').order('id');
+      });
+      var nilaiMap = {};
+      nilaiRows.forEach(function (r) {
+        if (!nilaiMap[r.siswa_id]) nilaiMap[r.siswa_id] = {};
+        nilaiMap[r.siswa_id][r.mapel_id] = r;
+      });
+
+      var waliRows = await ambilSemuaBaris(function () {
+        return supabaseClient.from('wali_kelas').select('kelas_id, guru:guru_id(nama)')
+          .eq('tahun_ajaran_id', tahunAktif.id).order('id');
+      });
+      var waliPerKelas = {};
+      waliRows.forEach(function (r) {
+        waliPerKelas[r.kelas_id] = (r.guru && r.guru.nama) || null;
+      });
+
+      // Susun opts per kelas (aturan filter & urutan mapel sama dengan halaman rekap per kelas)
+      var daftarOpts = [];
+      var dilewati = [];
+      kelasList.forEach(function (kelasObj) {
+        var siswaList = (siswaPerKelas[kelasObj.id] || []).slice();
+        siswaList.sort(function (a, b) { return a.nama.localeCompare(b.nama); });
+        if (!siswaList.length) { dilewati.push(kelasObj.nama + ' (belum ada siswa)'); return; }
+
+        var semesterKeAktif = hitungSemesterKe(kelasObj.tingkat, tahunAktif.semester);
+        var mapelList = mapelSemua.filter(function (m) {
+          if (m.berlaku_untuk === 'tertentu' && !(mapelKelasSet[kelasObj.id] && mapelKelasSet[kelasObj.id][m.id])) return false;
+          if (m.berlaku_semester === 'tertentu' && semesterKeAktif && (mapelSemesterSet[m.id] || []).indexOf(semesterKeAktif) === -1) return false;
+          return true;
+        });
+        mapelList.sort(function (a, b) {
+          var ja = a.jenis_mapel === 'kejuruan' ? 1 : 0, jb = b.jenis_mapel === 'kejuruan' ? 1 : 0;
+          if (ja !== jb) return ja - jb;
+          var ua = (a.urutan_rapor === null || a.urutan_rapor === undefined) ? 9999 : a.urutan_rapor;
+          var ub = (b.urutan_rapor === null || b.urutan_rapor === undefined) ? 9999 : b.urutan_rapor;
+          if (ua !== ub) return ua - ub;
+          return (a.nama || '').localeCompare(b.nama || '');
+        });
+        if (!mapelList.length) { dilewati.push(kelasObj.nama + ' (belum ada mata pelajaran)'); return; }
+
+        daftarOpts.push({
+          namaFile: 'rekap_nilai_' + RekapExcel.namaFileAman(kelasObj.nama) + '_' + RekapExcel.namaFileAman(tahunAktif.nama) + '_' + RekapExcel.namaFileAman(tahunAktif.semester) + '.xlsx',
+          namaSheet: 'Rekap ' + kelasObj.nama,
+          profilSekolah: profilSekolah,
+          tahunAjaran: { nama: tahunAktif.nama, semester: tahunAktif.semester },
+          kelas: kelasObj,
+          waliKelasNama: waliPerKelas[kelasObj.id] || null,
+          mapelList: mapelList,
+          siswaList: siswaList,
+          nilaiMap: nilaiMap
+        });
+      });
+
+      if (!daftarOpts.length) {
+        alert('Tidak ada kelas yang bisa diunduh.' + (dilewati.length ? '\n\nDilewati:\n- ' + dilewati.join('\n- ') : ''));
+        return;
+      }
+
+      var namaZip = 'rekap_nilai_semua_kelas_' + RekapExcel.namaFileAman(tahunAktif.nama) + '_' + RekapExcel.namaFileAman(tahunAktif.semester) + '.zip';
+      await RekapExcel.unduhRekapNilaiSemesterZip(daftarOpts, namaZip, function (selesai, total, namaKelas) {
+        btn.textContent = 'Menyiapkan ' + selesai + '/' + total + ' (' + namaKelas + ')...';
+      });
+
+      if (dilewati.length) {
+        alert('ZIP berisi ' + daftarOpts.length + ' kelas.\n\nKelas yang dilewati:\n- ' + dilewati.join('\n- '));
+      }
+    } catch (err) {
+      alert('Gagal membuat file ZIP: ' + (err && err.message ? err.message : err));
+    } finally {
+      btn.disabled = false;
+      btn.textContent = teksAsli;
+    }
   }
 
   async function renderRekapNilaiDetail(kelasObj) {
