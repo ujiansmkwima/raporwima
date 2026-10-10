@@ -6819,8 +6819,8 @@
       var profilRes = await supabaseClient.from('profil_sekolah').select('*').maybeSingle();
       var profilSekolah = profilRes.data || {};
       var NAMA_SEKOLAH = String(profilSekolah.nama_sekolah || 'SMK Widya Mandala Tambak').toUpperCase();
-      // Teks kaki cover (sesuai format Word). Ubah di sini kalau nama kementerian berganti.
-      var TEKS_KEMENTERIAN_1 = 'KEMENTERIAN PENDIDIKAN DAN KEBUDAYAAN';
+      // Teks kaki cover. Ubah di sini kalau nama kementerian berganti.
+      var TEKS_KEMENTERIAN_1 = 'KEMENTERIAN PENDIDIKAN DASAR DAN MENENGAH';
       var TEKS_KEMENTERIAN_2 = 'REPUBLIK INDONESIA';
 
       // NISN diambil sekali untuk seluruh kelas (ambilSiswaKelas tidak memuat NISN).
@@ -6831,26 +6831,24 @@
       function htmlCover(s) {
         var nama = String(s.nama || '').toUpperCase();
         var ukuran = nama.length <= 26 ? 17 : (nama.length <= 38 ? 14 : 12);
-        return '<div class="cv-page"><div class="cv-inner">' +
-          '<div class="cv-top"><img class="cv-logo" src="assets/logo.png" alt="Logo sekolah"></div>' +
-          '<div class="cv-title">' +
-            '<div class="cv-title__main">RAPOR</div>' +
-            '<div class="cv-title__sub">PESERTA DIDIK</div>' +
-            '<div class="cv-orn"><span></span><i></i><span></span></div>' +
-            '<div class="cv-title__edu">SEKOLAH MENENGAH KEJURUAN<br>(SMK)</div>' +
+        return '<div class="cv-page">' +
+          '<div class="cv-hero"><div class="cv-hero__school">' + escapeHtml(NAMA_SEKOLAH) + '</div></div>' +
+          '<div class="cv-body">' +
+            '<div class="cv-logo-wrap"><img class="cv-logo" src="assets/logo.png" alt="Logo sekolah"></div>' +
+            '<div class="cv-title">' +
+              '<div class="cv-title__main">RAPOR</div>' +
+              '<div class="cv-title__sub">PESERTA DIDIK</div>' +
+              '<div class="cv-pill">SEKOLAH MENENGAH KEJURUAN (SMK)</div>' +
+            '</div>' +
+            '<div class="cv-fields">' +
+              '<div class="cv-field"><div class="cv-field__label">NAMA PESERTA DIDIK:</div>' +
+                '<div class="cv-field__box" style="font-size:' + ukuran + 'pt;">' + escapeHtml(nama) + '</div></div>' +
+              '<div class="cv-field"><div class="cv-field__label">NISN:</div>' +
+                '<div class="cv-field__box">' + escapeHtml(nisnMap[s.id] || '-') + '</div></div>' +
+            '</div>' +
           '</div>' +
-          '<div class="cv-fields">' +
-            '<div class="cv-field"><div class="cv-field__label">NAMA PESERTA DIDIK:</div>' +
-              '<div class="cv-field__box" style="font-size:' + ukuran + 'pt;">' + escapeHtml(nama) + '</div></div>' +
-            '<div class="cv-field"><div class="cv-field__label">NISN:</div>' +
-              '<div class="cv-field__box">' + escapeHtml(nisnMap[s.id] || '-') + '</div></div>' +
-          '</div>' +
-          '<div class="cv-foot">' +
-            '<div class="cv-foot__school">' + escapeHtml(NAMA_SEKOLAH) + '</div>' +
-            '<div class="cv-foot__line"></div>' +
-            '<div class="cv-foot__min">' + escapeHtml(TEKS_KEMENTERIAN_1) + '<br>' + escapeHtml(TEKS_KEMENTERIAN_2) + '</div>' +
-          '</div>' +
-        '</div></div>';
+          '<div class="cv-foot"><div class="cv-foot__min">' + escapeHtml(TEKS_KEMENTERIAN_1) + '<br>' + escapeHtml(TEKS_KEMENTERIAN_2) + '</div></div>' +
+        '</div>';
       }
 
       function judulCetak(idList) {
@@ -6952,10 +6950,9 @@
       function htmlDataSekolah() {
         return '<div class="ds-page">' +
           '<div class="ds-head">' +
-            '<img class="ds-logo" src="assets/logo.png" alt="Logo sekolah">' +
-            '<div class="ds-head__t1">RAPOR PESERTA DIDIK</div>' +
-            '<div class="ds-head__t2">SEKOLAH MENENGAH KEJURUAN (SMK)</div>' +
-            '<div class="cv-orn"><span></span><i></i><span></span></div>' +
+            '<div class="ds-logo-wrap"><img class="ds-logo" src="assets/logo.png" alt="Logo sekolah"></div>' +
+            '<div><div class="ds-head__t1">RAPOR PESERTA DIDIK</div>' +
+            '<div class="ds-head__t2">SEKOLAH MENENGAH KEJURUAN (SMK)</div></div>' +
           '</div>' +
           '<div class="ds-section">IDENTITAS SEKOLAH</div>' +
           '<table class="ds-table"><tbody>' +
