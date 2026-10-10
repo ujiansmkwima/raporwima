@@ -42,7 +42,6 @@
     <nav class="menu-list" id="menuBI">
       <a href="#" class="menu-item" data-view="dashboard"><i data-lucide="layout-dashboard" class="menu-icon"></i><span class="menu-item__title">Dashboard</span></a>
       <a href="#" class="menu-item" data-view="siswa"><i data-lucide="book-user" class="menu-icon"></i><span class="menu-item__title">Data Induk Siswa</span></a>
-      <a href="#" class="menu-item" data-view="kelengkapan"><i data-lucide="list-checks" class="menu-icon"></i><span class="menu-item__title">Kelengkapan Data</span></a>
       <a href="#" class="menu-item" data-view="mutasi"><i data-lucide="arrow-right-left" class="menu-icon"></i><span class="menu-item__title">Mutasi & Kelulusan</span></a>
       <a href="#" class="menu-item" data-view="sinkron"><i data-lucide="refresh-cw" class="menu-icon"></i><span class="menu-item__title">Sinkron dari E-Rapor</span></a>
       <a href="#" class="menu-item" data-view="excel"><i data-lucide="file-spreadsheet" class="menu-icon"></i><span class="menu-item__title">Excel (Unduh/Impor)</span></a>
@@ -177,7 +176,6 @@
   var views = {
     dashboard: renderDashboard,
     siswa: function () { return BI.renderDaftar({ root: content, admin: true, judul: 'Data Induk Siswa', desc: 'Pilih siswa untuk melihat / melengkapi Buku Induk-nya.', bolehUbah: true }); },
-    kelengkapan: function () { return BI.renderKelengkapan({ root: content, admin: true }); },
     mutasi: renderMutasi,
     sinkron: function () { return BI.renderSinkron({ root: content }); },
     excel: function () { return BI.renderExcel({ root: content, admin: true }); },
