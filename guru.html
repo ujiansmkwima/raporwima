@@ -1021,39 +1021,48 @@
       // ================= ANALISIS NILAI SEMESTER ==============
       var sectionAnalisisHtml = '';
       var dataAnalisis = null;
-      if (penugasan.length) {
-        var kkmByMapel = {};
-        var kkmRes = await supabaseClient.from('mata_pelajaran').select('id, kkm').in('id', mapelIds);
-        (kkmRes.data || []).forEach(function (m) {
-          kkmByMapel[m.id] = (m.kkm !== null && m.kkm !== undefined) ? Number(m.kkm) : 75;
-        });
+      {
+        // Analisis memakai nilai rapor SELURUH mapel di tahun ajaran aktif
+        // (bukan hanya mapel yang diampu guru ini). Supabase membatasi 1000
+        // baris per query, jadi diambil bertahap.
+        var ambilSemuaAn = async function (buatQuery) {
+          var hasil = [];
+          for (var dari = 0; ; dari += 1000) {
+            var res = await buatQuery().range(dari, dari + 999);
+            if (res.error || !res.data) break;
+            hasil = hasil.concat(res.data);
+            if (res.data.length < 1000) break;
+          }
+          return hasil;
+        };
 
-        var nilaiAngka = {}; // mapelId|siswaId -> angka nilai rapor
-        nilaiRaporRows.forEach(function (r) {
-          if (r.nilai === null || r.nilai === undefined || r.nilai === '') return;
-          var n = Number(r.nilai);
-          if (!isNaN(n)) nilaiAngka[r.mapel_id + '|' + r.siswa_id] = n;
+        var nilaiSemua = await ambilSemuaAn(function () {
+          return supabaseClient.from('nilai').select('id, siswa_id, mapel_id, nilai')
+            .eq('tahun_ajaran_id', tahunAktif.id).eq('jenis', 'rapor').order('id');
+        });
+        var siswaKelasSemua = await ambilSemuaAn(function () {
+          return supabaseClient.from('siswa_kelas').select('id, siswa_id, kelas:kelas_id(nama), siswa:siswa_id(nama)')
+            .eq('tahun_ajaran_id', tahunAktif.id).order('id');
+        });
+        var mapelSemuaRes = await supabaseClient.from('mata_pelajaran').select('id, nama, kkm');
+
+        var infoSiswaAn = {}; // siswaId -> { nama, kelas }
+        siswaKelasSemua.forEach(function (r) {
+          infoSiswaAn[r.siswa_id] = { nama: r.siswa ? r.siswa.nama : null, kelas: r.kelas ? r.kelas.nama : '-' };
+        });
+        var infoMapelAn = {}; // mapelId -> { nama, kkm }
+        (mapelSemuaRes.data || []).forEach(function (m) {
+          infoMapelAn[m.id] = { nama: m.nama, kkm: (m.kkm !== null && m.kkm !== undefined) ? Number(m.kkm) : 75 };
         });
 
         var entriNilai = [];
-        var siswaButuhNama = {};
-        penugasan.forEach(function (p) {
-          (kelasSiswaMap[p.kelas.id] || []).forEach(function (sid) {
-            if (p.mapel.agama_spesifik && (siswaAgamaMap[sid] || null) !== p.mapel.agama_spesifik) return;
-            var n = nilaiAngka[p.mapel.id + '|' + sid];
-            if (n === undefined) return;
-            entriNilai.push({ siswaId: sid, mapelId: p.mapel.id, mapel: p.mapel.nama, kelas: p.kelas.nama, nilai: n });
-            siswaButuhNama[sid] = true;
-          });
+        nilaiSemua.forEach(function (r) {
+          if (r.nilai === null || r.nilai === undefined || r.nilai === '') return;
+          var n = Number(r.nilai);
+          var si = infoSiswaAn[r.siswa_id], mp = infoMapelAn[r.mapel_id];
+          if (isNaN(n) || !si || !mp) return; // siswa tidak terdaftar di tahun ajaran ini / mapel tidak dikenal
+          entriNilai.push({ siswaId: r.siswa_id, mapelId: r.mapel_id, mapel: mp.nama, kkm: mp.kkm, kelas: si.kelas, nama: si.nama || '(tanpa nama)', nilai: n });
         });
-
-        var namaSiswaMap = {};
-        var idsNama = Object.keys(siswaButuhNama);
-        for (var ci = 0; ci < idsNama.length; ci += 100) {
-          var namaRes = await supabaseClient.from('siswa').select('id, nama').in('id', idsNama.slice(ci, ci + 100));
-          (namaRes.data || []).forEach(function (r) { namaSiswaMap[r.id] = r.nama; });
-        }
-        entriNilai.forEach(function (e) { e.nama = namaSiswaMap[e.siswaId] || '(tanpa nama)'; });
 
         var fmtAn = function (n) { return Number(n).toLocaleString('id-ID', { maximumFractionDigits: 1 }); };
 
@@ -1061,7 +1070,7 @@
           sectionAnalisisHtml = taskSectionHtml({
             icon: 'bar-chart-3',
             title: 'Analisis Nilai Semester ' + tahunAktif.semester,
-            desc: 'Ringkasan sebaran nilai rapor siswa di mapel yang kamu ampu.',
+            desc: 'Ringkasan sebaran nilai rapor seluruh mapel di sekolah.',
             bodyHtml: '<div class="task-section__empty">Belum ada nilai rapor yang tersimpan, jadi belum ada yang bisa dianalisis.</div>'
           });
         } else {
@@ -1074,7 +1083,7 @@
             if (e.nilai > m.max) m.max = e.nilai;
           });
           var listMapelAn = Object.keys(perMapel).map(function (k) {
-            var m = perMapel[k]; m.avg = m.sum / m.n; m.kkm = kkmByMapel[m.id] !== undefined ? kkmByMapel[m.id] : 75; return m;
+            var m = perMapel[k]; m.avg = m.sum / m.n; m.kkm = infoMapelAn[m.id] ? infoMapelAn[m.id].kkm : 75; return m;
           }).sort(function (a, b) { return b.avg - a.avg; });
 
           var rataAll = entriNilai.reduce(function (s, e) { return s + e.nilai; }, 0) / entriNilai.length;
@@ -1104,7 +1113,7 @@
           sectionAnalisisHtml = taskSectionHtml({
             icon: 'bar-chart-3',
             title: 'Analisis Nilai Semester ' + tahunAktif.semester,
-            desc: 'Sebaran nilai rapor siswa di mapel yang kamu ampu, Tahun Ajaran ' + tahunAktif.nama + '.',
+            desc: 'Sebaran nilai rapor seluruh mapel dan seluruh siswa, Tahun Ajaran ' + tahunAktif.nama + ' Semester ' + tahunAktif.semester + '.',
             bodyHtml: statAnHtml +
               '<div class="an-block"><div class="an-block__head"><h4 class="an-block__title">Rata-rata nilai per mapel</h4>' +
               '<span class="an-legend"><i class="an-legend__dot an-legend__dot--ok"></i>di atas KKM <i class="an-legend__dot an-legend__dot--low"></i>di bawah KKM <i class="an-legend__tick"></i>garis KKM</span></div>' +
@@ -1227,7 +1236,7 @@
         sectionEkskulHtml +
         sectionKokuHtml +
         sectionPresensiHtml +
-        '<div class="panel-note">Analisis nilai semester dihitung dari nilai rapor akhir yang sudah tersimpan untuk mapel & kelas yang kamu ampu. Progres ekstrakurikuler & kokurikuler dihitung dari peserta/siswa yang jadi tanggung jawabmu. Progres presensi dihitung dari siswa yang datanya sudah pernah disimpan.</div>';
+        '<div class="panel-note">Analisis nilai semester dihitung dari nilai rapor akhir seluruh mapel yang sudah tersimpan. Progres ekstrakurikuler & kokurikuler dihitung dari peserta/siswa yang jadi tanggung jawabmu. Progres presensi dihitung dari siswa yang datanya sudah pernah disimpan.</div>';
 
       lucide.createIcons();
 
