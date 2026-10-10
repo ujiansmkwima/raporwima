@@ -6,7 +6,7 @@
 <title>Dashboard Guru — E-Rapor SMK Widya Mandala Tambak</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=11">
+<link rel="stylesheet" href="style.css?v=12">
 <script src="https://unpkg.com/lucide@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -779,10 +779,12 @@
       // ================= 1) NILAI RAPOR ==============
       var rowsNilai = [];
       var sectionNilaiHtml = '';
+      var nilaiRaporRows = []; // dipakai juga oleh Analisis Nilai Semester
       if (penugasan.length) {
         var nilaiRes = await supabaseClient
           .from('nilai').select('siswa_id, mapel_id, nilai')
           .eq('tahun_ajaran_id', tahunAktif.id).eq('jenis', 'rapor').in('mapel_id', mapelIds);
+        nilaiRaporRows = nilaiRes.data || [];
         var nilaiMap = {}; // key: mapelId|siswaId -> true kalau nilai rapor sudah diisi
         (nilaiRes.data || []).forEach(function (r) {
           if (r.nilai === null || r.nilai === undefined) return;
@@ -1016,13 +1018,112 @@
         });
       }
 
+      // ================= ANALISIS NILAI SEMESTER ==============
+      var sectionAnalisisHtml = '';
+      var dataAnalisis = null;
+      if (penugasan.length) {
+        var kkmByMapel = {};
+        var kkmRes = await supabaseClient.from('mata_pelajaran').select('id, kkm').in('id', mapelIds);
+        (kkmRes.data || []).forEach(function (m) {
+          kkmByMapel[m.id] = (m.kkm !== null && m.kkm !== undefined) ? Number(m.kkm) : 75;
+        });
+
+        var nilaiAngka = {}; // mapelId|siswaId -> angka nilai rapor
+        nilaiRaporRows.forEach(function (r) {
+          if (r.nilai === null || r.nilai === undefined || r.nilai === '') return;
+          var n = Number(r.nilai);
+          if (!isNaN(n)) nilaiAngka[r.mapel_id + '|' + r.siswa_id] = n;
+        });
+
+        var entriNilai = [];
+        var siswaButuhNama = {};
+        penugasan.forEach(function (p) {
+          (kelasSiswaMap[p.kelas.id] || []).forEach(function (sid) {
+            if (p.mapel.agama_spesifik && (siswaAgamaMap[sid] || null) !== p.mapel.agama_spesifik) return;
+            var n = nilaiAngka[p.mapel.id + '|' + sid];
+            if (n === undefined) return;
+            entriNilai.push({ siswaId: sid, mapelId: p.mapel.id, mapel: p.mapel.nama, kelas: p.kelas.nama, nilai: n });
+            siswaButuhNama[sid] = true;
+          });
+        });
+
+        var namaSiswaMap = {};
+        var idsNama = Object.keys(siswaButuhNama);
+        for (var ci = 0; ci < idsNama.length; ci += 100) {
+          var namaRes = await supabaseClient.from('siswa').select('id, nama').in('id', idsNama.slice(ci, ci + 100));
+          (namaRes.data || []).forEach(function (r) { namaSiswaMap[r.id] = r.nama; });
+        }
+        entriNilai.forEach(function (e) { e.nama = namaSiswaMap[e.siswaId] || '(tanpa nama)'; });
+
+        var fmtAn = function (n) { return Number(n).toLocaleString('id-ID', { maximumFractionDigits: 1 }); };
+
+        if (entriNilai.length === 0) {
+          sectionAnalisisHtml = taskSectionHtml({
+            icon: 'bar-chart-3',
+            title: 'Analisis Nilai Semester ' + tahunAktif.semester,
+            desc: 'Ringkasan sebaran nilai rapor siswa di mapel yang kamu ampu.',
+            bodyHtml: '<div class="task-section__empty">Belum ada nilai rapor yang tersimpan, jadi belum ada yang bisa dianalisis.</div>'
+          });
+        } else {
+          // ---- rata-rata per mapel (gabungan semua kelas yang diampu) ----
+          var perMapel = {};
+          entriNilai.forEach(function (e) {
+            var m = perMapel[e.mapelId] = perMapel[e.mapelId] || { nama: e.mapel, id: e.mapelId, sum: 0, n: 0, min: Infinity, max: -Infinity };
+            m.sum += e.nilai; m.n++;
+            if (e.nilai < m.min) m.min = e.nilai;
+            if (e.nilai > m.max) m.max = e.nilai;
+          });
+          var listMapelAn = Object.keys(perMapel).map(function (k) {
+            var m = perMapel[k]; m.avg = m.sum / m.n; m.kkm = kkmByMapel[m.id] !== undefined ? kkmByMapel[m.id] : 75; return m;
+          }).sort(function (a, b) { return b.avg - a.avg; });
+
+          var rataAll = entriNilai.reduce(function (s, e) { return s + e.nilai; }, 0) / entriNilai.length;
+          var urutAll = entriNilai.slice().sort(function (a, b) { return b.nilai - a.nilai; });
+          var tertinggiAll = urutAll[0], terendahAll = urutAll[urutAll.length - 1];
+
+          var statAnHtml = '<div class="stat-grid">' +
+            '<div class="stat-card"><div class="stat-card__label"><i data-lucide="sigma"></i>Rata-rata Nilai</div>' +
+            '<div class="stat-card__value">' + fmtAn(rataAll) + '</div><div class="stat-card__sub">dari ' + entriNilai.length + ' nilai rapor</div></div>' +
+            '<div class="stat-card"><div class="stat-card__label"><i data-lucide="trending-up"></i>Nilai Tertinggi</div>' +
+            '<div class="stat-card__value">' + fmtAn(tertinggiAll.nilai) + '</div><div class="stat-card__sub">' + escapeHtml(tertinggiAll.nama) + '</div></div>' +
+            '<div class="stat-card"><div class="stat-card__label"><i data-lucide="trending-down"></i>Nilai Terendah</div>' +
+            '<div class="stat-card__value">' + fmtAn(terendahAll.nilai) + '</div><div class="stat-card__sub">' + escapeHtml(terendahAll.nama) + '</div></div>' +
+            '</div>';
+
+          var opsiMapelAn = '<option value="">Semua mapel</option>' + listMapelAn.slice().sort(function (a, b) { return a.nama.localeCompare(b.nama); })
+            .map(function (m) { return '<option value="' + escapeHtml(m.id) + '">' + escapeHtml(m.nama) + '</option>'; }).join('');
+
+          var chartHtml = listMapelAn.map(function (m) {
+            var lulus = m.avg >= m.kkm;
+            return '<div class="an-row"><div class="an-row__name">' + escapeHtml(m.nama) + '</div>' +
+              '<div class="an-row__bar"><div class="an-bar ' + (lulus ? 'an-bar--ok' : 'an-bar--low') + '" style="width:' + Math.min(100, m.avg).toFixed(1) + '%"></div>' +
+              '<span class="an-kkm" style="left:' + Math.min(100, m.kkm) + '%" title="KKM ' + m.kkm + '"></span></div>' +
+              '<div class="an-row__val"><strong>' + fmtAn(m.avg) + '</strong><span>' + m.n + ' siswa · ' + fmtAn(m.min) + '–' + fmtAn(m.max) + '</span></div></div>';
+          }).join('');
+
+          sectionAnalisisHtml = taskSectionHtml({
+            icon: 'bar-chart-3',
+            title: 'Analisis Nilai Semester ' + tahunAktif.semester,
+            desc: 'Sebaran nilai rapor siswa di mapel yang kamu ampu, Tahun Ajaran ' + tahunAktif.nama + '.',
+            bodyHtml: statAnHtml +
+              '<div class="an-block"><div class="an-block__head"><h4 class="an-block__title">Rata-rata nilai per mapel</h4>' +
+              '<span class="an-legend"><i class="an-legend__dot an-legend__dot--ok"></i>di atas KKM <i class="an-legend__dot an-legend__dot--low"></i>di bawah KKM <i class="an-legend__tick"></i>garis KKM</span></div>' +
+              '<div class="an-chart">' + chartHtml + '</div></div>' +
+              '<div class="an-block"><div class="an-block__head"><h4 class="an-block__title">Siswa nilai tertinggi &amp; terendah</h4>' +
+              '<select id="anFilterMapel" class="an-select" aria-label="Filter mapel">' + opsiMapelAn + '</select></div>' +
+              '<div class="an-rank" id="anRank"></div></div>'
+          });
+          dataAnalisis = { entri: entriNilai, fmt: fmtAn };
+        }
+      }
+
       // ---------- Rangkai semua section jadi satu halaman ----------
       // ================= RINGKASAN: hero + tugas berikutnya ==============
       var semuaTugas = []; // setiap item: { kind, label, filled, total, sel }
       var gabFilled = 0, gabTotal = 0;
       rowsNilai.forEach(function (r) {
         gabFilled += r.filled; gabTotal += r.total;
-        semuaTugas.push({ kind: 'Nilai rapor', label: r.mapel + ' · ' + r.kelas, filled: r.filled, total: r.total, sel: 'button[data-nilai-idx="' + rowsNilai.indexOf(r) + '"]' });
+        semuaTugas.push({ kind: 'Nilai rapor', label: r.mapel + ' · ' + r.kelas, filled: r.filled, total: r.total, aksi: function () { bukaInputNilaiDash(r); } });
       });
       rowsEkskul.forEach(function (r, i) {
         gabFilled += r.filled; gabTotal += r.total;
@@ -1036,11 +1137,23 @@
         gabFilled += filledWali; gabTotal += totalWali;
         semuaTugas.push({ kind: 'Presensi', label: 'Kelas ' + waliKelas.kelas.nama, filled: filledWali, total: totalWali, sel: '#btnDashPresensi' });
       }
+      function bukaInputNilaiDash(r) {
+        var target = Array.prototype.find.call(document.querySelectorAll('#menuMengajar .menu-item'), function (el) {
+          return el.querySelector('.menu-item__title').textContent === r.mapel && el.querySelector('.menu-item__sub').textContent === r.kelas;
+        });
+        if (target) { setActiveMenuItem(target); }
+        renderInputNilai(r.p);
+      }
+      function bukaTpBankDash(r) {
+        var itemTujuanEl = document.getElementById('menuTujuan').querySelector('.menu-item');
+        if (itemTujuanEl) { setActiveMenuItem(itemTujuanEl); }
+        renderTujuanPembelajaran(r.mapel);
+      }
       var tugasBelum = semuaTugas.filter(function (t) { return t.total > 0 && t.filled < t.total; })
         .sort(function (a, b) { return pctOf(a.filled, a.total) - pctOf(b.filled, b.total) || b.total - a.total; });
       // TP yang belum dibuat/diaktifkan menahan input nilai, jadi ditaruh paling atas.
       var tugasTp = rowsTpBank.map(function (r, i) {
-        return { kind: 'Tujuan Pembelajaran', label: r.mapel.nama, tp: true, aktif: r.aktif, total: r.total, sel: 'button[data-tpbank-idx="' + i + '"]' };
+        return { kind: 'Tujuan Pembelajaran', label: r.mapel.nama, tp: true, aktif: r.aktif, total: r.total, aksi: function () { bukaTpBankDash(r); } };
       }).filter(function (t) { return t.aktif === 0; });
       var antrean = tugasTp.concat(tugasBelum);
       var antreanTampil = antrean.slice(0, 5);
@@ -1110,39 +1223,44 @@
         '<div class="panel-head__desc">Semua tugas kamu — Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + ' Semester ' + escapeHtml(tahunAktif.semester) + '.</div></div></div>' +
         ringkasanPeranHtml +
         antreanHtml +
-        sectionTpBankHtml +
-        sectionNilaiHtml +
+        sectionAnalisisHtml +
         sectionEkskulHtml +
         sectionKokuHtml +
         sectionPresensiHtml +
-        '<div class="panel-note">Progres nilai rapor dihitung per mapel/kelas yang kamu ampu, dari nilai rapor akhir yang sudah tersimpan. Capaian Pembelajaran tidak lagi dicentang manual — sistem menyusunnya sendiri dari nilai TP (terbaik = nilai tertinggi, kurang = di bawah KKM). Progres ekstrakurikuler & kokurikuler dihitung dari peserta/siswa yang jadi tanggung jawabmu. Progres presensi dihitung dari siswa yang datanya sudah pernah disimpan.</div>';
+        '<div class="panel-note">Analisis nilai semester dihitung dari nilai rapor akhir yang sudah tersimpan untuk mapel & kelas yang kamu ampu. Progres ekstrakurikuler & kokurikuler dihitung dari peserta/siswa yang jadi tanggung jawabmu. Progres presensi dihitung dari siswa yang datanya sudah pernah disimpan.</div>';
 
       lucide.createIcons();
 
+      if (dataAnalisis) {
+        var anRankEl = document.getElementById('anRank');
+        var anSelect = document.getElementById('anFilterMapel');
+        var renderRankAn = function () {
+          var fm = anSelect.value;
+          var sub = dataAnalisis.entri.filter(function (e) { return !fm || String(e.mapelId) === fm; })
+            .sort(function (a, b) { return b.nilai - a.nilai || a.nama.localeCompare(b.nama); });
+          var n = Math.min(3, Math.max(1, Math.floor(sub.length / 2)));
+          function daftar(arr, judul, ikon, cls) {
+            return '<div class="an-rank__col"><div class="an-rank__title an-rank__title--' + cls + '"><i data-lucide="' + ikon + '"></i>' + judul + '</div>' +
+              '<ol class="an-rank__list">' + arr.map(function (e) {
+                return '<li><div class="an-rank__who"><strong>' + escapeHtml(e.nama) + '</strong><span>' + escapeHtml(e.mapel) + ' · ' + escapeHtml(e.kelas) + '</span></div>' +
+                  '<div class="an-rank__score">' + dataAnalisis.fmt(e.nilai) + '</div></li>';
+              }).join('') + '</ol></div>';
+          }
+          anRankEl.innerHTML = sub.length === 0
+            ? '<div class="task-section__empty">Belum ada nilai untuk mapel ini.</div>'
+            : daftar(sub.slice(0, n), 'Tertinggi', 'trophy', 'top') + daftar(sub.slice(-n).reverse(), 'Terendah', 'alert-triangle', 'bottom');
+          lucide.createIcons();
+        };
+        anSelect.addEventListener('change', renderRankAn);
+        renderRankAn();
+      }
+
       content.querySelectorAll('button[data-go]').forEach(function (btn) {
         btn.addEventListener('click', function () {
-          var tujuan = content.querySelector(antreanTampil[parseInt(btn.dataset.go, 10)].sel);
+          var t = antreanTampil[parseInt(btn.dataset.go, 10)];
+          if (t.aksi) { t.aksi(); return; }
+          var tujuan = content.querySelector(t.sel);
           if (tujuan) tujuan.click();
-        });
-      });
-
-      content.querySelectorAll('button[data-nilai-idx]').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          var r = rowsNilai[parseInt(btn.dataset.nilaiIdx, 10)];
-          var target = Array.prototype.find.call(document.querySelectorAll('#menuMengajar .menu-item'), function (el) {
-            return el.querySelector('.menu-item__title').textContent === r.mapel && el.querySelector('.menu-item__sub').textContent === r.kelas;
-          });
-          if (target) { setActiveMenuItem(target); }
-          renderInputNilai(r.p);
-        });
-      });
-
-      content.querySelectorAll('button[data-tpbank-idx]').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          var r = rowsTpBank[parseInt(btn.dataset.tpbankIdx, 10)];
-          var itemTujuanEl = document.getElementById('menuTujuan').querySelector('.menu-item');
-          if (itemTujuanEl) { setActiveMenuItem(itemTujuanEl); }
-          renderTujuanPembelajaran(r.mapel);
         });
       });
 
