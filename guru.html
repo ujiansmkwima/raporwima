@@ -6661,16 +6661,11 @@
         }
       }
 
-      function barisIdent(label, value) {
-        return '<tr><td class="ident-label">' + escapeHtml(label) + '</td><td class="ident-colon">:</td>' +
-          '<td class="ident-value">' + escapeHtml(value || '-') + '</td></tr>';
-      }
-
-      // Baris "diisi tangan" (mis. Diterima di sekolah ini) — dikosongkan
-      // total, tanpa garis/strip placeholder, cukup label dan titik dua.
-      function barisIdentKosong(label) {
-        return '<tr><td class="ident-label">' + escapeHtml(label) + '</td><td class="ident-colon">:</td>' +
-          '<td class="ident-value"></td></tr>';
+      // Satu isian "Label : Nilai" bergaya Buku Induk (grid 2 kolom, garis titik-titik).
+      // full = true -> selebar baris (mis. alamat).
+      function kvIdent(label, value, full) {
+        var v = (value === null || value === undefined || String(value).trim() === '') ? '-' : String(value);
+        return '<div class="idk-r' + (full ? ' idk-r--full' : '') + '"><span class="idk-l">' + escapeHtml(label) + '</span><span class="idk-c">:</span><span class="idk-v">' + escapeHtml(v) + '</span></div>';
       }
 
       async function buatKartuIdentitas(siswaId) {
@@ -6701,60 +6696,69 @@
         var ttlTampil = [siswa.tempat_lahir, formatTanggalIndonesia(siswa.tanggal_lahir)].filter(Boolean).join(', ');
         var tahunAkhir = (String(tahunAktif.nama).split('/')[1] || tahunAktif.nama).trim();
 
+                var tanggalTtd = TANGGAL_IDENTITAS_CETAK ? escapeHtml(TANGGAL_IDENTITAS_CETAK) : '…........' + escapeHtml(tahunAkhir);
+
         return (
-          '<div class="rapor-cetak rapor-cetak--identitas">' +
+          '<div class="rapor-cetak rapor-cetak--identitas rapor-cetak--bi">' +
 
-          '<div class="rapor-cetak__bar">KETERANGAN TENTANG PESERTA DIDIK</div>' +
-          '<div class="rapor-cetak__bar rapor-cetak__bar--sub">A. IDENTITAS PESERTA DIDIK</div>' +
-          '<table class="ident-table"><tbody>' +
-          barisIdent('Nama Peserta Didik', siswa.nama) +
-          barisIdent('NIS / NISN', (siswa.nis || '-') + ' / ' + (siswa.nisn || '-')) +
-          (detail.nik ? barisIdent('NIK', detail.nik) : '') +
-          barisIdent('Tempat, Tanggal Lahir', ttlTampil) +
-          barisIdent('Jenis Kelamin', jenisKelaminTampil) +
-          barisIdent('Agama', siswa.agama) +
-          barisIdent('Status dalam Keluarga', siswa.status_keluarga) +
-          barisIdent('Anak Ke', siswa.anak_ke === null || siswa.anak_ke === undefined ? '' : String(siswa.anak_ke)) +
-          // Format alamat sama dengan Buku Induk (B. Tempat Tinggal)
-          barisIdent('Alamat (Jalan / Dusun / RT RW)', siswa.alamat_siswa) +
-          barisIdent('Desa / Kelurahan', detail.kelurahan) +
-          barisIdent('Kecamatan', detail.kecamatan) +
-          barisIdent('Kabupaten / Kota', detail.kab_kota) +
-          barisIdent('Provinsi', detail.provinsi) +
-          barisIdent('Kode Pos', detail.kode_pos) +
-          barisIdent('Nomor Telepon Rumah', siswa.no_telp_siswa) +
-          barisIdent('Sekolah Asal', siswa.sekolah_asal) +
-          barisIdentKosong('Diterima di Sekolah Ini') +
-          barisIdent('Pada Tanggal', formatTanggalIndonesia(siswa.tanggal_masuk)) +
-          barisIdent('Di Kelas', siswa.kelas_masuk) +
-          '</tbody></table>' +
+          // Judul
+          '<div class="idk-judul"><div class="idk-judul__t">KETERANGAN TENTANG PESERTA DIDIK</div>' +
+          '<div class="idk-judul__n">NIS <b>' + escapeHtml(siswa.nis || '—') + '</b> &nbsp;|&nbsp; NISN <b>' + escapeHtml(siswa.nisn || '—') + '</b></div></div>' +
 
-          '<div class="rapor-cetak__bar rapor-cetak__bar--sub">B. DATA ORANG TUA</div>' +
-          '<table class="ident-table"><tbody>' +
-          barisIdent('Nama Ayah', siswa.nama_ayah) +
-          barisIdent('Nama Ibu', siswa.nama_ibu) +
-          barisIdent('Alamat Orang Tua', siswa.alamat_ortu) +
-          barisIdent('Nomor Telepon Rumah', siswa.no_telp_ortu) +
-          barisIdent('Pekerjaan Ayah', siswa.pekerjaan_ayah) +
-          barisIdent('Pekerjaan Ibu', siswa.pekerjaan_ibu) +
-          '</tbody></table>' +
+          // A. Identitas Peserta Didik
+          '<div class="idk-sec"><h4>A. IDENTITAS PESERTA DIDIK</h4><div class="idk-kv">' +
+          kvIdent('Nama Peserta Didik', siswa.nama, true) +
+          kvIdent('NIS', siswa.nis) +
+          kvIdent('NISN', siswa.nisn) +
+          (detail.nik ? kvIdent('NIK', detail.nik, true) : '') +
+          kvIdent('Tempat, Tanggal Lahir', ttlTampil) +
+          kvIdent('Jenis Kelamin', jenisKelaminTampil) +
+          kvIdent('Agama', siswa.agama) +
+          kvIdent('Status dalam Keluarga', siswa.status_keluarga) +
+          kvIdent('Anak Ke', siswa.anak_ke === null || siswa.anak_ke === undefined ? '' : String(siswa.anak_ke)) +
+          kvIdent('Nomor Telepon Rumah', siswa.no_telp_siswa) +
+          // Format alamat sama dengan Buku Induk (B. Tempat Tinggal): jalan / dusun / RT RW
+          kvIdent('Alamat', siswa.alamat_siswa, true) +
+          kvIdent('Desa / Kelurahan', detail.kelurahan) +
+          kvIdent('Kecamatan', detail.kecamatan) +
+          kvIdent('Kabupaten / Kota', detail.kab_kota) +
+          kvIdent('Provinsi', detail.provinsi) +
+          kvIdent('Kode Pos', detail.kode_pos) +
+          kvIdent('Sekolah Asal', siswa.sekolah_asal, true) +
+          '<div class="idk-sub">Diterima di Sekolah Ini</div>' +
+          kvIdent('Pada Tanggal', formatTanggalIndonesia(siswa.tanggal_masuk)) +
+          kvIdent('Di Kelas', siswa.kelas_masuk) +
+          '</div></div>' +
 
-          '<div class="rapor-cetak__bar rapor-cetak__bar--sub">C. DATA WALI</div>' +
-          '<table class="ident-table"><tbody>' +
-          barisIdent('Nama Wali', siswa.nama_wali) +
-          (detail.wali_hubungan ? barisIdent('Hubungan dengan Siswa', detail.wali_hubungan) : '') +
-          barisIdent('Alamat Wali', siswa.alamat_wali) +
-          barisIdent('Nomor Telepon Rumah', siswa.no_telp_wali) +
-          barisIdent('Pekerjaan Wali', siswa.pekerjaan_wali) +
-          '</tbody></table>' +
+          // B. Data Orang Tua
+          '<div class="idk-sec"><h4>B. DATA ORANG TUA</h4><div class="idk-kv">' +
+          kvIdent('Nama Ayah', siswa.nama_ayah) +
+          kvIdent('Nama Ibu', siswa.nama_ibu) +
+          kvIdent('Pekerjaan Ayah', siswa.pekerjaan_ayah) +
+          kvIdent('Pekerjaan Ibu', siswa.pekerjaan_ibu) +
+          kvIdent('Alamat Orang Tua', siswa.alamat_ortu, true) +
+          kvIdent('Nomor Telepon Rumah', siswa.no_telp_ortu, true) +
+          '</div></div>' +
 
-          '<div class="rapor-cetak__footer">' +
-          '<div class="ident-footer-row">' +
-          '<div class="ident-photo-box" style="overflow:hidden;padding:0;">' + (detail.foto ? '<img src="' + detail.foto + '" alt="Foto" style="width:100%;height:100%;object-fit:cover;">' : 'Foto<br>3&times;4') + '</div>' +
-          '<div class="ident-footer-ttd"><div class="rapor-cetak__footer-date">' + escapeHtml(NAMA_KOTA_TTD) + ', ' + (TANGGAL_IDENTITAS_CETAK ? escapeHtml(TANGGAL_IDENTITAS_CETAK) : '…........' + escapeHtml(tahunAkhir)) + '</div><div>Kepala Sekolah</div>' + ruangTtdKepalaSekolah(profilSekolah, 'rapor') + '<div><strong>' + escapeHtml(NAMA_KEPALA_SEKOLAH) + '</strong></div></div>' +
-          '</div>' +
-          '</div>' +
+          // C. Data Wali
+          '<div class="idk-sec"><h4>C. DATA WALI</h4><div class="idk-kv">' +
+          kvIdent('Nama Wali', siswa.nama_wali) +
+          (detail.wali_hubungan ? kvIdent('Hubungan dengan Siswa', detail.wali_hubungan) : kvIdent('Pekerjaan Wali', siswa.pekerjaan_wali)) +
+          (detail.wali_hubungan ? kvIdent('Pekerjaan Wali', siswa.pekerjaan_wali) : '') +
+          kvIdent('Nomor Telepon Rumah', siswa.no_telp_wali) +
+          kvIdent('Alamat Wali', siswa.alamat_wali, true) +
+          '</div></div>' +
 
+          // Foto 3x4 (kiri) + tanda tangan Kepala Sekolah (kanan), posisi di tengah halaman
+          '<div class="idk-foot">' +
+          '<div class="idk-foto' + (detail.foto ? '' : ' idk-foto--kosong') + '">' +
+          (detail.foto ? '<img src="' + detail.foto + '" alt="Foto">' : 'Tempel foto<br>3 &times; 4') + '</div>' +
+          '<div class="idk-ttd__in">' +
+          '<div>' + escapeHtml(NAMA_KOTA_TTD) + ', ' + tanggalTtd + '</div><div>Kepala Sekolah,</div>' +
+          ruangTtdKepalaSekolah(profilSekolah, 'rapor') +
+          '<div><strong><u>' + escapeHtml(NAMA_KEPALA_SEKOLAH) + '</u></strong></div>' +
+          (profilSekolah.nip_kepala_sekolah ? '<div>NIP. ' + escapeHtml(profilSekolah.nip_kepala_sekolah) + '</div>' : '') +
+          '</div></div>' +
           '</div>'
         );
       }

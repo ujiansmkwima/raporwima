@@ -1989,6 +1989,129 @@ a { color: inherit; text-decoration: none; }
   font-size: 11.5px;
 }
 
+/* ---------- Cetak Identitas gaya Buku Induk, tema hijau cover rapor ----------
+   Modifier .rapor-cetak--bi dipakai kartu "Keterangan Tentang Peserta Didik".
+   Struktur meniru cetak Buku Induk (kop sekolah, judul pil, kartu foto +
+   ringkasan, judul bagian bergaris kiri, isian 2 kolom bergaris titik),
+   tetapi memakai palet hijau yang sama dengan cover rapor (--cv-*). */
+.rapor-cetak--bi {
+  --bi-dark: #14532d;
+  --bi-main: #1f7a45;
+  --bi-soft: #cdeedb;
+  --bi-card: #eef9f2;
+  --bi-line: #c6e6d3;
+  --bi-muted: #4a6b58;
+  font-family: "Segoe UI", Calibri, Arial, Helvetica, sans-serif;
+  font-size: 11pt;
+  line-height: 1.45;
+  color: #000;
+  padding: 14px 20px;
+}
+.rapor-cetak--bi,
+.rapor-cetak--bi * {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* Kop sekolah */
+.idk-kop {
+  display: flex; align-items: center; gap: 14px;
+  padding-bottom: 7px; margin-bottom: 8px; position: relative;
+  border-bottom: 2.5px solid var(--bi-dark);
+}
+.idk-kop::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -6px;
+  border-bottom: .8px solid var(--bi-main);
+}
+.idk-kop img, .idk-kop__sp { width: 58px; height: 58px; flex: 0 0 58px; }
+.idk-kop img { object-fit: contain; }
+.idk-kop__tx { flex: 1; text-align: center; }
+.idk-kop__nm { font-size: 15pt; font-weight: 800; letter-spacing: .5px; color: var(--bi-dark); }
+.idk-kop__al { font-size: 8.5pt; margin-top: 2px; color: #000; }
+
+/* Judul */
+.idk-judul { text-align: center; margin: 12px 0 8px; }
+.idk-judul__t {
+  display: inline-block; background: var(--bi-dark); color: #fff;
+  font-weight: 800; font-size: 14pt; letter-spacing: 2.5px;
+  padding: 5px 28px; border-radius: 3px;
+}
+.idk-judul__n { margin-top: 6px; font-size: 11pt; color: #000; }
+
+/* Kartu foto + ringkasan */
+.idk-kartu {
+  display: flex; align-items: center; gap: 16px;
+  border: 1px solid var(--bi-line); border-radius: 6px;
+  padding: 8px 14px; background: rgba(238, 249, 242, .78); margin-bottom: 2px;
+}
+.idk-fw { width: 29mm; flex: 0 0 29mm; text-align: center; }
+.idk-foto {
+  width: 27mm; height: 36mm; margin: 0 auto;
+  border: 1px solid var(--bi-muted); background: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11pt; color: #000; line-height: 1.3; text-align: center; overflow: hidden;
+}
+.idk-foto--kosong { border: 1px dashed #8fb59f; }
+.idk-foto img { width: 100%; height: 100%; object-fit: cover; }
+.idk-cap {
+  font-size: 8pt; font-weight: 700; color: var(--bi-dark);
+  margin-top: 5px; text-transform: uppercase; letter-spacing: .4px;
+}
+.idk-ringkas { flex: 1; min-width: 0; }
+.idk-nama {
+  font-size: 14pt; font-weight: 800; color: var(--bi-dark);
+  line-height: 1.2; text-align: center; margin-bottom: 7px;
+}
+.idk-ringkas table { width: 100%; border-collapse: collapse; }
+.idk-ringkas td { padding: 2px 3px; font-size: 9.5pt; vertical-align: top; }
+.idk-ringkas td.l { width: 34%; }
+.idk-ringkas td.c { width: 3%; }
+.idk-ringkas td.v { font-weight: 600; }
+.idk-lencana {
+  display: inline-block; padding: 0 8px; border-radius: 9px;
+  font-size: 8.5pt; font-weight: 700;
+  border: 1px solid var(--bi-main); color: var(--bi-dark); background: #fff;
+}
+
+/* Bagian isian */
+.idk-sec { margin-top: 12px; page-break-inside: avoid; break-inside: avoid; }
+.idk-sec h4 {
+  margin: 0 0 4px; font-size: 11pt; font-weight: 800; letter-spacing: .2px;
+  color: #000;
+  border-left: 4px solid var(--bi-main); border-bottom: 1.5px solid var(--bi-main);
+  padding: 1px 0 2px 7px; page-break-after: avoid;
+}
+.idk-kv { display: grid; grid-template-columns: 1fr 1fr; column-gap: 20px; }
+.idk-r {
+  display: flex; gap: 0; padding: 3.2px 0;
+  page-break-inside: avoid; break-inside: avoid;
+}
+.idk-r--full { grid-column: 1 / -1; }
+.idk-l { flex: 0 0 43mm; font-size: 11pt; color: #000; }
+.idk-c { flex: 0 0 4mm; font-size: 11pt; color: #000; }
+.idk-v {
+  flex: 1; min-width: 0; font-weight: 700; font-size: 11pt; color: #000;
+  word-break: break-word; min-height: 1.2em;
+  border-bottom: .6px dotted #000;
+}
+.idk-sub {
+  grid-column: 1 / -1; margin-top: 6px; padding: 2px 0;
+  font-size: 11pt; font-weight: 800; color: #000;
+}
+
+/* Tanda tangan & footer */
+.idk-ttd { display: flex; justify-content: flex-end; margin-top: 12px; page-break-inside: avoid; break-inside: avoid; font-size: 9.5pt; }
+.idk-foot { display: flex; justify-content: center; align-items: flex-end; gap: 6mm; margin-top: 22px; page-break-inside: avoid; break-inside: avoid; font-size: 11pt; color: #000; }
+.idk-foot .idk-foto { margin: 0; flex: 0 0 auto; }
+.idk-ttd__in { text-align: left; min-width: 62mm; }
+.idk-ttd__in .rapor-cetak__ttd-space { width: 100%; position: relative; height: 50px; }
+.idk-ttd__in .rapor-cetak__ttd-space--gambar img { max-height: 48px; }
+.idk-ttd__in .rapor-cetak__ttd-space--gambar img { left: 0; transform: none; max-width: 100%; }
+.idk-ft {
+  margin-top: 10px; padding-top: 4px; border-top: .5px solid var(--bi-line);
+  font-size: 7.5pt; color: var(--bi-muted); display: flex; justify-content: space-between;
+}
+
 /* =====================================================================
    Cetak Cover (HAL 1) & Cetak Identitas Sekolah (HAL 2)
    A4, margin Narrow 12.7mm (sama dengan @page di bawah): area isi
