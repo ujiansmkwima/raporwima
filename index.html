@@ -206,6 +206,14 @@
       mulaiAutoGeser();
     }
 
+    // Gambar ada di Supabase Storage (bucket publik "login-slideshow"); kolom `gambar`
+    // berisi path file. Nilai lama berupa data URL / http tetap dipakai apa adanya.
+    function urlSlide(v) {
+      if (!v) return '';
+      if (/^(data:|https?:)/.test(v)) return v;
+      return supabaseClient.storage.from('login-slideshow').getPublicUrl(v).data.publicUrl;
+    }
+
     function tambahSlide(s) {
       var caption = '';
       if (s.judul || s.deskripsi) {
@@ -216,7 +224,7 @@
       }
       var el = document.createElement('div');
       el.className = 'login-slideshow__slide' + (slideEls.length === 0 ? ' is-active' : '');
-      el.innerHTML = '<img src="' + s.gambar + '" alt="" decoding="async">' + caption;
+      el.innerHTML = '<img src="' + urlSlide(s.gambar) + '" alt="" decoding="async">' + caption;
       track.appendChild(el);
       slideEls.push(el);
 

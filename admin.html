@@ -692,7 +692,17 @@
     // Gambar yang baru dipilih (sudah dikecilkan jadi data URL), belum
     // disimpan ke database sampai tombol "Tambah ke Slideshow" diklik
     // — supaya Judul & Deskripsi bisa diisi dulu sebelum tersimpan.
-    var calonGambarBaru = null;
+    var calonGambarBaru = null; // { blob, preview } — sudah dikompres <= 80 KB, belum diunggah
+
+    // Gambar disimpan di Supabase Storage (bucket publik "login-slideshow",
+    // karena harus tampil sebelum login). Kolom `gambar` hanya berisi PATH file.
+    // Nilai lama berupa data URL (base64) tetap tampil sampai dimigrasi.
+    var BUCKET_SLIDE = 'login-slideshow';
+    function urlSlide(v) {
+      if (!v) return '';
+      if (/^(data:|https?:)/.test(v)) return v;
+      return supabaseClient.storage.from(BUCKET_SLIDE).getPublicUrl(v).data.publicUrl;
+    }
 
     async function muatDanGambar() {
       var res = await supabaseClient.from('login_slideshow').select('*').order('urutan', { ascending: true });
@@ -703,7 +713,7 @@
         : '<div id="slideshowList" style="display:flex;flex-direction:column;gap:10px;max-width:720px;">' +
           list.map(function (s, i) {
             return '<div class="slideshow-item" style="display:flex;gap:12px;border:1px solid var(--border,#e5e7eb);border-radius:8px;padding:10px;">' +
-              '<img src="' + s.gambar + '" alt="" style="width:128px;height:72px;object-fit:cover;border-radius:6px;flex-shrink:0;">' +
+              '<img src="' + urlSlide(s.gambar) + '" alt="" style="width:128px;height:72px;object-fit:cover;border-radius:6px;flex-shrink:0;">' +
               '<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;">' +
                 '<div style="font-size:11.5px;color:var(--ink-soft);">Urutan ke-' + (i + 1) + '</div>' +
                 '<input type="text" class="slide-judul" data-id="' + s.id + '" value="' + escapeHtml(s.judul || '') + '" placeholder="Judul (opsional)" style="font-weight:600;">' +
@@ -732,11 +742,20 @@
           '<div class="field"><label>Judul (opsional)</label><input type="text" id="slideshowNewJudul" placeholder="mis. Prestasi Siswa 2026"></div>' +
           '<div class="field"><label>Deskripsi (opsional)</label><textarea id="slideshowNewDeskripsi" rows="2" placeholder="mis. Juara 1 LKS Tingkat Provinsi"></textarea></div>' +
           '<button type="button" class="btn-small btn-small--primary" id="slideshowNewSubmit" disabled style="align-self:flex-start;"><i data-lucide="upload" style="width:14px;height:14px;"></i> Tambah ke Slideshow</button>' +
-          '<div class="panel-note" style="margin:8px 0 0;padding:0;">Gunakan foto berorientasi landscape/mendatar (mis. 16:9) untuk hasil terbaik. Gambar otomatis dikecilkan &amp; dikompres saat diupload.</div>' +
+          '<div class="panel-note" style="margin:8px 0 0;padding:0;">Gunakan foto berorientasi landscape/mendatar (mis. 16:9) untuk hasil terbaik. Gambar otomatis dikompres menjadi ≤ 80 KB dan disimpan di Supabase Storage.</div>' +
         '</div>' +
+        (list.some(function (s) { return /^data:/.test(s.gambar || ''); })
+          ? '<div class="panel-note" style="margin-top:14px;">Ada gambar lama yang masih tersimpan di database. <button type="button" class="btn-small" id="slideshowMigrasi">Pindahkan ke Storage</button></div>'
+          : '') +
         '<div id="slideshowMsg" style="margin-top:10px;"></div>';
 
       lucide.createIcons();
+      var bMigrasi = document.getElementById('slideshowMigrasi');
+      if (bMigrasi) bMigrasi.addEventListener('click', async function () {
+        if (!confirm('Pindahkan semua gambar lama ke Storage dan kompres ke ≤ 80 KB?')) return;
+        bMigrasi.disabled = true;
+        await migrasiSlideshowKeStorage();
+      });
 
       document.querySelectorAll('.btn-slide-naik').forEach(function (btn) {
         btn.addEventListener('click', function () { tukarUrutan(btn.dataset.id, -1, list); });
@@ -749,8 +768,12 @@
           if (!confirm('Hapus gambar ini dari slideshow?')) return;
           var msg = document.getElementById('slideshowMsg');
           msg.textContent = 'Menghapus...';
+          var baris = list.find(function (x) { return x.id === btn.dataset.id; });
           var del = await supabaseClient.from('login_slideshow').delete().eq('id', btn.dataset.id);
           if (del.error) { msg.textContent = 'Gagal menghapus: ' + del.error.message; return; }
+          if (baris && baris.gambar && !/^(data:|https?:)/.test(baris.gambar)) {
+            try { await supabaseClient.storage.from(BUCKET_SLIDE).remove([baris.gambar]); } catch (e) { /* file yatim tidak fatal */ }
+          }
           muatDanGambar();
         });
       });
@@ -777,10 +800,11 @@
         if (!file) return;
         try {
           msg.textContent = 'Memproses gambar...';
-          calonGambarBaru = await kecilkanGambarSlideshow(file);
-          previewWrap.innerHTML = '<img src="' + calonGambarBaru + '" alt="" style="width:100%;max-width:300px;border-radius:8px;margin:4px 0 2px;display:block;">';
+          var blobKecil = await kecilkanGambarSlideshow(file);
+          calonGambarBaru = { blob: blobKecil, preview: URL.createObjectURL(blobKecil) };
+          previewWrap.innerHTML = '<img src="' + calonGambarBaru.preview + '" alt="" style="width:100%;max-width:300px;border-radius:8px;margin:4px 0 2px;display:block;">';
           submitBtn.disabled = false;
-          msg.textContent = 'Gambar siap — isi Judul/Deskripsi (opsional), lalu klik "Tambah ke Slideshow".';
+          msg.textContent = 'Gambar siap (' + Math.round(blobKecil.size / 1024) + ' KB) — isi Judul/Deskripsi (opsional), lalu klik "Tambah ke Slideshow".';
         } catch (err) {
           msg.textContent = 'Gagal memproses gambar: ' + (err && err.message ? err.message : err);
         }
@@ -793,8 +817,15 @@
         var judul = document.getElementById('slideshowNewJudul').value.trim() || null;
         var deskripsi = document.getElementById('slideshowNewDeskripsi').value.trim() || null;
         var urutanBaru = list.length ? (Math.max.apply(null, list.map(function (s) { return s.urutan; })) + 1) : 0;
-        var ins = await supabaseClient.from('login_slideshow').insert({ gambar: calonGambarBaru, judul: judul, deskripsi: deskripsi, urutan: urutanBaru });
-        if (ins.error) { msg.textContent = 'Gagal menyimpan: ' + ins.error.message; return; }
+        var path = 'slide-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '.jpg';
+        var up = await supabaseClient.storage.from(BUCKET_SLIDE).upload(path, calonGambarBaru.blob, { contentType: 'image/jpeg', cacheControl: '31536000', upsert: false });
+        if (up.error) { msg.textContent = 'Gagal mengunggah gambar: ' + up.error.message + ' (pastikan migrasi_slideshow_storage.sql sudah dijalankan)'; return; }
+        var ins = await supabaseClient.from('login_slideshow').insert({ gambar: path, judul: judul, deskripsi: deskripsi, urutan: urutanBaru });
+        if (ins.error) {
+          try { await supabaseClient.storage.from(BUCKET_SLIDE).remove([path]); } catch (e) { /* abaikan */ }
+          msg.textContent = 'Gagal menyimpan: ' + ins.error.message; return;
+        }
+        calonGambarBaru = null;
         muatDanGambar();
       });
     }
@@ -820,35 +851,67 @@
       muatDanGambar();
     }
 
-    // Mengecilkan & mengompres gambar slideshow di sisi browser sebelum
-    // disimpan sebagai data URL base64 (lebar dibatasi maks 1280px,
-    // diekspor sebagai JPEG kualitas 0.82 supaya ukurannya wajar untuk
-    // disimpan di kolom teks, walau foto asli dari kamera/HP besar).
-    function kecilkanGambarSlideshow(file) {
-      return new Promise(function (resolve, reject) {
-        var reader = new FileReader();
-        reader.onerror = function () { reject(new Error('Gagal membaca file.')); };
-        reader.onload = function () {
-          var img = new Image();
-          img.onerror = function () { reject(new Error('File bukan gambar yang valid.')); };
-          img.onload = function () {
-            var LEBAR_MAKS = 1280;
-            var skala = img.width > LEBAR_MAKS ? (LEBAR_MAKS / img.width) : 1;
-            var w = Math.round(img.width * skala);
-            var h = Math.round(img.height * skala);
-            var canvas = document.createElement('canvas');
-            canvas.width = w;
-            canvas.height = h;
-            var ctx = canvas.getContext('2d');
-            ctx.fillStyle = '#fff';
-            ctx.fillRect(0, 0, w, h);
-            ctx.drawImage(img, 0, 0, w, h);
-            resolve(canvas.toDataURL('image/jpeg', 0.82));
-          };
-          img.src = reader.result;
-        };
-        reader.readAsDataURL(file);
-      });
+    // Mengompres gambar slideshow di browser menjadi JPEG <= 80 KB.
+    // Mulai dari lebar maks 1280 px; kualitas dicari dengan pencarian biner,
+    // bila masih > 80 KB dimensi diperkecil 15% lalu diulang.
+    var SLIDE_MAKS_BYTE = 80 * 1024;
+    function canvasKeBlobSlide(c, q) { return new Promise(function (res) { c.toBlob(res, 'image/jpeg', q); }); }
+    async function kecilkanGambarSlideshow(file) {
+      if (!file || !/^image\//.test(file.type || '')) throw new Error('File bukan gambar. Pilih JPG, PNG, atau WEBP.');
+      var url = URL.createObjectURL(file);
+      try {
+        var img = await new Promise(function (resolve, reject) {
+          var im = new Image();
+          im.onload = function () { resolve(im); };
+          im.onerror = function () { reject(new Error('File bukan gambar yang valid.')); };
+          im.src = url;
+        });
+        var skala = Math.min(1, 1280 / img.naturalWidth, 1280 / img.naturalHeight);
+        var w = Math.max(1, Math.round(img.naturalWidth * skala));
+        var h = Math.max(1, Math.round(img.naturalHeight * skala));
+        for (var tahap = 0; tahap < 10; tahap++) {
+          var c = document.createElement('canvas');
+          c.width = w; c.height = h;
+          var ctx = c.getContext('2d');
+          ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
+          ctx.drawImage(img, 0, 0, w, h);
+          var b = await canvasKeBlobSlide(c, 0.85);
+          if (b && b.size <= SLIDE_MAKS_BYTE) return b;
+          var lo = 0.3, hi = 0.85, terbaik = null;
+          for (var i = 0; i < 7; i++) {
+            var mid = (lo + hi) / 2;
+            b = await canvasKeBlobSlide(c, mid);
+            if (b && b.size <= SLIDE_MAKS_BYTE) { terbaik = b; lo = mid; } else { hi = mid; }
+          }
+          if (terbaik) return terbaik;
+          w = Math.max(1, Math.round(w * 0.85)); h = Math.max(1, Math.round(h * 0.85));
+        }
+        throw new Error('Gambar tidak bisa dikompres sampai 80 KB. Coba gambar lain.');
+      } finally { URL.revokeObjectURL(url); }
+    }
+
+    // Pindahkan gambar lama (base64 di database) ke Storage.
+    async function migrasiSlideshowKeStorage() {
+      var msg = document.getElementById('slideshowMsg');
+      var r = await supabaseClient.from('login_slideshow').select('id, gambar').like('gambar', 'data:%');
+      if (r.error) { msg.textContent = 'Gagal membaca data: ' + r.error.message; return; }
+      var rows = r.data || [], ok = 0, gagal = 0;
+      for (var i = 0; i < rows.length; i++) {
+        msg.textContent = 'Memindahkan ' + (i + 1) + ' / ' + rows.length + '...';
+        try {
+          var blob = await (await fetch(rows[i].gambar)).blob();
+          var kecil = await kecilkanGambarSlideshow(new File([blob], 'x.jpg', { type: blob.type || 'image/jpeg' }));
+          var path = 'slide-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '.jpg';
+          var up = await supabaseClient.storage.from(BUCKET_SLIDE).upload(path, kecil, { contentType: 'image/jpeg', cacheControl: '31536000', upsert: false });
+          if (up.error) throw up.error;
+          var u = await supabaseClient.from('login_slideshow').update({ gambar: path }).eq('id', rows[i].id);
+          if (u.error) { try { await supabaseClient.storage.from(BUCKET_SLIDE).remove([path]); } catch (e2) {} throw u.error; }
+          ok++;
+        } catch (e) { gagal++; }
+      }
+      try { localStorage.removeItem('login_slideshow_cache_v1'); } catch (e) {}
+      msg.textContent = 'Selesai: ' + ok + ' gambar dipindah, ' + gagal + ' gagal.';
+      muatDanGambar();
     }
 
     await muatDanGambar();
