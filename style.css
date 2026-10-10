@@ -1383,7 +1383,7 @@ a { color: inherit; text-decoration: none; }
 }
 
 /* ---------- Cetak Rapor ----------
-   Meniru persis format cetak resmi: header kuning #FFC000, watermark
+   Meniru persis format cetak resmi: header abu-abu muda #E3E5E8, watermark
    logo sekolah di tengah, kotak Kokurikuler/Catatan/Tanggapan, dan
    blok tanda tangan tiga kolom di bagian bawah. */
 .rapor-cetak {
@@ -1569,7 +1569,7 @@ a { color: inherit; text-decoration: none; }
 
 .rapor-cetak__nilai th,
 .rapor-cetak__ekskul th {
-  background: #FFC000;
+  background: #E3E5E8;
   color: #000;
   font-weight: 700;
   text-align: center;
@@ -1652,9 +1652,9 @@ a { color: inherit; text-decoration: none; }
   font-weight: 400 !important;
 }
 
-/* ---- Bar judul kuning (Kokurikuler / Catatan Wali Kelas / dst) ---- */
+/* ---- Bar judul abu-abu muda (Kokurikuler / Catatan Wali Kelas / dst) ---- */
 .rapor-cetak__bar {
-  background: #FFC000;
+  background: #E3E5E8;
   border: 1px solid #000;
   border-bottom: none;
   color: #000;
@@ -1759,7 +1759,7 @@ a { color: inherit; text-decoration: none; }
 }
 
 .rapor-cetak__kehadiran--nts th {
-  background: #FFC000;
+  background: #E3E5E8;
   color: #000;
   font-weight: 700;
   text-align: center;
@@ -1990,224 +1990,145 @@ a { color: inherit; text-decoration: none; }
 }
 
 /* =====================================================================
-   Cetak Cover (HAL 1) & Cetak Data Sekolah (HAL 2)
+   Cetak Cover (HAL 1) & Cetak Identitas Sekolah (HAL 2)
    A4, margin Narrow 12.7mm (sama dengan @page di bawah): area isi
-   184.6mm x 271.6mm. Gaya modern: blok hijau tua dengan gradasi halus,
-   lingkaran logo bergaris emas, kartu isian berpinggiran membulat.
-   Warna mengikuti logo sekolah (hijau tua + emas).
+   184.6mm x 271.6mm. Gaya modern-minimalis bernuansa biru: header logo +
+   nama sekolah rata kiri, judul besar tebal, kartu isian bersudut
+   membulat, ilustrasi gedung di kanan bawah, dan garis dekoratif.
+   Semua elemen diposisikan absolut (mm) mengikuti desain acuan.
    ===================================================================== */
 .cv-preview { overflow-x: auto; padding: 8px 2px 18px; }
 .cv-print-only { display: none; }
 
-/* ---------- Cover ---------- */
-.cv-page {
+.cv-page,
+.ds-page {
+  --cv-navy: #153463;
+  --cv-blue: #234a85;
+  --cv-soft: #cfe0f5;
+  --cv-card: #eef4fc;
+  --cv-line: #c9dbf1;
+  --cv-muted: #4d5f7e;
   position: relative;
   width: 184.6mm;
   max-width: none;
   height: 268mm;
   margin: 0 auto;
   box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
   overflow: hidden;
   background: #fff;
-  color: #111;
-  border: 0.3mm solid #cfd9cc;
-  border-radius: 4mm;
-  box-shadow: 0 2px 16px rgba(15, 23, 42, 0.14);
+  color: var(--cv-navy);
+  font-family: "Plus Jakarta Sans", Arial, sans-serif;
+  border: 0.3mm solid #e3e8ef;
+  box-shadow: 0 2px 16px rgba(15, 23, 42, 0.12);
   page-break-inside: avoid;
   break-inside: avoid;
 }
-.cv-page + .cv-page { margin-top: 24px; }
+.cv-page + .cv-page,
+.ds-page + .ds-page { margin-top: 24px; }
 
-.cv-hero {
-  position: relative;
-  flex: 0 0 auto;
-  height: 76mm;
-  box-sizing: border-box;
-  padding-top: 13mm;
-  overflow: hidden;
-  text-align: center;
-  color: #fff;
-  background: linear-gradient(135deg, #004d27 0%, #006030 55%, #1b8a4a 100%);
-  border-bottom: 1.6mm solid #e3b800;
-}
-.cv-hero::before {
-  content: "";
+/* ---------- Dekorasi bersama ---------- */
+.cv-deco { position: absolute; pointer-events: none; }
+.cv-deco--line  { left: 166mm; top: 7mm;   width: 30mm; height: 1mm;   background: #bcd3f0; border-radius: 1mm;   transform: translate(-50%, -50%) rotate(-45deg); }
+.cv-deco--soft  { left: 171mm; top: 14.5mm; width: 29mm; height: 6.4mm; background: var(--cv-soft); border-radius: 3.2mm; transform: translate(-50%, -50%) rotate(-45deg); }
+.cv-deco--navy  { left: 178mm; top: 10.5mm; width: 20mm; height: 5.6mm; background: var(--cv-blue); border-radius: 2.8mm; transform: translate(-50%, -50%) rotate(-45deg); }
+.cv-deco--corner{ left: 184mm; top: 262mm; width: 62mm; height: 22mm;  background: var(--cv-soft); border-radius: 11mm;  transform: translate(-50%, -50%) rotate(-45deg); opacity: .75; }
+.cv-deco--bar1  { left: 0;      top: 248.6mm; width: 28mm; height: 2.1mm; background: var(--cv-blue); border-radius: 0 1.05mm 1.05mm 0; }
+.cv-deco--bar2  { left: 29.8mm; top: 248.6mm; width: 33mm; height: 2.1mm; background: var(--cv-soft); border-radius: 1.05mm; }
+.cv-deco--arc   { left: 110mm;  top: 155mm;   width: 160mm; height: 160mm; background: #f3f7fd; border-radius: 50%; }
+
+/* ---------- Header: logo + nama sekolah ---------- */
+.cv-brand {
   position: absolute;
-  right: -22mm;
-  top: -26mm;
-  width: 80mm;
-  height: 80mm;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.08);
+  left: 18.9mm; top: 14.4mm;
+  display: flex; align-items: center; gap: 4.8mm;
+  height: 26mm;
 }
-.cv-hero::after {
-  content: "";
-  position: absolute;
-  left: -18mm;
-  bottom: -30mm;
-  width: 70mm;
-  height: 70mm;
-  border-radius: 50%;
-  border: 2.2mm solid rgba(240, 200, 0, 0.55);
-}
-.cv-hero__school {
-  position: relative;
-  z-index: 1;
-  font-size: 11pt;
-  font-weight: 800;
-  letter-spacing: 0.3em;
-  margin-right: -0.3em;
+.cv-logo { display: block; height: 26mm; width: auto; max-width: 28mm; object-fit: contain; }
+.cv-brand__name {
+  max-width: 88mm;
+  font-size: 19pt; font-weight: 700; line-height: 1.16;
+  letter-spacing: 0.01em; color: var(--cv-blue);
 }
 
-.cv-body {
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 16mm 9mm;
-  text-align: center;
-}
-
-.cv-logo-wrap {
-  position: relative;
-  z-index: 2;
-  width: 50mm;
-  height: 50mm;
-  margin-top: -26mm;
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: #fff;
-  border: 1.4mm solid #e3b800;
-  box-shadow: 0 1.5mm 5mm rgba(0, 0, 0, 0.18);
-}
-.cv-logo { display: block; width: 36mm; height: auto; }
-
+/* ---------- Judul ---------- */
+.cv-title { position: absolute; left: 24mm; top: 46mm; }
 .cv-title__main {
-  font-size: 46pt;
-  font-weight: 900;
-  line-height: 1;
-  letter-spacing: 0.28em;
-  margin-right: -0.28em;
-  color: #006030;
+  font-size: 88pt; font-weight: 800; line-height: 1;
+  letter-spacing: -0.01em; color: var(--cv-navy);
 }
 .cv-title__sub {
-  margin-top: 2.5mm;
-  font-size: 20pt;
-  font-weight: 800;
-  letter-spacing: 0.3em;
-  margin-right: -0.3em;
-  color: #1b2b21;
+  margin-top: 1.5mm;
+  font-size: 40pt; font-weight: 800; line-height: 1.1;
+  letter-spacing: 0; color: var(--cv-navy);
 }
+.cv-rule { position: absolute; left: 25mm; top: 99.2mm; width: 115.5mm; height: 0.5mm; background: var(--cv-blue); }
 .cv-pill {
-  display: inline-block;
-  margin-top: 5.5mm;
-  padding: 2.2mm 7mm;
-  border: 0.45mm solid #006030;
-  border-radius: 10mm;
-  font-size: 11pt;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-  color: #006030;
+  position: absolute; left: 23.8mm; top: 102mm;
+  width: 133.5mm; height: 11.8mm; box-sizing: border-box;
+  display: flex; align-items: center; padding-left: 7.5mm;
+  background: var(--cv-soft); border-radius: 6mm;
+  font-size: 14.5pt; font-weight: 700; letter-spacing: 0.09em; color: var(--cv-navy);
 }
 
-.cv-fields { width: 100%; }
-.cv-field + .cv-field { margin-top: 7mm; }
-.cv-field__label {
-  margin-bottom: 2.3mm;
-  font-size: 10pt;
-  font-weight: 800;
-  letter-spacing: 0.16em;
-  color: #006030;
+/* ---------- Kartu isian ---------- */
+.cv-fields {
+  position: absolute; left: 18.9mm; top: 122.9mm;
+  width: 109.6mm; height: 48mm; box-sizing: border-box;
+  padding: 0 6mm;
+  display: flex; flex-direction: column; justify-content: center;
+  background: var(--cv-card); border-radius: 5mm;
 }
+.cv-field { display: flex; align-items: center; gap: 4.6mm; min-height: 20mm; }
+.cv-field + .cv-field { border-top: 0.3mm solid var(--cv-line); }
+.cv-field__icon {
+  flex: 0 0 14.3mm; width: 14.3mm; height: 14.3mm;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%; background: var(--cv-navy);
+}
+.cv-field__icon svg { width: 7.6mm; height: 7.6mm; display: block; }
+.cv-field__text { flex: 1 1 auto; min-width: 0; }
+.cv-field__label { font-size: 10.5pt; font-weight: 500; letter-spacing: 0.08em; color: var(--cv-muted); }
 .cv-field__box {
-  box-sizing: border-box;
-  padding: 4.6mm 6mm;
-  border: 0.4mm solid #bcd6b8;
-  border-left: 2.4mm solid #006030;
-  border-radius: 3mm;
-  background: #f1f8ee;
-  font-size: 17pt;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  line-height: 1.25;
+  margin-top: 0.8mm;
+  font-size: 18pt; font-weight: 800; line-height: 1.15; color: var(--cv-navy);
   overflow-wrap: anywhere;
 }
 
-.cv-foot {
-  flex: 0 0 auto;
-  box-sizing: border-box;
-  padding: 6mm 10mm;
-  text-align: center;
-  color: #fff;
-  background: #004d27;
-  border-top: 1.6mm solid #e3b800;
-}
-.cv-foot__min { font-size: 11pt; font-weight: 700; letter-spacing: 0.08em; line-height: 1.55; }
 
-/* ---------- Data Sekolah ---------- */
-.ds-page {
-  position: relative;
-  width: 184.6mm;
-  max-width: none;
-  margin: 0 auto;
-  box-sizing: border-box;
-  padding: 10mm 12mm 12mm;
-  background: #fff;
-  color: #111;
-  border: 1px solid var(--border-strong, #d8dee6);
-  border-radius: 6px;
-}
-.ds-page + .ds-page { margin-top: 24px; }
+/* ---------- Kaki: logo kementerian ---------- */
+.cv-foot { position: absolute; left: 13mm; top: 225.8mm; display: flex; align-items: center; }
+.cv-foot__logo { display: block; width: 19mm; height: auto; }
+.cv-foot__sep { width: 0.3mm; height: 11mm; margin: 0 4mm 0 4.6mm; background: var(--cv-blue); }
+.cv-foot__min { font-size: 9pt; font-weight: 500; letter-spacing: 0.04em; line-height: 1.55; color: var(--cv-navy); }
 
-.ds-head {
-  display: flex;
-  align-items: center;
-  gap: 6mm;
-  margin-bottom: 8mm;
-  padding: 6mm 8mm;
-  border-radius: 4mm;
-  border-bottom: 1.6mm solid #e3b800;
-  color: #fff;
-  background: linear-gradient(135deg, #004d27 0%, #006030 60%, #1b8a4a 100%);
+/* ---------- Identitas Sekolah (HAL 2) ---------- */
+.ds-logo-wrap { display: none; }
+.ds-title { position: absolute; left: 24mm; top: 46mm; right: 20mm; }
+.ds-title__main {
+  font-size: 40pt; font-weight: 800; line-height: 1.05; letter-spacing: -0.01em; color: var(--cv-navy);
 }
-.ds-logo-wrap {
-  flex: 0 0 auto;
-  width: 25mm;
-  height: 25mm;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: #fff;
+.ds-title__sub {
+  margin-top: 2mm; font-size: 14pt; font-weight: 800; letter-spacing: 0.04em; color: var(--cv-blue);
 }
-.ds-logo { display: block; width: 19mm; height: auto; }
-.ds-head__t1 { font-size: 16pt; font-weight: 900; letter-spacing: 0.14em; }
-.ds-head__t2 { margin-top: 1.5mm; font-size: 10.5pt; font-weight: 600; letter-spacing: 0.05em; }
-
-.ds-section {
-  margin-bottom: 3mm;
-  padding: 2.4mm 4mm;
-  border-left: 1.6mm solid #006030;
-  border-radius: 0 2mm 2mm 0;
-  background: #f1f8ee;
-  font-size: 10.5pt;
-  font-weight: 800;
-  letter-spacing: 0.14em;
-  color: #006030;
+.ds-rule { position: absolute; left: 25mm; top: 80mm; width: 115.5mm; height: 0.5mm; background: var(--cv-blue); }
+.ds-pill {
+  position: absolute; left: 23.8mm; top: 83mm;
+  width: 133.5mm; height: 11.8mm; box-sizing: border-box;
+  display: flex; align-items: center; padding-left: 7.5mm;
+  background: var(--cv-soft); border-radius: 6mm;
+  font-size: 13pt; font-weight: 700; letter-spacing: 0.09em; color: var(--cv-navy);
+}
+.ds-card {
+  position: absolute; left: 18.9mm; top: 101mm; right: 18.9mm;
+  box-sizing: border-box; padding: 3mm 8mm;
+  background: var(--cv-card); border-radius: 5mm;
 }
 .ds-table { width: 100%; border-collapse: collapse; }
-.ds-table td { padding: 3.4mm 3mm; vertical-align: top; font-size: 12pt; line-height: 1.4; }
-.ds-table tr:nth-child(odd) td { background: #f7faf5; }
-.ds-table tr + tr td { border-top: 0.25mm solid #dfe8dc; }
-.ds-k { width: 50mm; color: #006030; font-weight: 700; white-space: nowrap; }
-.ds-c { width: 6mm; text-align: center; color: #3a4a40; }
-.ds-v { font-weight: 700; color: #111; overflow-wrap: anywhere; }
+.ds-table td { padding: 2.6mm 0; vertical-align: top; font-size: 11pt; line-height: 1.4; }
+.ds-table tr + tr td { border-top: 0.3mm solid var(--cv-line); }
+.ds-k { width: 46mm; color: var(--cv-muted); font-weight: 500; white-space: nowrap; }
+.ds-c { width: 6mm; text-align: center; color: var(--cv-muted); }
+.ds-v { font-weight: 800; color: var(--cv-navy); overflow-wrap: anywhere; }
 
 /* Saat mencetak (window.print()): sembunyikan sidebar, topbar, dan semua
    kontrol interaktif (tombol, dropdown pemilih siswa), tampilkan hanya
@@ -2322,10 +2243,12 @@ a { color: inherit; text-decoration: none; }
     print-color-adjust: exact !important;
     color-adjust: exact !important;
   }
-  .cv-page { margin: 0 !important; box-shadow: none !important; }
+  .cv-page { margin: 0 !important; box-shadow: none !important; border: none !important; }
   .cv-page + .cv-page,
   .ds-page + .ds-page { margin-top: 0 !important; page-break-before: always; break-before: page; }
-  .ds-page { border: none !important; border-radius: 0 !important; padding: 4mm 0 0 !important; }
+  .ds-page { margin: 0 !important; box-shadow: none !important; border: none !important; border-radius: 0 !important; }
+  /* Identitas Sekolah memakai desain penuh halaman: tanpa watermark tambahan. */
+  #cetakDataSekolahPrint:not(:empty)::before { display: none !important; }
 
   .rapor-cetak__nilai,
   .rapor-cetak__ekskul,

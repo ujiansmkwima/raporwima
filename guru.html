@@ -6,7 +6,7 @@
 <title>Dashboard Guru — E-Rapor SMK Widya Mandala Tambak</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=12">
+<link rel="stylesheet" href="style.css?v=15">
 <script src="https://unpkg.com/lucide@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -6830,24 +6830,23 @@
 
       function htmlCover(s) {
         var nama = String(s.nama || '').toUpperCase();
-        var ukuran = nama.length <= 26 ? 17 : (nama.length <= 38 ? 14 : 12);
+        var ukuran = nama.length <= 16 ? 18 : (nama.length <= 22 ? 15 : (nama.length <= 30 ? 12.5 : 10.5));
         return '<div class="cv-page">' +
-          '<div class="cv-hero"><div class="cv-hero__school">' + escapeHtml(NAMA_SEKOLAH) + '</div></div>' +
-          '<div class="cv-body">' +
-            '<div class="cv-logo-wrap"><img class="cv-logo" src="assets/logo.png" alt="Logo sekolah"></div>' +
-            '<div class="cv-title">' +
-              '<div class="cv-title__main">RAPOR</div>' +
-              '<div class="cv-title__sub">PESERTA DIDIK</div>' +
-              '<div class="cv-pill">SEKOLAH MENENGAH KEJURUAN (SMK)</div>' +
-            '</div>' +
-            '<div class="cv-fields">' +
-              '<div class="cv-field"><div class="cv-field__label">NAMA PESERTA DIDIK:</div>' +
-                '<div class="cv-field__box" style="font-size:' + ukuran + 'pt;">' + escapeHtml(nama) + '</div></div>' +
-              '<div class="cv-field"><div class="cv-field__label">NISN:</div>' +
-                '<div class="cv-field__box">' + escapeHtml(nisnMap[s.id] || '-') + '</div></div>' +
-            '</div>' +
+          '<div class="cv-deco cv-deco--line"></div><div class="cv-deco cv-deco--soft"></div><div class="cv-deco cv-deco--navy"></div>' +
+          '<div class="cv-deco cv-deco--corner"></div>' +
+          '<div class="cv-brand"><img class="cv-logo" src="assets/logo.png" alt="Logo sekolah"><div class="cv-brand__name">' + escapeHtml(NAMA_SEKOLAH) + '</div></div>' +
+          '<div class="cv-title"><div class="cv-title__main">RAPOR</div><div class="cv-title__sub">PESERTA DIDIK</div></div>' +
+          '<div class="cv-rule"></div>' +
+          '<div class="cv-pill">SEKOLAH MENENGAH KEJURUAN (SMK)</div>' +
+          '<div class="cv-fields">' +
+            '<div class="cv-field"><div class="cv-field__icon"><svg viewBox="0 0 24 24" fill="#fff"><circle cx="12" cy="8" r="4.2"/><path d="M3.8 21c0-4.4 3.6-7.4 8.2-7.4s8.2 3 8.2 7.4z"/></svg></div><div class="cv-field__text"><div class="cv-field__label">NAMA PESERTA DIDIK</div>' +
+              '<div class="cv-field__box" style="font-size:' + ukuran + 'pt;">' + escapeHtml(nama) + '</div></div></div>' +
+            '<div class="cv-field"><div class="cv-field__icon"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4.5" width="19" height="15" rx="2.6"/><circle cx="8.3" cy="10.6" r="2" fill="#fff" stroke="none"/><path d="M4.9 16.4c.4-1.7 1.7-2.5 3.4-2.5s3 .8 3.4 2.5M14 9.8h5M14 13.4h5" /></svg></div><div class="cv-field__text"><div class="cv-field__label">NISN</div>' +
+              '<div class="cv-field__box">' + escapeHtml(nisnMap[s.id] || '-') + '</div></div></div>' +
           '</div>' +
-          '<div class="cv-foot"><div class="cv-foot__min">' + escapeHtml(TEKS_KEMENTERIAN_1) + '<br>' + escapeHtml(TEKS_KEMENTERIAN_2) + '</div></div>' +
+          '<div class="cv-foot"><img class="cv-foot__logo" src="assets/logo-kemdikdasmen.png" alt=""><div class="cv-foot__sep"></div>' +
+            '<div class="cv-foot__min">' + escapeHtml(TEKS_KEMENTERIAN_1) + '<br>' + escapeHtml(TEKS_KEMENTERIAN_2) + '</div></div>' +
+          '<div class="cv-deco cv-deco--bar1"></div><div class="cv-deco cv-deco--bar2"></div>' +
         '</div>';
       }
 
@@ -6949,13 +6948,14 @@
 
       function htmlDataSekolah() {
         return '<div class="ds-page">' +
-          '<div class="ds-head">' +
-            '<div class="ds-logo-wrap"><img class="ds-logo" src="assets/logo.png" alt="Logo sekolah"></div>' +
-            '<div><div class="ds-head__t1">RAPOR PESERTA DIDIK</div>' +
-            '<div class="ds-head__t2">SEKOLAH MENENGAH KEJURUAN (SMK)</div></div>' +
-          '</div>' +
-          '<div class="ds-section">IDENTITAS SEKOLAH</div>' +
-          '<table class="ds-table"><tbody>' +
+          '<div class="cv-deco cv-deco--arc" style="top:175mm"></div>' +
+          '<div class="cv-deco cv-deco--line"></div><div class="cv-deco cv-deco--soft"></div><div class="cv-deco cv-deco--navy"></div>' +
+          '<div class="cv-deco cv-deco--corner"></div>' +
+          '<div class="cv-brand"><img class="cv-logo" src="assets/logo.png" alt="Logo sekolah"><div class="cv-brand__name">' + escapeHtml(String(p.nama_sekolah || 'SMK Widya Mandala Tambak').toUpperCase()) + '</div></div>' +
+          '<div class="ds-title"><div class="ds-title__main">IDENTITAS<br>SEKOLAH</div></div>' +
+          '<div class="ds-rule"></div>' +
+          '<div class="ds-pill">RAPOR PESERTA DIDIK &middot; SMK</div>' +
+          '<div class="ds-card"><table class="ds-table"><tbody>' +
             baris('Nama Sekolah', String(p.nama_sekolah || '').toUpperCase()) +
             baris('NPSN / NSS', (p.npsn || '-') + ' / ' + (p.nss || '-')) +
             baris('Alamat', p.alamat_sekolah) +
@@ -6965,7 +6965,10 @@
             baris('Provinsi', p.provinsi) +
             baris('Website', p.website) +
             baris('Email', p.email) +
-          '</tbody></table>' +
+          '</tbody></table></div>' +
+          '<div class="cv-foot"><img class="cv-foot__logo" src="assets/logo-kemdikdasmen.png" alt=""><div class="cv-foot__sep"></div>' +
+            '<div class="cv-foot__min">KEMENTERIAN PENDIDIKAN DASAR DAN MENENGAH<br>REPUBLIK INDONESIA</div></div>' +
+          '<div class="cv-deco cv-deco--bar1"></div><div class="cv-deco cv-deco--bar2"></div>' +
         '</div>';
       }
 
