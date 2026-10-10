@@ -1241,10 +1241,11 @@
     wp.getCell('A1').font = { bold: true, size: 14, color: { argb: WARNA.judul } };
     var petunjuk = [
       '1. Isi data pada sheet "Data Siswa". Jangan mengubah, menghapus, atau menambah kolom, dan jangan mengubah tulisan pada baris judul kolom.',
-      '2. Siswa dicocokkan lewat NIS (cadangan NISN). NIS/NISN tidak bisa diubah lewat impor.',
+      '2. Siswa dicocokkan lewat NIS (cadangan NISN). NIS tidak bisa diubah lewat impor. NISN hanya bisa diperbarui oleh admin (siswa dicocokkan lewat NIS; bila NISN lama sudah ada, centang "Timpa data yang sudah ada").',
       '3. Kolom berjudul ORANYE = isian pokok yang dihitung dalam "Kelengkapan Data". Kolom biru = isian tambahan.',
       '4. Tanggal ditulis dd/mm/yyyy (contoh 17/05/2008). Isian berdropdown dipilih dari daftar yang tersedia.',
       '5. Sel yang dibiarkan kosong TIDAK menghapus data yang sudah ada di sistem.',
+      '5a. Saat impor, isian yang di sistem sudah terisi TIDAK ditimpa (hanya mengisi yang masih kosong). Centang "Timpa data yang sudah ada" di halaman Impor bila isian di Excel ingin menggantikan data lama.',
       '5b. Kolom Kelas (khusus admin): siswa baru, atau siswa yang belum punya kelas di tahun ajaran aktif, akan otomatis ditempatkan ke kelas yang dipilih. Siswa yang sudah punya kelas tidak dipindahkan.',
       '6. Setelah selesai, simpan file, lalu di aplikasi pilih menu Excel → Impor Excel dan periksa ringkasannya sebelum menekan "Terapkan".'
     ];
@@ -1419,7 +1420,7 @@
     var H = headerExcel();
     var byNis = {}, byNisn = {};
     semuaSiswa.forEach(function (s) { if (s.nis) byNis[String(s.nis).trim()] = s; if (s.nisn) byNisn[String(s.nisn).trim()] = s; });
-    var hasil = { cocok: [], tidakDitemukan: [], baru: [], penempatan: [], totalBaris: baris.length, tambahBaru: !!o.tambahBaru, peringatan: [] };
+    var hasil = { cocok: [], tidakDitemukan: [], baru: [], penempatan: [], totalBaris: baris.length, tambahBaru: !!o.tambahBaru, timpa: !!o.timpa, dilewatiTerisi: 0, menimpa: 0, peringatan: [] };
     var kelasByNama = {};
     (o.kelasList || []).forEach(function (k) { kelasByNama[String(k.nama).trim().toLowerCase()] = k; });
     // Cari kelas dari kolom Kelas; mengembalikan objek kelas atau null (dan memberi peringatan bila tak dikenal)
@@ -1453,13 +1454,25 @@
       var nama = String(r['Nama Lengkap'] === undefined ? '' : r['Nama Lengkap']).trim();
       var s = (nis && byNis[nis]) || (nisn && byNisn[nisn]);
       var si = {}, de = {}, n = 0;
+      var cocokLewatNis = !!(nis && byNis[nis]);
       H.forEach(function (h) {
         var f = h.f;
-        if (s && (f.k === 'nis' || f.k === 'nisn' || f.k === 'status')) return; // identitas & status tidak diubah lewat impor
+        // NIS (kunci pencocokan) & status tidak diubah lewat impor. NISN boleh diperbarui
+        // oleh admin bila siswa dicocokkan lewat NIS (mengikuti aturan timpa seperti isian lain).
+        if (s && (f.k === 'nis' || f.k === 'status')) return;
+        if (s && f.k === 'nisn' && !(o.tempatkan && cocokLewatNis)) return;
         if (!s && f.k === 'status') return;
         var out = ambil(r, h);
         if (out === undefined) return;
-        if (s && String(s[f.k] === null || s[f.k] === undefined ? '' : s[f.k]) === String(out)) return; // sama
+        if (s) {
+          var lama = (s[f.k] === null || s[f.k] === undefined) ? '' : String(s[f.k]);
+          if (lama === String(out)) return; // sama
+          if (lama.trim() !== '') {
+            // Sudah terisi di sistem: hanya ditimpa bila "Timpa data yang sudah ada" dicentang.
+            if (!o.timpa) { hasil.dilewatiTerisi++; return; }
+            hasil.menimpa++;
+          }
+        }
         (f.t === 'siswa' ? si : de)[f.k] = out; n++;
       });
       if (s) {
@@ -1705,7 +1718,9 @@
       '<div class="section-title">2. Impor</div>' +
       '<div class="toolbar" style="align-items:center;">' +
       '<label class="btn-small" style="cursor:pointer;">⬆ Pilih File Excel untuk Diimpor<input type="file" id="exFile" accept=".xlsx,.xls" style="display:none;"></label>' +
-      (opts.admin ? '<label style="display:flex;gap:6px;align-items:center;font-size:12.5px;"><input type="checkbox" id="exBaru"> tambahkan siswa baru bila NIS belum ada</label>' : '') + '</div>' +
+      (opts.admin ? '<label style="display:flex;gap:6px;align-items:center;font-size:12.5px;"><input type="checkbox" id="exBaru"> tambahkan siswa baru bila NIS belum ada</label>' : '') +
+      '<label style="display:flex;gap:6px;align-items:center;font-size:12.5px;"><input type="checkbox" id="exTimpa"> timpa data yang sudah ada</label></div>' +
+      '<div class="panel-note" style="margin-top:-4px;">Tanpa dicentang, impor hanya mengisi isian yang masih kosong; data yang sudah terisi dibiarkan. Centang "timpa data yang sudah ada" bila isian di Excel harus menggantikan data lama (sel Excel yang kosong tetap tidak menghapus apa pun).</div>' +
       '<div id="exHasil"></div>';
     var hasil = root.querySelector('#exHasil');
 
@@ -1735,15 +1750,18 @@
     });
 
     var fileEl = root.querySelector('#exFile');
-    fileEl.addEventListener('change', async function () {
-      if (!fileEl.files[0]) return;
+    var fileTerpilih = null;
+    async function prosesFile() {
+      if (!fileTerpilih) return;
       hasil.innerHTML = '<div class="panel-note">Membaca file...</div>';
       try {
         var semua = await BI.muatSiswa({ kelasId: opts.kelasId || null });
         var tambahBaru = !!(root.querySelector('#exBaru') || {}).checked;
-        var h = await BI.bacaExcel(fileEl.files[0], semua, { tambahBaru: tambahBaru, tempatkan: !!opts.admin, kelasList: opts.admin ? await BI.muatKelas() : [] });
+        var timpa = !!(root.querySelector('#exTimpa') || {}).checked;
+        var h = await BI.bacaExcel(fileTerpilih, semua, { tambahBaru: tambahBaru, timpa: timpa, tempatkan: !!opts.admin, kelasList: opts.admin ? await BI.muatKelas() : [] });
         var isian = h.cocok.reduce(function (t, c) { return t + c.jumlah; }, 0);
         hasil.innerHTML = '<div class="import-summary">' + h.totalBaris + ' baris berisi data dibaca\n' + h.cocok.length + ' siswa punya perubahan (' + isian + ' isian)\n' +
+          (h.timpa ? (h.menimpa ? h.menimpa + ' isian akan MENIMPA data yang sudah ada\n' : '') : (h.dilewatiTerisi ? h.dilewatiTerisi + ' isian dilewati karena data sudah terisi (centang "timpa data yang sudah ada" bila ingin menggantinya)\n' : '')) +
           (h.baru.length ? h.baru.length + ' siswa baru akan ditambahkan\n' : '') +
           (h.penempatan.length || h.baru.some(function (x) { return x.kelasId; }) ? (h.penempatan.length + h.baru.filter(function (x) { return x.kelasId; }).length) + ' siswa akan ditempatkan ke kelas (tahun ajaran aktif)\n' : '') +
           (h.tidakDitemukan.length ? h.tidakDitemukan.length + ' baris tidak cocok dengan siswa manapun (periksa NIS' + (opts.admin ? ', atau centang "tambahkan siswa baru"' : '') + '):\n' + esc(h.tidakDitemukan.slice(0, 15).join('\n')) + (h.tidakDitemukan.length > 15 ? '\n...' : '') : 'Semua baris dikenali.') +
@@ -1752,11 +1770,22 @@
         var t = hasil.querySelector('#exTerapkan');
         if (t) t.addEventListener('click', async function () {
           t.disabled = true;
+          fileTerpilih = null;
           var r = await BI.terapkanImpor(h, function (n, tot) { t.textContent = 'Menyimpan ' + n + '/' + tot + '...'; });
           hasil.innerHTML = '<div class="import-summary">Selesai: ' + r.ok + ' siswa diperbarui' + (r.baru ? ', ' + r.baru + ' siswa baru ditambahkan' : '') + (r.ditempatkan ? ', ' + r.ditempatkan + ' siswa ditempatkan ke kelas' : '') + '.' + (r.gagal.length ? '\nGagal ' + r.gagal.length + ':\n' + esc(r.gagal.slice(0, 10).join('\n')) : '') + '</div>';
         });
       } catch (e) { hasil.innerHTML = '<div class="import-summary" style="color:var(--danger);">Gagal membaca file: ' + esc(pesanError(e)) + '</div>'; }
+    }
+    fileEl.addEventListener('change', function () {
+      if (!fileEl.files[0]) return;
+      fileTerpilih = fileEl.files[0];
       fileEl.value = '';
+      prosesFile();
+    });
+    // Ubah centang -> pratinjau dihitung ulang dari file yang sama (tanpa pilih file lagi).
+    ['#exTimpa', '#exBaru'].forEach(function (id) {
+      var el = root.querySelector(id);
+      if (el) el.addEventListener('change', prosesFile);
     });
   };
 

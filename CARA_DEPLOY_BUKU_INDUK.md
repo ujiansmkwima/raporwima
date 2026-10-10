@@ -35,6 +35,8 @@ Pasang: jalankan ulang migrasi_buku_induk.sql, lalu upload bukuinduk-core.js.
 Menu **Excel** (admin & wali kelas): Template Isian (berisi daftar siswa), Template Kosong (admin, siswa baru), Data Saat Ini, lalu Impor.
 File Excel berformat tabel bergaris: judul, pita bagian, header (oranye = isian pokok), dropdown pilihan, filter, baris beku, sheet Petunjuk.
 Impor mencocokkan lewat NIS (cadangan NISN), menampilkan ringkasan + peringatan sebelum "Terapkan". Admin bisa mencentang "tambahkan siswa baru bila NIS belum ada".
+
+Opsi **"timpa data yang sudah ada"**: bila TIDAK dicentang (bawaan), impor hanya mengisi isian yang masih kosong dan isian yang sudah terisi di sistem dibiarkan (ringkasan menampilkan jumlah yang dilewati). Bila dicentang, isian di Excel menggantikan data lama. Sel Excel yang kosong tidak pernah menghapus data. Mengubah centang langsung menghitung ulang pratinjau dari file yang sama.
 Butuh library ExcelJS dari cdnjs (sudah ditambahkan di bukuinduk-admin.html & bukuinduk-guru.html).
 
 ## Admin E-Rapor: Tarik dari Buku Induk
@@ -42,3 +44,6 @@ admin.html → menu **Tarik dari Buku Induk**: menarik nilai & kehadiran semeste
 
 ## Penempatan kelas lewat impor Excel (admin)
 Kolom **Kelas** di template dibaca saat impor: siswa baru, atau siswa yang belum punya kelas di tahun ajaran aktif, otomatis ditempatkan (tabel siswa_kelas). Siswa yang sudah punya kelas tidak dipindah (muncul peringatan). Nama kelas harus sama dengan data Kelas E-Rapor; di template kolom ini berupa dropdown.
+
+
+Catatan NISN: NIS tidak bisa diubah lewat impor (dipakai sebagai kunci pencocokan). NISN bisa diperbarui oleh admin bila siswa dicocokkan lewat NIS; jika NISN lama sudah terisi, centang "timpa data yang sudah ada". Wali kelas tidak bisa mengubah NISN lewat impor.
