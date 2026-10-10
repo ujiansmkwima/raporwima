@@ -1989,6 +1989,141 @@ a { color: inherit; text-decoration: none; }
   font-size: 11.5px;
 }
 
+/* =====================================================================
+   Cetak Cover (HAL 1) & Cetak Data Sekolah (HAL 2)
+   Ukuran kertas A4, margin Narrow 12.7mm (sama dengan @page di bawah):
+   area isi = 184.6mm x 271.6mm. Warna mengikuti logo sekolah (hijau
+   tua + emas), dengan blok warna dibuat sangat tipis supaya hemat tinta.
+   ===================================================================== */
+.cv-preview { overflow-x: auto; padding: 8px 2px 18px; }
+.cv-print-only { display: none; }
+
+/* Ornamen garis-berlian pemisah judul */
+.cv-orn { display: flex; align-items: center; justify-content: center; gap: 3mm; margin: 4mm 0 0; }
+.cv-orn span { display: block; width: 26mm; height: 0.35mm; background: #d9a400; }
+.cv-orn i { display: block; width: 2.6mm; height: 2.6mm; background: #006030; transform: rotate(45deg); }
+
+/* ---------- Cover ---------- */
+.cv-page {
+  position: relative;
+  width: 184.6mm;
+  max-width: none;
+  height: 268mm;
+  margin: 0 auto;
+  box-sizing: border-box;
+  padding: 2.2mm;
+  border: 1.1mm solid #006030;
+  background: #fff;
+  color: #111;
+  box-shadow: 0 2px 16px rgba(15, 23, 42, 0.14);
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+.cv-page + .cv-page { margin-top: 24px; }
+
+.cv-inner {
+  height: 100%;
+  box-sizing: border-box;
+  border: 0.3mm solid #d9a400;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13mm 16mm 11mm;
+  text-align: center;
+}
+
+.cv-logo { display: block; width: 54mm; height: auto; }
+
+.cv-title__main {
+  font-size: 46pt;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0.28em;
+  margin-right: -0.28em;
+  color: #006030;
+}
+.cv-title__sub {
+  margin-top: 2.5mm;
+  font-size: 20pt;
+  font-weight: 800;
+  letter-spacing: 0.3em;
+  margin-right: -0.3em;
+  color: #1b2b21;
+}
+.cv-title__edu {
+  margin-top: 4.5mm;
+  font-size: 12.5pt;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.55;
+  color: #1b2b21;
+}
+
+.cv-fields { width: 100%; display: flex; flex-direction: column; gap: 9mm; }
+.cv-field__label {
+  margin-bottom: 2.5mm;
+  font-size: 10.5pt;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: #3a4a40;
+}
+.cv-field__box {
+  box-sizing: border-box;
+  padding: 5mm 6mm;
+  border: 0.5mm solid #006030;
+  border-left-width: 2.4mm;
+  border-radius: 2mm;
+  background: #f4f9f1;
+  font-size: 17pt;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.cv-foot { width: 100%; }
+.cv-foot__school { font-size: 10pt; font-weight: 700; letter-spacing: 0.14em; color: #006030; }
+.cv-foot__line { width: 60%; height: 0; border-top: 0.3mm solid #c9d3c6; margin: 3mm auto; }
+.cv-foot__min { font-size: 11.5pt; font-weight: 700; letter-spacing: 0.06em; line-height: 1.55; color: #1b2b21; }
+
+/* ---------- Data Sekolah ---------- */
+.ds-page {
+  position: relative;
+  width: 184.6mm;
+  max-width: none;
+  margin: 0 auto;
+  box-sizing: border-box;
+  padding: 10mm 12mm 12mm;
+  background: #fff;
+  color: #111;
+  border: 1px solid var(--border-strong, #d8dee6);
+  border-radius: 6px;
+}
+.ds-page + .ds-page { margin-top: 24px; }
+
+.ds-head { text-align: center; margin-bottom: 9mm; }
+.ds-logo { display: block; width: 26mm; height: auto; margin: 0 auto 4mm; }
+.ds-head__t1 { font-size: 17pt; font-weight: 900; letter-spacing: 0.16em; margin-right: -0.16em; color: #006030; }
+.ds-head__t2 { margin-top: 1.5mm; font-size: 11.5pt; font-weight: 700; letter-spacing: 0.06em; color: #1b2b21; }
+
+.ds-section {
+  margin-bottom: 4mm;
+  padding: 2.4mm 4mm;
+  border-left: 1.6mm solid #006030;
+  background: #f4f9f1;
+  font-size: 10.5pt;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: #006030;
+}
+.ds-table { width: 100%; border-collapse: collapse; }
+.ds-table td { padding: 3.2mm 1mm; vertical-align: top; border-bottom: 0.3mm dotted #b8c4b6; font-size: 12pt; line-height: 1.4; }
+.ds-k { width: 50mm; color: #3a4a40; font-weight: 600; white-space: nowrap; }
+.ds-c { width: 6mm; text-align: center; color: #3a4a40; }
+.ds-v { font-weight: 700; color: #111; overflow-wrap: anywhere; }
+
+
 /* Saat mencetak (window.print()): sembunyikan sidebar, topbar, dan semua
    kontrol interaktif (tombol, dropdown pemilih siswa), tampilkan hanya
    kartu rapor siap cetak (#cetakRaporArea .rapor-cetak), dibuat semirip
@@ -2067,7 +2202,8 @@ a { color: inherit; text-decoration: none; }
   #cetakRaporArea:not(:empty)::before,
   #cetakIdentitasArea:not(:empty)::before,
   #cetakPklArea:not(:empty)::before,
-  #cetakNtsArea:not(:empty)::before {
+  #cetakNtsArea:not(:empty)::before,
+  #cetakDataSekolahPrint:not(:empty)::before {
     content: "";
     position: fixed;
     top: 50%;
@@ -2090,6 +2226,21 @@ a { color: inherit; text-decoration: none; }
     background: transparent !important;
     z-index: 1;
   }
+
+  /* Cetak Cover & Data Sekolah: hanya wadah khusus cetak yang tampil;
+     preview di layar disembunyikan lewat .no-print. Tiap halaman mulai
+     di kertas baru. */
+  .cv-print-only { display: block !important; position: relative; z-index: 1; }
+  .cv-preview { overflow: visible; padding: 0; }
+  .cv-page, .cv-page *, .ds-page, .ds-page * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+  .cv-page { margin: 0 !important; box-shadow: none !important; }
+  .cv-page + .cv-page,
+  .ds-page + .ds-page { margin-top: 0 !important; page-break-before: always; break-before: page; }
+  .ds-page { border: none !important; border-radius: 0 !important; padding: 4mm 0 0 !important; }
 
   .rapor-cetak__nilai,
   .rapor-cetak__ekskul,

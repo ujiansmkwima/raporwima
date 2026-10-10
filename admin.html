@@ -555,10 +555,18 @@
 
     content.innerHTML =
       '<div class="panel-head"><div><div class="panel-head__title">Profil Sekolah</div>' +
-      '<div class="panel-head__desc">Data ini dipakai otomatis di kepala Cetak Rapor dan baris tanda tangan Kepala Sekolah — sekali diisi di sini, semua rapor/nilai tengah semester/nilai PKL yang dicetak wali kelas & guru memakai data yang sama.</div></div></div>' +
+      '<div class="panel-head__desc">Data ini dipakai otomatis di kepala Cetak Rapor, Cetak Data Sekolah (HAL 2 rapor) dan baris tanda tangan Kepala Sekolah — sekali diisi di sini, semua rapor/nilai tengah semester/nilai PKL yang dicetak wali kelas & guru memakai data yang sama.</div></div></div>' +
       '<form class="add-form" id="formProfilSekolah" style="flex-direction:column;align-items:stretch;max-width:520px;">' +
       '<div class="field"><label>Nama Sekolah</label><input type="text" id="psNamaSekolah" value="' + escapeHtml(p.nama_sekolah || '') + '" placeholder="SMK Widya Mandala Tambak" required></div>' +
-      '<div class="field"><label>Alamat Sekolah</label><input type="text" id="psAlamatSekolah" value="' + escapeHtml(p.alamat_sekolah || '') + '" placeholder="Jl. ..."></div>' +
+      '<div class="field"><label>Alamat Sekolah (jalan / komplek / RT RW) — tampil di Cetak Data Sekolah</label><input type="text" id="psAlamatSekolah" value="' + escapeHtml(p.alamat_sekolah || '') + '" placeholder="Komplek ..., RT 04/ RW 03 Desa ..."></div>' +
+      '<div class="field"><label>NPSN</label><input type="text" id="psNpsn" value="' + escapeHtml(p.npsn || '') + '" placeholder="69899923"></div>' +
+      '<div class="field"><label>NSS (opsional, kosongkan kalau tidak ada)</label><input type="text" id="psNss" value="' + escapeHtml(p.nss || '') + '"></div>' +
+      '<div class="field"><label>Kelurahan / Desa</label><input type="text" id="psKelurahan" value="' + escapeHtml(p.kelurahan || '') + '" placeholder="Purwodadi"></div>' +
+      '<div class="field"><label>Kecamatan</label><input type="text" id="psKecamatan" value="' + escapeHtml(p.kecamatan || '') + '" placeholder="Kecamatan Tambak"></div>' +
+      '<div class="field"><label>Kota / Kabupaten</label><input type="text" id="psKabKota" value="' + escapeHtml(p.kab_kota || '') + '" placeholder="Kabupaten Banyumas"></div>' +
+      '<div class="field"><label>Provinsi</label><input type="text" id="psProvinsi" value="' + escapeHtml(p.provinsi || '') + '" placeholder="Jawa Tengah"></div>' +
+      '<div class="field"><label>Website</label><input type="text" id="psWebsite" value="' + escapeHtml(p.website || '') + '" placeholder="http://www.contoh.sch.id"></div>' +
+      '<div class="field"><label>Email Sekolah</label><input type="text" id="psEmail" value="' + escapeHtml(p.email || '') + '" placeholder="sekolah@gmail.com"></div>' +
       '<div class="field"><label>Nama Kepala Sekolah</label><input type="text" id="psKepalaSekolah" value="' + escapeHtml(p.kepala_sekolah || '') + '" placeholder="Agung Pambudi, S.E., S. Kom., M.M."></div>' +
       '<div class="field"><label>NIP Kepala Sekolah (opsional)</label><input type="text" id="psNipKepalaSekolah" value="' + escapeHtml(p.nip_kepala_sekolah || '') + '"></div>' +
       '<div class="field"><label>Kota (untuk baris tanda tangan, mis. "Tambak, ....... 2026")</label><input type="text" id="psKotaTtd" value="' + escapeHtml(p.kota_ttd || 'Tambak') + '" placeholder="Tambak"></div>' +
@@ -655,6 +663,14 @@
         singleton: true,
         nama_sekolah: document.getElementById('psNamaSekolah').value.trim() || 'SMK Widya Mandala Tambak',
         alamat_sekolah: document.getElementById('psAlamatSekolah').value.trim() || null,
+        npsn: document.getElementById('psNpsn').value.trim() || null,
+        nss: document.getElementById('psNss').value.trim() || null,
+        kelurahan: document.getElementById('psKelurahan').value.trim() || null,
+        kecamatan: document.getElementById('psKecamatan').value.trim() || null,
+        kab_kota: document.getElementById('psKabKota').value.trim() || null,
+        provinsi: document.getElementById('psProvinsi').value.trim() || null,
+        website: document.getElementById('psWebsite').value.trim() || null,
+        email: document.getElementById('psEmail').value.trim() || null,
         kepala_sekolah: document.getElementById('psKepalaSekolah').value.trim() || null,
         nip_kepala_sekolah: document.getElementById('psNipKepalaSekolah').value.trim() || null,
         kota_ttd: document.getElementById('psKotaTtd').value.trim() || 'Tambak',
@@ -669,7 +685,9 @@
       }, { onConflict: 'singleton' });
 
       if (upd.error) {
-        msg.textContent = 'Gagal menyimpan: ' + upd.error.message;
+        var salahKolom = /column|schema cache/i.test(upd.error.message || '');
+        msg.textContent = 'Gagal menyimpan: ' + upd.error.message +
+          (salahKolom ? ' — jalankan dulu migrasi_profil_sekolah_data_sekolah.sql di Supabase SQL Editor.' : '');
       } else {
         msg.textContent = 'Tersimpan.';
       }

@@ -448,6 +448,31 @@
       // menu Cetak Rapor, skema tombol/preview/cetak sama persis.
       document.getElementById('labelCetak').style.display = '';
       var menuCetakIdentitas = document.getElementById('menuCetakIdentitas');
+
+      // Cetak Cover (HAL 1) & Cetak Data Sekolah (HAL 2) — urutan menu
+      // mengikuti urutan halaman buku rapor: Cover, Data Sekolah, Identitas.
+      var itemCetakCover = document.createElement('a');
+      itemCetakCover.href = '#';
+      itemCetakCover.className = 'menu-item';
+      itemCetakCover.innerHTML = '<i data-lucide="book-marked" class="menu-icon"></i><span class="menu-item__title">Cetak Cover</span><span class="menu-item__sub">' + waliKelas.kelas.nama + '</span>';
+      itemCetakCover.addEventListener('click', function (e) {
+        e.preventDefault();
+        setActiveMenuItem(itemCetakCover);
+        renderCetakCover(waliKelas);
+      });
+      menuCetakIdentitas.appendChild(itemCetakCover);
+
+      var itemCetakDataSekolah = document.createElement('a');
+      itemCetakDataSekolah.href = '#';
+      itemCetakDataSekolah.className = 'menu-item';
+      itemCetakDataSekolah.innerHTML = '<i data-lucide="school" class="menu-icon"></i><span class="menu-item__title">Cetak Data Sekolah</span><span class="menu-item__sub">' + waliKelas.kelas.nama + '</span>';
+      itemCetakDataSekolah.addEventListener('click', function (e) {
+        e.preventDefault();
+        setActiveMenuItem(itemCetakDataSekolah);
+        renderCetakDataSekolah(waliKelas);
+      });
+      menuCetakIdentitas.appendChild(itemCetakDataSekolah);
+
       var itemCetakIdentitas = document.createElement('a');
       itemCetakIdentitas.href = '#';
       itemCetakIdentitas.className = 'menu-item';
@@ -6735,6 +6760,245 @@
       }
 
       renderDaftarSiswa();
+    }
+
+    // ================= WALI KELAS: Cetak Cover & Cetak Data Sekolah =================
+    // HAL 1 (Cover) dan HAL 2 (Identitas/Data Sekolah) buku rapor.
+    //  - Cover: nama & NISN dari data Siswa (tiap siswa 1 halaman).
+    //  - Data Sekolah: dari Profil Sekolah yang diisi Admin (isinya sama
+    //    untuk semua siswa, jadi bisa dicetak 1 halaman atau sebanyak siswa).
+    // Hasil cetak ditaruh di wadah khusus cetak (.cv-print-only) supaya
+    // tampilan Preview di layar tidak ikut terganti/hilang saat mencetak.
+    // Tunggu logo selesai dimuat sebelum jendela cetak dibuka.
+    function tungguGambarCetak(el) {
+      var imgs = Array.prototype.slice.call(el.querySelectorAll('img'));
+      return Promise.all(imgs.map(function (im) {
+        if (im.complete) return null;
+        return new Promise(function (resolve) {
+          im.onload = im.onerror = resolve;
+          setTimeout(resolve, 3000);
+        });
+      }));
+    }
+
+    // Isi wadah cetak -> window.print() -> kosongkan lagi setelah selesai.
+    async function jalankanCetakHalaman(areaId, htmlParts, judul, triggerBtn) {
+      var teksAsliBtn = triggerBtn ? triggerBtn.innerHTML : null;
+      if (triggerBtn) { triggerBtn.disabled = true; triggerBtn.innerHTML = 'Menyiapkan...'; }
+      var judulAsli = document.title;
+      try {
+        var area = document.getElementById(areaId);
+        area.innerHTML = htmlParts.join('');
+        document.title = judul;
+        await tungguGambarCetak(area);
+        await new Promise(function (resolve) { setTimeout(resolve, 150); });
+        var bersihkan = function () {
+          area.innerHTML = '';
+          window.removeEventListener('afterprint', bersihkan);
+        };
+        window.addEventListener('afterprint', bersihkan);
+        window.print();
+      } catch (err) {
+        alert('Gagal menyiapkan cetak: ' + (err && err.message ? err.message : err));
+      } finally {
+        document.title = judulAsli;
+        if (triggerBtn) { triggerBtn.disabled = false; triggerBtn.innerHTML = teksAsliBtn; lucide.createIcons(); }
+      }
+    }
+
+    // ---------- Cetak Cover ----------
+    async function renderCetakCover(wk) {
+      content.innerHTML = renderPlaceholder('Memuat...', 'Menyiapkan cover rapor kelas ' + escapeHtml(wk.kelas.nama) + '.');
+
+      var siswaList = await ambilSiswaKelas(wk.kelas.id);
+      if (!siswaList.length) {
+        content.innerHTML = renderPlaceholder('Cetak Cover — ' + escapeHtml(wk.kelas.nama), 'Belum ada siswa di kelas ini pada tahun ajaran aktif.');
+        return;
+      }
+
+      var profilRes = await supabaseClient.from('profil_sekolah').select('*').maybeSingle();
+      var profilSekolah = profilRes.data || {};
+      var NAMA_SEKOLAH = String(profilSekolah.nama_sekolah || 'SMK Widya Mandala Tambak').toUpperCase();
+      // Teks kaki cover (sesuai format Word). Ubah di sini kalau nama kementerian berganti.
+      var TEKS_KEMENTERIAN_1 = 'KEMENTERIAN PENDIDIKAN DAN KEBUDAYAAN';
+      var TEKS_KEMENTERIAN_2 = 'REPUBLIK INDONESIA';
+
+      // NISN diambil sekali untuk seluruh kelas (ambilSiswaKelas tidak memuat NISN).
+      var nisnMap = {};
+      var nisnRes = await supabaseClient.from('siswa').select('id, nisn').in('id', siswaList.map(function (s) { return s.id; }));
+      (nisnRes.data || []).forEach(function (r) { nisnMap[r.id] = r.nisn; });
+
+      function htmlCover(s) {
+        var nama = String(s.nama || '').toUpperCase();
+        var ukuran = nama.length <= 26 ? 17 : (nama.length <= 38 ? 14 : 12);
+        return '<div class="cv-page"><div class="cv-inner">' +
+          '<div class="cv-top"><img class="cv-logo" src="assets/logo.png" alt="Logo sekolah"></div>' +
+          '<div class="cv-title">' +
+            '<div class="cv-title__main">RAPOR</div>' +
+            '<div class="cv-title__sub">PESERTA DIDIK</div>' +
+            '<div class="cv-orn"><span></span><i></i><span></span></div>' +
+            '<div class="cv-title__edu">SEKOLAH MENENGAH KEJURUAN<br>(SMK)</div>' +
+          '</div>' +
+          '<div class="cv-fields">' +
+            '<div class="cv-field"><div class="cv-field__label">NAMA PESERTA DIDIK:</div>' +
+              '<div class="cv-field__box" style="font-size:' + ukuran + 'pt;">' + escapeHtml(nama) + '</div></div>' +
+            '<div class="cv-field"><div class="cv-field__label">NISN:</div>' +
+              '<div class="cv-field__box">' + escapeHtml(nisnMap[s.id] || '-') + '</div></div>' +
+          '</div>' +
+          '<div class="cv-foot">' +
+            '<div class="cv-foot__school">' + escapeHtml(NAMA_SEKOLAH) + '</div>' +
+            '<div class="cv-foot__line"></div>' +
+            '<div class="cv-foot__min">' + escapeHtml(TEKS_KEMENTERIAN_1) + '<br>' + escapeHtml(TEKS_KEMENTERIAN_2) + '</div>' +
+          '</div>' +
+        '</div></div>';
+      }
+
+      function judulCetak(idList) {
+        if (idList.length === 1) {
+          var s = siswaList.find(function (x) { return x.id === idList[0]; });
+          return 'Cover - ' + (s ? s.nama : 'Siswa') + ' - ' + wk.kelas.nama;
+        }
+        return 'Cover - ' + wk.kelas.nama;
+      }
+
+      function cetak(idList, btn) {
+        var parts = idList.map(function (id) {
+          return htmlCover(siswaList.find(function (x) { return x.id === id; }));
+        });
+        return jalankanCetakHalaman('cetakCoverPrint', parts, judulCetak(idList), btn);
+      }
+
+      function tampilkanPreview(siswaId) {
+        var s = siswaList.find(function (x) { return x.id === siswaId; });
+        var box = document.getElementById('cetakCoverPreview');
+        box.innerHTML =
+          '<div style="display:flex;gap:8px;margin:14px 0 6px;align-items:center;flex-wrap:wrap;">' +
+          '<strong style="font-size:13px;">Preview: ' + escapeHtml(s.nama) + '</strong>' +
+          '<button class="btn-small btn-small--primary" id="btnCetakDariPreviewCover"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak</button>' +
+          '<button class="btn-small" id="btnTutupPreviewCover">Tutup Preview</button>' +
+          '</div><div class="cv-preview">' + htmlCover(s) + '</div>';
+        lucide.createIcons();
+        document.getElementById('btnCetakDariPreviewCover').addEventListener('click', function () { cetak([siswaId], this); });
+        document.getElementById('btnTutupPreviewCover').addEventListener('click', function () { box.innerHTML = ''; });
+        box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+
+      var rowsHtml = siswaList.map(function (s, i) {
+        return '<tr>' +
+          '<td class="tc-center"><input type="checkbox" class="cetak-cover-check" value="' + s.id + '"></td>' +
+          '<td class="tc-center">' + (i + 1) + '</td>' +
+          '<td>' + escapeHtml(s.nis || '—') + '</td>' +
+          '<td>' + escapeHtml(nisnMap[s.id] || '—') + '</td>' +
+          '<td>' + escapeHtml(s.nama) + '</td>' +
+          '<td class="tc-center">' +
+          '<button class="btn-small btn-cover-preview" data-id="' + s.id + '"><i data-lucide="eye" style="width:14px;height:14px;"></i> Preview</button> ' +
+          '<button class="btn-small btn-small--primary btn-cover-satu" data-id="' + s.id + '"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak</button>' +
+          '</td></tr>';
+      }).join('');
+
+      content.innerHTML =
+        '<div class="panel-head"><div><div class="panel-head__title">Cetak Cover — ' + escapeHtml(wk.kelas.nama) + '</div>' +
+        '<div class="panel-head__desc">Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + '. Cover rapor (HAL 1) berisi Nama dan NISN sesuai data siswa. Klik Preview untuk melihat, Cetak untuk satu siswa, atau centang beberapa lalu Cetak Terpilih. Tiap siswa tercetak 1 halaman A4.</div></div>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+        '<button class="btn-small" id="btnCoverCetakTerpilih"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak Terpilih</button>' +
+        '<button class="btn-small btn-small--primary" id="btnCoverCetakSemua"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak Semua</button>' +
+        '</div></div>' +
+        '<div class="table-wrap no-print"><table class="data-table"><thead><tr>' +
+        '<th class="tc-center"><input type="checkbox" id="checkSemuaCover"></th>' +
+        '<th class="rc-th-no">No</th><th>NIS</th><th>NISN</th><th>Nama Siswa</th><th class="tc-center">Aksi</th>' +
+        '</tr></thead><tbody>' + rowsHtml + '</tbody></table></div>' +
+        '<div id="cetakCoverPreview" class="no-print"></div>' +
+        '<div id="cetakCoverPrint" class="cv-print-only"></div>';
+      lucide.createIcons();
+
+      document.getElementById('checkSemuaCover').addEventListener('change', function () {
+        var checked = this.checked;
+        document.querySelectorAll('.cetak-cover-check').forEach(function (c) { c.checked = checked; });
+      });
+      document.querySelectorAll('.btn-cover-preview').forEach(function (btn) {
+        btn.addEventListener('click', function () { tampilkanPreview(this.getAttribute('data-id')); });
+      });
+      document.querySelectorAll('.btn-cover-satu').forEach(function (btn) {
+        btn.addEventListener('click', function () { cetak([this.getAttribute('data-id')], this); });
+      });
+      document.getElementById('btnCoverCetakTerpilih').addEventListener('click', function () {
+        var ids = Array.prototype.slice.call(document.querySelectorAll('.cetak-cover-check:checked')).map(function (c) { return c.value; });
+        if (!ids.length) { alert('Centang minimal satu siswa terlebih dahulu.'); return; }
+        cetak(ids, this);
+      });
+      document.getElementById('btnCoverCetakSemua').addEventListener('click', function () {
+        cetak(siswaList.map(function (s) { return s.id; }), this);
+      });
+    }
+
+    // ---------- Cetak Data Sekolah ----------
+    async function renderCetakDataSekolah(wk) {
+      content.innerHTML = renderPlaceholder('Memuat...', 'Menyiapkan data sekolah.');
+
+      var siswaList = await ambilSiswaKelas(wk.kelas.id);
+      var profilRes = await supabaseClient.from('profil_sekolah').select('*').maybeSingle();
+      var p = profilRes.data || {};
+
+      var kosong = [];
+      [['NPSN', p.npsn], ['Alamat', p.alamat_sekolah], ['Kelurahan', p.kelurahan], ['Kecamatan', p.kecamatan],
+       ['Kota/Kabupaten', p.kab_kota], ['Provinsi', p.provinsi], ['Website', p.website], ['Email', p.email]
+      ].forEach(function (x) { if (!x[1]) kosong.push(x[0]); });
+
+      function baris(label, nilai) {
+        return '<tr><td class="ds-k">' + escapeHtml(label) + '</td><td class="ds-c">:</td>' +
+          '<td class="ds-v">' + escapeHtml(nilai || '-') + '</td></tr>';
+      }
+
+      function htmlDataSekolah() {
+        return '<div class="ds-page">' +
+          '<div class="ds-head">' +
+            '<img class="ds-logo" src="assets/logo.png" alt="Logo sekolah">' +
+            '<div class="ds-head__t1">RAPOR PESERTA DIDIK</div>' +
+            '<div class="ds-head__t2">SEKOLAH MENENGAH KEJURUAN (SMK)</div>' +
+            '<div class="cv-orn"><span></span><i></i><span></span></div>' +
+          '</div>' +
+          '<div class="ds-section">IDENTITAS SEKOLAH</div>' +
+          '<table class="ds-table"><tbody>' +
+            baris('Nama Sekolah', String(p.nama_sekolah || '').toUpperCase()) +
+            baris('NPSN / NSS', (p.npsn || '-') + ' / ' + (p.nss || '-')) +
+            baris('Alamat', p.alamat_sekolah) +
+            baris('Kelurahan', p.kelurahan) +
+            baris('Kecamatan', p.kecamatan) +
+            baris('Kota / Kabupaten', p.kab_kota) +
+            baris('Provinsi', p.provinsi) +
+            baris('Website', p.website) +
+            baris('Email', p.email) +
+          '</tbody></table>' +
+        '</div>';
+      }
+
+      var jumlahSiswa = siswaList.length;
+      content.innerHTML =
+        '<div class="panel-head"><div><div class="panel-head__title">Cetak Data Sekolah — ' + escapeHtml(wk.kelas.nama) + '</div>' +
+        '<div class="panel-head__desc">Data sekolah (HAL 2 rapor) diambil otomatis dari menu Admin → Profil, jadi sama untuk semua siswa. Cetak 1 halaman, atau cetak sebanyak jumlah siswa kelas ini kalau tiap siswa butuh halamannya sendiri.</div></div>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+        '<button class="btn-small btn-small--primary" id="btnDsCetakSatu"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak 1 Halaman</button>' +
+        (jumlahSiswa > 1 ? '<button class="btn-small" id="btnDsCetakSemua"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak ' + jumlahSiswa + ' Salinan (1 per siswa)</button>' : '') +
+        '</div></div>' +
+        (kosong.length
+          ? '<div class="panel-note no-print">Beberapa data sekolah belum diisi Admin dan tampil “-”: ' + escapeHtml(kosong.join(', ')) + '. Minta Admin melengkapinya di menu Profil.</div>'
+          : '') +
+        '<div class="cv-preview no-print">' + htmlDataSekolah() + '</div>' +
+        '<div id="cetakDataSekolahPrint" class="cv-print-only"></div>';
+      lucide.createIcons();
+
+      var judul = 'Data Sekolah - ' + wk.kelas.nama;
+      document.getElementById('btnDsCetakSatu').addEventListener('click', function () {
+        jalankanCetakHalaman('cetakDataSekolahPrint', [htmlDataSekolah()], judul, this);
+      });
+      var btnSemua = document.getElementById('btnDsCetakSemua');
+      if (btnSemua) {
+        btnSemua.addEventListener('click', function () {
+          var parts = [];
+          for (var i = 0; i < jumlahSiswa; i++) parts.push(htmlDataSekolah());
+          jalankanCetakHalaman('cetakDataSekolahPrint', parts, judul, this);
+        });
+      }
     }
 
     function setActiveMenuItem(el) {
