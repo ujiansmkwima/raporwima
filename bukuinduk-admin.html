@@ -114,7 +114,20 @@
       '<div class="stat-card"><div class="stat-card__label">Semester terarsip</div><div class="stat-card__value">' + (arsip === null ? '—' : arsip) + '</div><div class="stat-card__sub">hasil tarik dari E-Rapor</div></div>' +
       '</div>' +
       '<div class="panel-note"><b>Cara kerja sinkron.</b> Biodata siswa memakai tabel yang sama dengan E-Rapor, jadi perubahan di Buku Induk langsung terlihat di E-Rapor (mis. Cetak Identitas) dan sebaliknya. ' +
-      'Nilai, kehadiran, ekskul & PKL dari E-Rapor diarsipkan ke Buku Induk lewat menu <b>Sinkron dari E-Rapor</b> (atau otomatis saat membuka tab Perkembangan Belajar siswa).</div>';
+      'Nilai, kehadiran, ekskul & PKL dari E-Rapor diarsipkan ke Buku Induk lewat menu <b>Sinkron dari E-Rapor</b> (atau otomatis saat membuka tab Perkembangan Belajar siswa).</div>' +
+      '<div class="panel-note"><b>Foto siswa.</b> Foto kini disimpan di Supabase Storage (otomatis dikompres ≤ 50 KB), bukan di database. ' +
+      'Jika ada foto lama yang masih tersimpan di database, pindahkan sekali saja: ' +
+      '<button type="button" class="btn-small" id="biMigrasiFoto">Pindahkan foto lama ke Storage</button> <span id="biMigrasiFotoInfo"></span></div>';
+    var bMig = document.getElementById('biMigrasiFoto');
+    if (bMig) bMig.addEventListener('click', async function () {
+      if (!confirm('Pindahkan semua foto lama (database) ke Storage dan kompres ke ≤ 50 KB? Proses ini aman diulang.')) return;
+      var info = document.getElementById('biMigrasiFotoInfo'); bMig.disabled = true;
+      try {
+        var h = await BI.migrasiFotoKeStorage(function (i, n) { info.textContent = 'Memproses ' + i + ' / ' + n + '...'; });
+        info.textContent = 'Selesai: ' + h.dipindah + ' siswa dipindah, ' + h.gagal + ' gagal.' + (h.gagal ? ' ' + h.pesan.slice(0, 3).join(' | ') : '');
+      } catch (e) { info.textContent = 'Gagal: ' + BI.pesanError(e); }
+      bMig.disabled = false;
+    });
   }
 
   // ---------- Mutasi & Kelulusan ----------

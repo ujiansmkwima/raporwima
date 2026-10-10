@@ -177,18 +177,68 @@
     return list;
   };
 
+  // ================= Foto di Supabase Storage =================
+  // File foto disimpan di bucket Storage (privat), BUKAN di database.
+  // Kolom `foto` / `foto_lulus` di bi_siswa_detail hanya menyimpan PATH file
+  // (mis. "<siswa_id>/masuk-1730000000000.jpg"). Nilai lama berupa data URL
+  // (base64) tetap bisa tampil sampai dimigrasi (BI.migrasiFotoKeStorage).
+  var BUCKET_FOTO = 'buku-induk-foto';
+  var FOTO_MAKS_BYTE = 50 * 1024; // target kompres: maksimal 50 KB
+  var cacheUrlFoto = {};          // path -> { url, exp }
+
+  function adaDataUrl(v) { return typeof v === 'string' && v.indexOf('data:') === 0; }
+
+  // Path / data URL -> URL yang bisa dipasang di <img>.
+  BI.urlFoto = async function (v) {
+    if (!v) return null;
+    if (adaDataUrl(v)) return v;
+    var c = cacheUrlFoto[v];
+    if (c && c.exp > Date.now()) return c.url;
+    var r = await sb().storage.from(BUCKET_FOTO).createSignedUrl(v, 3600);
+    if (r.error || !r.data) return null;
+    cacheUrlFoto[v] = { url: r.data.signedUrl, exp: Date.now() + 50 * 60 * 1000 };
+    return r.data.signedUrl;
+  };
+
+  // Banyak sekaligus (untuk cetak). Hasil: { nilaiAsli: url }
+  async function urlFotoBanyak(vals) {
+    var out = {}, perlu = [];
+    vals.forEach(function (v) {
+      if (!v || out[v] !== undefined) return;
+      if (adaDataUrl(v)) { out[v] = v; return; }
+      var c = cacheUrlFoto[v];
+      if (c && c.exp > Date.now()) { out[v] = c.url; return; }
+      out[v] = null; perlu.push(v);
+    });
+    for (var i = 0; i < perlu.length; i += 100) {
+      var part = perlu.slice(i, i + 100);
+      var r = await sb().storage.from(BUCKET_FOTO).createSignedUrls(part, 3600);
+      if (r.error || !r.data) continue;
+      r.data.forEach(function (d) {
+        if (d && d.path && d.signedUrl) {
+          out[d.path] = d.signedUrl;
+          cacheUrlFoto[d.path] = { url: d.signedUrl, exp: Date.now() + 50 * 60 * 1000 };
+        }
+      });
+    }
+    return out;
+  }
+
   BI.muatFoto = async function (siswaId) {
     var r = await sb().from('bi_siswa_detail').select('foto').eq('siswa_id', siswaId).maybeSingle();
-    return r.data ? r.data.foto : null;
+    return r.data ? await BI.urlFoto(r.data.foto) : null;
   };
 
   // Foto saat masuk (kolom foto) + foto saat lulus (kolom foto_lulus).
+  // Hasil: { masuk: url, lulus: url, path: { masuk, lulus } } — path = nilai asli di kolom.
   // Bila kolom foto_lulus belum ada (migrasi belum diulang), foto lulus dianggap kosong.
   BI.muatFotoSemua = async function (siswaId) {
     var r = await sb().from('bi_siswa_detail').select('foto, foto_lulus').eq('siswa_id', siswaId).maybeSingle();
     if (r.error) r = await sb().from('bi_siswa_detail').select('foto').eq('siswa_id', siswaId).maybeSingle();
     if (r.error) throw r.error;
-    return { masuk: r.data ? (r.data.foto || null) : null, lulus: r.data ? (r.data.foto_lulus || null) : null };
+    var pm = r.data ? (r.data.foto || null) : null;
+    var pl = r.data ? (r.data.foto_lulus || null) : null;
+    return { masuk: await BI.urlFoto(pm), lulus: await BI.urlFoto(pl), path: { masuk: pm, lulus: pl } };
   };
 
   async function muatFotoBanyak(ids) {
@@ -198,10 +248,28 @@
     } catch (e) {
       rows = await inChunks(ids, function (p, a, b) { return sb().from('bi_siswa_detail').select('siswa_id, foto').in('siswa_id', p).order('siswa_id').range(a, b); }, 20);
     }
+    var semua = [];
+    rows.forEach(function (r) { semua.push(r.foto, r.foto_lulus); });
+    var url = await urlFotoBanyak(semua);
     var m = {};
-    rows.forEach(function (r) { m[r.siswa_id] = { masuk: r.foto || null, lulus: r.foto_lulus || null }; });
+    rows.forEach(function (r) { m[r.siswa_id] = { masuk: r.foto ? (url[r.foto] || null) : null, lulus: r.foto_lulus ? (url[r.foto_lulus] || null) : null }; });
     return m;
   }
+
+  // Unggah blob JPEG ke Storage. Nama file unik supaya tidak kena cache.
+  BI.unggahFoto = async function (siswaId, key, blob) {
+    var path = siswaId + '/' + key + '-' + Date.now() + '.jpg';
+    var r = await sb().storage.from(BUCKET_FOTO).upload(path, blob, { contentType: 'image/jpeg', cacheControl: '3600', upsert: false });
+    if (r.error) throw r.error;
+    return path;
+  };
+
+  // Hapus file di Storage (abaikan nilai kosong / data URL lama). Gagal hapus tidak fatal.
+  BI.hapusFoto = async function (path) {
+    if (!path || adaDataUrl(path)) return;
+    try { await sb().storage.from(BUCKET_FOTO).remove([path]); } catch (e) { /* abaikan */ }
+    delete cacheUrlFoto[path];
+  };
 
   BI.muatKelas = async function () {
     var r = await sb().from('kelas').select('id, nama, tingkat, program_keahlian').order('nama');
@@ -273,25 +341,77 @@
     return { siswa: si, detail: de };
   }
 
-  // Foto: kecilkan di browser (tinggi maks 360px, JPEG) supaya ringan.
-  BI.fotoDariFile = function (file) {
-    return new Promise(function (resolve, reject) {
-      var fr = new FileReader();
-      fr.onerror = function () { reject(new Error('Gagal membaca file foto.')); };
-      fr.onload = function () {
-        var img = new Image();
-        img.onerror = function () { reject(new Error('File bukan gambar yang valid.')); };
-        img.onload = function () {
-          var skala = Math.min(1, 360 / img.height, 300 / img.width);
-          var c = document.createElement('canvas');
-          c.width = Math.round(img.width * skala); c.height = Math.round(img.height * skala);
-          c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-          resolve(c.toDataURL('image/jpeg', 0.8));
-        };
-        img.src = fr.result;
-      };
-      fr.readAsDataURL(file);
-    });
+  // Foto: dikompres otomatis di browser menjadi JPEG <= 50 KB.
+  // Mulai dari maks 360x480 px (rasio 3x4), kualitas dicari dengan pencarian biner;
+  // bila masih > 50 KB, dimensi diperkecil 15% lalu diulang.
+  function canvasKeBlob(c, q) { return new Promise(function (res) { c.toBlob(res, 'image/jpeg', q); }); }
+
+  BI.fotoDariFile = async function (file) {
+    if (!file || !/^image\//.test(file.type || '')) throw new Error('File bukan gambar. Pilih file JPG, PNG, atau WEBP.');
+    var url = URL.createObjectURL(file);
+    try {
+      var img = await new Promise(function (resolve, reject) {
+        var im = new Image();
+        im.onload = function () { resolve(im); };
+        im.onerror = function () { reject(new Error('File bukan gambar yang valid / format tidak didukung browser.')); };
+        im.src = url;
+      });
+      var skala = Math.min(1, 480 / img.naturalHeight, 360 / img.naturalWidth);
+      var w = Math.max(1, Math.round(img.naturalWidth * skala));
+      var h = Math.max(1, Math.round(img.naturalHeight * skala));
+      for (var tahap = 0; tahap < 10; tahap++) {
+        var c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        var ctx = c.getContext('2d');
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h); // PNG transparan -> latar putih
+        ctx.drawImage(img, 0, 0, w, h);
+        var b = await canvasKeBlob(c, 0.92);
+        if (b && b.size <= FOTO_MAKS_BYTE) return b;
+        var lo = 0.3, hi = 0.92, terbaik = null;
+        for (var i = 0; i < 7; i++) {
+          var mid = (lo + hi) / 2;
+          b = await canvasKeBlob(c, mid);
+          if (b && b.size <= FOTO_MAKS_BYTE) { terbaik = b; lo = mid; } else { hi = mid; }
+        }
+        if (terbaik) return terbaik;
+        w = Math.max(1, Math.round(w * 0.85)); h = Math.max(1, Math.round(h * 0.85));
+      }
+      throw new Error('Foto tidak bisa dikompres sampai 50 KB. Coba foto lain.');
+    } finally { URL.revokeObjectURL(url); }
+  };
+
+  // Pindahkan foto lama (data URL base64 di database) ke Storage. Khusus admin.
+  // Hasil: { dipindah, gagal, pesan[] }
+  BI.migrasiFotoKeStorage = async function (onProgress) {
+    var rows = [];
+    var r = await sb().from('bi_siswa_detail').select('siswa_id').or('foto.like.data:%,foto_lulus.like.data:%').limit(1000);
+    if (r.error) throw r.error;
+    rows = r.data || [];
+    var hasil = { dipindah: 0, gagal: 0, pesan: [] };
+    for (var i = 0; i < rows.length; i++) {
+      var id = rows[i].siswa_id;
+      if (onProgress) onProgress(i + 1, rows.length);
+      try {
+        var d = await sb().from('bi_siswa_detail').select('foto, foto_lulus').eq('siswa_id', id).maybeSingle();
+        if (d.error) throw d.error;
+        var upd = {};
+        var kunci = [['foto', 'masuk'], ['foto_lulus', 'lulus']];
+        for (var k = 0; k < kunci.length; k++) {
+          var v = d.data[kunci[k][0]];
+          if (!adaDataUrl(v)) continue;
+          var blob = await (await fetch(v)).blob();
+          var file = new File([blob], 'x.jpg', { type: blob.type || 'image/jpeg' });
+          var kecil = await BI.fotoDariFile(file);
+          upd[kunci[k][0]] = await BI.unggahFoto(id, kunci[k][1], kecil);
+        }
+        if (Object.keys(upd).length) {
+          var u = await sb().from('bi_siswa_detail').update(upd).eq('siswa_id', id);
+          if (u.error) throw u.error;
+          hasil.dipindah++;
+        }
+      } catch (e) { hasil.gagal++; hasil.pesan.push(id + ': ' + pesanError(e)); }
+    }
+    return hasil;
   };
 
   // ================= Buka satu siswa =================
@@ -303,8 +423,8 @@
       { key: 'masuk', kolom: 'foto', judul: 'Foto Saat Masuk', ket: 'Foto 3×4 saat diterima di sekolah.' },
       { key: 'lulus', kolom: 'foto_lulus', judul: 'Foto Saat Lulus', ket: 'Foto 3×4 saat lulus / meninggalkan sekolah.' }
     ];
-    var fotoBaru = {}; // per key: tidak ada = tidak diubah, null = dihapus, string = foto baru
-    var foto = { masuk: null, lulus: null };
+    var fotoBaru = {}; // per key: tidak ada = tidak diubah, null = dihapus, { blob, preview } = foto baru (belum diunggah)
+    var foto = { masuk: null, lulus: null, path: { masuk: null, lulus: null } };
     try { foto = await BI.muatFotoSemua(s.id); } catch (e) { /* tabel belum ada: ditangani saat simpan */ }
 
     var kel = BI.kelengkapan(s);
@@ -346,7 +466,7 @@
       FOTO.forEach(function (f) {
         var box = root.querySelector('#biFotoBox_' + f.key);
         if (!box) return;
-        var src = fotoBaru[f.key] !== undefined ? fotoBaru[f.key] : foto[f.key];
+        var src = fotoBaru[f.key] !== undefined ? (fotoBaru[f.key] ? fotoBaru[f.key].preview : null) : foto[f.key];
         box.innerHTML = src ? '<img src="' + src + '" style="width:100%;height:100%;object-fit:cover;" alt="' + f.judul + '">' : 'Foto<br>3 × 4';
       });
     }
@@ -367,7 +487,14 @@
     root.querySelectorAll('[data-foto-file]').forEach(function (fileEl) {
       fileEl.addEventListener('change', async function () {
         if (!fileEl.files[0]) return;
-        try { fotoBaru[fileEl.dataset.fotoFile] = await BI.fotoDariFile(fileEl.files[0]); tampilFoto(); } catch (e) { alert(e.message); }
+        try {
+          var key = fileEl.dataset.fotoFile;
+          var blob = await BI.fotoDariFile(fileEl.files[0]);
+          if (fotoBaru[key] && fotoBaru[key].preview) URL.revokeObjectURL(fotoBaru[key].preview);
+          fotoBaru[key] = { blob: blob, preview: URL.createObjectURL(blob) };
+          tampilFoto();
+        } catch (e) { alert(e.message); }
+        fileEl.value = '';
       });
     });
     root.querySelectorAll('[data-foto-hapus]').forEach(function (b) {
@@ -385,11 +512,24 @@
           if (r1.error) throw r1.error;
         }
         var d = Object.assign({ siswa_id: s.id, updated_by: BI.ctx.userId, updated_at: new Date().toISOString() }, v.detail);
-        FOTO.forEach(function (f) { if (fotoBaru[f.key] !== undefined) d[f.kolom] = fotoBaru[f.key]; });
-        var r2 = await sb().from('bi_siswa_detail').upsert(d, { onConflict: 'siswa_id' });
-        if (r2.error) throw r2.error;
+        // Foto: unggah dulu ke Storage, kolom DB hanya menyimpan path-nya.
+        var terunggah = [], lamaDihapus = [];
+        try {
+          for (var i = 0; i < FOTO.length; i++) {
+            var f = FOTO[i];
+            if (fotoBaru[f.key] === undefined) continue;
+            if (fotoBaru[f.key] === null) { d[f.kolom] = null; }
+            else { var pth = await BI.unggahFoto(s.id, f.key, fotoBaru[f.key].blob); terunggah.push(pth); d[f.kolom] = pth; }
+            if (foto.path[f.key]) lamaDihapus.push(foto.path[f.key]);
+          }
+          var r2 = await sb().from('bi_siswa_detail').upsert(d, { onConflict: 'siswa_id' });
+          if (r2.error) throw r2.error;
+        } catch (eFoto) {
+          for (var j = 0; j < terunggah.length; j++) await BI.hapusFoto(terunggah[j]); // batalkan unggahan yatim
+          throw eFoto;
+        }
+        for (var k = 0; k < lamaDihapus.length; k++) await BI.hapusFoto(lamaDihapus[k]);
         Object.assign(s, v.siswa, v.detail);
-        FOTO.forEach(function (f) { if (fotoBaru[f.key] !== undefined) { foto[f.key] = fotoBaru[f.key]; } });
         fotoBaru = {};
         alert('Tersimpan. Biodata dasar juga langsung berlaku di E-Rapor.');
         BI.bukaSiswa(s, opts);
@@ -964,7 +1104,13 @@
       w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Buku Induk</title><style>' + css + '</style></head><body>' + halaman + '</body></html>');
       w.document.close();
       w.focus();
-      setTimeout(function () { w.print(); }, 700);
+      // Tunggu semua foto (dari Storage) selesai dimuat sebelum dialog cetak dibuka (maks 10 dtk).
+      var imgs = Array.prototype.slice.call(w.document.images);
+      var tunggu = Promise.all(imgs.map(function (im) {
+        return im.complete ? Promise.resolve() : new Promise(function (ok) { im.onload = im.onerror = ok; });
+      }));
+      await Promise.race([tunggu, new Promise(function (ok) { setTimeout(ok, 10000); })]);
+      setTimeout(function () { w.print(); }, 300);
     } catch (e) {
       w.document.body.innerHTML = '<p style="font-family:sans-serif;color:#b91c1c;">Gagal menyiapkan cetak: ' + esc(pesanError(e)) + '</p>';
     }

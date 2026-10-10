@@ -6664,6 +6664,12 @@
         try {
           var detRes = await supabaseClient.from('bi_siswa_detail').select('nik, foto, wali_hubungan, kelurahan, kecamatan, kab_kota, provinsi, kode_pos').eq('siswa_id', siswaId).maybeSingle();
           if (!detRes.error && detRes.data) detail = detRes.data;
+          // Foto kini berupa path di Supabase Storage -> ubah jadi URL bertanda tangan
+          // (nilai lama berupa data URL base64 tetap dipakai apa adanya).
+          if (detail.foto && String(detail.foto).indexOf('data:') !== 0) {
+            var sg = await supabaseClient.storage.from('buku-induk-foto').createSignedUrl(detail.foto, 3600);
+            detail.foto = (!sg.error && sg.data) ? sg.data.signedUrl : null;
+          }
         } catch (e) { /* abaikan */ }
 
         var jenisKelaminTampil = siswa.jenis_kelamin === 'L' ? 'Laki-laki' : (siswa.jenis_kelamin === 'P' ? 'Perempuan' : '');
