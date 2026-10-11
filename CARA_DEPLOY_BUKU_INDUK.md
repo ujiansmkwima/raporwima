@@ -47,3 +47,17 @@ Kolom **Kelas** di template dibaca saat impor: siswa baru, atau siswa yang belum
 
 
 Catatan NISN: NIS tidak bisa diubah lewat impor (dipakai sebagai kunci pencocokan). NISN bisa diperbarui oleh admin bila siswa dicocokkan lewat NIS; jika NISN lama sudah terisi, centang "timpa data yang sudah ada". Wali kelas tidak bisa mengubah NISN lewat impor.
+
+## Cetak Buku Induk: 4 bagian
+Menu **Cetak Buku Induk** (admin & wali kelas) kini dibagi menjadi 4 bagian:
+1. **Cover** — satu per kelas (judul, kelas, program keahlian, tahun ajaran, nama & alamat sekolah).
+2. **Daftar Siswa** — satu kelas: No, Nama, NIS, NISN, Keterangan (**Baru / Pindahan**, diambil dari isian "Diterima Sebagai"; bila kosong, dianggap Pindahan jika "Pindahan dari Sekolah" terisi, selain itu Baru).
+3. **Biodata** — identitas, orang tua, pendidikan, keluar sekolah, prestasi & catatan.
+4. **Nilai** — perkembangan belajar (leger semester 1–6, kehadiran, ekskul) dan kokurikuler.
+
+Cover + Daftar Siswa dicetak **sekaligus** lewat satu tombol (cukup sekali per kelas). Biodata dan Nilai punya tombol cetak masing-masing (pilih siswa dengan centang). Di halaman detail satu siswa juga ada tombol **Cetak Biodata** dan **Cetak Nilai**.
+Pasang: upload bukuinduk-core.js, bukuinduk-admin.html, bukuinduk-guru.html (tanpa migrasi SQL baru).
+
+Biodata & Nilai dicetak tanpa tanda tangan. Daftar Siswa memuat tanda tangan Kepala Sekolah saja; tanggalnya = tanggal diterima siswa baru di kelas itu (yang paling umum; bila tidak ada siswa baru, memakai tanggal cetak).
+
+Biodata dicetak 2 halaman A4 per siswa (halaman 1: kartu identitas + Keterangan Pribadi s/d Ibu Kandung; halaman 2: alamat orang tua, wali, pendidikan, keluar sekolah, catatan khusus, prestasi) dengan jarak baris dirapatkan sedikit.

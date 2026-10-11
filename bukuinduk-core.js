@@ -438,7 +438,7 @@
       '<div class="toolbar">' +
       '<button class="btn-small" id="biKembali">← ' + esc(opts.labelKembali || 'Kembali') + '</button>' +
       (bolehUbah ? '<button class="btn-small btn-small--primary" id="biSimpan">💾 Simpan Perubahan</button>' : '') +
-      '<button class="btn-small" id="biCetak">🖨 Cetak Buku Induk</button>' +
+      '<button class="btn-small" id="biCetak">🖨 Cetak Biodata</button> <button class="btn-small" id="biCetakNilai">🖨 Cetak Nilai</button>' +
       '</div>' +
       '<div class="subtab-nav" id="biTabNav">' + tabs.map(function (t, i) {
         return '<button type="button" class="subtab-btn' + (i === 0 ? ' active' : '') + '" data-tab="' + t.id + '">' + esc(t.judul) + '</button>';
@@ -482,7 +482,8 @@
     root.querySelectorAll('#biTabNav .subtab-btn').forEach(function (b) { b.addEventListener('click', function () { pilihTab(b.dataset.tab); }); });
 
     root.querySelector('#biKembali').addEventListener('click', function () { if (opts.onKembali) opts.onKembali(); });
-    root.querySelector('#biCetak').addEventListener('click', function () { BI.cetak([s]); });
+    root.querySelector('#biCetak').addEventListener('click', function () { BI.cetak([s], 'biodata'); });
+    root.querySelector('#biCetakNilai').addEventListener('click', function () { BI.cetak([s], 'nilai'); });
 
     root.querySelectorAll('[data-foto-file]').forEach(function (fileEl) {
       fileEl.addEventListener('change', async function () {
@@ -643,7 +644,7 @@
       '<div class="bi-dt__body">' + tabs.map(function (tb, i) {
         return '<div data-p="' + tb.id + '"' + (i === 0 ? '' : ' hidden') + '>' + panelHtml(tb) + '</div>';
       }).join('') + '</div>' +
-      '<div class="bi-dt__foot"><button type="button" class="btn-small" id="biDtCetak">🖨 Cetak</button>' +
+      '<div class="bi-dt__foot"><button type="button" class="btn-small" id="biDtCetak">🖨 Cetak Biodata</button> <button type="button" class="btn-small" id="biDtCetakNilai">🖨 Cetak Nilai</button>' +
       (opts.bolehUbah ? '<button type="button" class="btn-small btn-small--primary" id="biDtBuka">✏️ Buka & Ubah Data</button>' : '') +
       '<button type="button" class="btn-small" data-x>Tutup</button></div></div>';
 
@@ -662,7 +663,8 @@
         o.querySelector('.bi-dt__body').scrollTop = 0;
       });
     });
-    o.querySelector('#biDtCetak').addEventListener('click', function () { BI.cetak([s]); });
+    o.querySelector('#biDtCetak').addEventListener('click', function () { BI.cetak([s], 'biodata'); });
+    o.querySelector('#biDtCetakNilai').addEventListener('click', function () { BI.cetak([s], 'nilai'); });
     var bBuka = o.querySelector('#biDtBuka');
     if (bBuka) bBuka.addEventListener('click', function () { tutup(); if (opts.onBuka) opts.onBuka(); });
 
@@ -1040,11 +1042,13 @@
   }
 
   // ================= Cetak Buku Induk =================
-  BI.cetak = async function (list) {
+  // jenis: 'biodata' | 'nilai' | 'lengkap' (bawaan: lengkap)
+  BI.cetak = async function (list, jenis) {
+    jenis = jenis || 'lengkap';
     if (!list.length) { alert('Tidak ada siswa untuk dicetak.'); return; }
     var w = window.open('', '_blank');
     if (!w) { alert('Pop-up diblokir browser. Izinkan pop-up untuk situs ini lalu coba lagi.'); return; }
-    w.document.write('<p style="font-family:sans-serif;">Menyiapkan Buku Induk...</p>');
+    w.document.write('<p style="font-family:sans-serif;">Menyiapkan cetak...</p>');
     try {
       var ids = list.map(function (s) { return s.id; });
       var fotoMap = await muatFotoBanyak(ids);
@@ -1057,51 +1061,12 @@
       var halaman = list.map(function (s) {
         var rw = rwRows.filter(function (r) { return r.siswa_id === s.id; }).sort(function (a, b) { return (a.semester_ke || 99) - (b.semester_ke || 99); });
         var ct = ctRows.filter(function (r) { return r.siswa_id === s.id; });
-        return halamanSiswa(s, fotoMap[s.id] || {}, rw, ct, profil, logo);
+        return halamanSiswa(s, fotoMap[s.id] || {}, rw, ct, profil, logo, jenis);
       }).join('');
 
-      var NAVY = '#12306b';
-      var css = [
-        '@page{size:A4;margin:12mm 13mm 14mm}',
-        '*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}',
-        'body{font-family:"Segoe UI",Calibri,Arial,Helvetica,sans-serif;font-size:10pt;color:#000;margin:0;line-height:1.35}',
-        '.hal{page-break-after:always}.hal:last-child{page-break-after:auto}',
-        /* kop surat */
-        '.kop{display:flex;align-items:center;gap:14px;padding-bottom:9px;border-bottom:2.5px solid ' + NAVY + ';position:relative;margin-bottom:10px}',
-        '.kop:after{content:"";position:absolute;left:0;right:0;bottom:-6px;border-bottom:.8px solid ' + NAVY + '}',
-        '.kop img,.kop .sp{width:64px;height:64px;flex:0 0 64px}.kop img{object-fit:contain}',
-        '.kop .tx{flex:1;text-align:center}.kop .nm{font-size:15pt;font-weight:800;letter-spacing:.5px;color:' + NAVY + '}.kop .al{font-size:8.5pt;color:#000;margin-top:2px}',
-        /* judul */
-        '.judul{text-align:center;margin:16px 0 12px}.judul .t{display:inline-block;background:' + NAVY + ';color:#fff;font-weight:800;font-size:12pt;letter-spacing:2.5px;padding:5px 28px;border-radius:3px}',
-        '.judul .n{margin-top:6px;font-size:9pt;color:#000}.judul .n b{color:#000}',
-        /* kartu identitas + 2 foto */
-        '.kartu{display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid #c7d0e4;border-radius:6px;padding:10px 12px;background:#f6f8fd;margin-bottom:4px}',
-        '.fw{width:32mm;flex:0 0 32mm;text-align:center}',
-        '.foto{width:30mm;height:40mm;margin:0 auto;border:1px solid #6b7280;background:#fff;display:flex;align-items:center;justify-content:center;font-size:7.5pt;line-height:1.3;color:#000;text-align:center;overflow:hidden}',
-        '.foto.kosong{border:1px dashed #9ca3af}.foto img{width:100%;height:100%;object-fit:cover}',
-        '.fw .cap{font-size:8pt;font-weight:700;color:' + NAVY + ';margin-top:5px;text-transform:uppercase;letter-spacing:.4px}.fw .tg{font-size:7.5pt;color:#000;min-height:1em}',
-        '.ringkas{flex:1;min-width:0}.ringkas .nama{font-size:14pt;font-weight:800;color:' + NAVY + ';line-height:1.2;text-align:center;margin-bottom:7px}',
-        '.ringkas table{width:100%;border-collapse:collapse}.ringkas td{padding:2px 3px;font-size:9.5pt;vertical-align:top}.ringkas td.l{color:#000;width:36%}.ringkas td.c{width:3%}.ringkas td.v{font-weight:600}',
-        '.lencana{display:inline-block;padding:0 8px;border-radius:9px;font-size:8.5pt;font-weight:700;border:1px solid ' + NAVY + ';color:' + NAVY + ';background:#fff}',
-        /* bagian isian */
-        '.sec{margin-top:10px;page-break-inside:avoid}',
-        '.sec h4{margin:0 0 4px;font-size:10pt;font-weight:800;letter-spacing:.2px;color:' + NAVY + ';border-left:4px solid ' + NAVY + ';border-bottom:1.5px solid ' + NAVY + ';padding:1px 0 2px 7px;page-break-after:avoid}',
-        '.kv{display:grid;grid-template-columns:1fr 1fr;column-gap:20px}',
-        '.kv .r{display:flex;gap:4px;padding:2.4px 0;border-bottom:.5px dotted #9ca3af;page-break-inside:avoid}.kv .r.full{grid-column:1/-1}',
-        '.kv .l{flex:0 0 41%;color:#000;font-size:9pt}.kv .r.full .l{flex-basis:20.5%}',
-        '.kv .v{flex:1;min-width:0;font-weight:600;word-break:break-word;white-space:pre-wrap;min-height:1.1em}',
-        '.kv .v:before{content:": ";color:#000;font-weight:400}.kv .v.kosong{color:#000;font-weight:400}',
-        /* tabel nilai & catatan */
-        'table.g{width:100%;border-collapse:collapse;font-size:8.5pt;margin-top:4px}',
-        'table.g th{background:' + NAVY + ';color:#fff;font-weight:700;padding:3px 4px;border:1px solid ' + NAVY + ';text-align:center}',
-        'table.g td{border:1px solid #c3cad9;padding:2.5px 4px}table.g tbody tr:nth-child(even) td{background:#f3f6fb}',
-        'table.g tr{page-break-inside:avoid}.kosongnote{font-size:9pt;color:#000;font-style:italic;padding:3px 0}',
-        /* tanda tangan & footer */
-        '.ttd{display:flex;justify-content:space-between;margin-top:20px;page-break-inside:avoid;font-size:9.5pt}.ttd>div{text-align:center;width:44%}.ttd .sp{height:58px}',
-        '.ft{margin-top:14px;padding-top:4px;border-top:.5px solid #cbd5e1;font-size:7.5pt;color:#000;display:flex;justify-content:space-between}'
-      ].join('');
+      var css = cssCetak();
       w.document.open();
-      w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Buku Induk</title><style>' + css + '</style></head><body>' + halaman + '</body></html>');
+      w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + (jenis === 'nilai' ? 'Nilai' : jenis === 'biodata' ? 'Biodata' : 'Buku Induk') + '</title><style>' + css + '</style></head><body>' + halaman + '</body></html>');
       w.document.close();
       w.focus();
       // Tunggu semua foto (dari Storage) selesai dimuat sebelum dialog cetak dibuka (maks 10 dtk).
@@ -1110,6 +1075,93 @@
         return im.complete ? Promise.resolve() : new Promise(function (ok) { im.onload = im.onerror = ok; });
       }));
       await Promise.race([tunggu, new Promise(function (ok) { setTimeout(ok, 10000); })]);
+      setTimeout(function () { w.print(); }, 300);
+    } catch (e) {
+      w.document.body.innerHTML = '<p style="font-family:sans-serif;color:#b91c1c;">Gagal menyiapkan cetak: ' + esc(pesanError(e)) + '</p>';
+    }
+  };
+
+
+  // Keterangan penerimaan: Baru / Pindahan
+  function keteranganMasuk(s) {
+    var d = String(s.diterima_sebagai || '').toLowerCase();
+    if (d.indexOf('pindah') !== -1) return 'Pindahan';
+    if (d) return 'Baru';
+    return kosong(s.pindahan_dari) ? 'Baru' : 'Pindahan';
+  }
+
+  // ---- Cover Buku Induk (gaya modern: biru-navy, kartu info, gedung sekolah) ----
+  var SVG_GEDUNG = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 560 320\" style=\"width:100%;height:auto;display:block\"><defs><linearGradient id=\"gl\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#a9c9ef\"/><stop offset=\"1\" stop-color=\"#4f86cf\"/></linearGradient><linearGradient id=\"wl\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#ffffff\"/><stop offset=\"1\" stop-color=\"#e6eef9\"/></linearGradient></defs><polygon points=\"12,142.0 289,82.0 289,96.0 12,152.0\" fill=\"#8fb6e8\"/><polygon points=\"12,142.0 289,82.0 289,87.0 12,147.0\" fill=\"#3f78c4\"/><polygon points=\"20,150.0 285,96.0 285,274.0 20,252.0\" fill=\"url(#wl)\"/><polygon points=\"20,198.0 285,182.0 285,188.0 20,204.0\" fill=\"#dbe8f8\"/><polygon points=\"27.0,161.1 66.0,154.4 66.0,190.2 27.0,193.3\" fill=\"url(#gl)\" stroke=\"#12306b\" stroke-opacity=\".35\" stroke-width=\"1\"/><line x1=\"40.0\" y1=\"158.9\" x2=\"40.0\" y2=\"192.3\" stroke=\"#fff\" stroke-width=\"1.6\" stroke-opacity=\".85\"/><line x1=\"53.0\" y1=\"156.7\" x2=\"53.0\" y2=\"191.2\" stroke=\"#fff\" stroke-width=\"1.6\" stroke-opacity=\".85\"/><line x1=\"27.0\" y1=\"177.2\" x2=\"66.0\" y2=\"172.3\" stroke=\"#fff\" stroke-width=\"1.6\" stroke-opacity=\".85\"/><polygon points=\"27.0,208.9 66.0,207.4 66.0,244.3 27.0,242.2\" fill=\"url(#gl)\" stroke=\"#12306b\" stroke-opacity=\".35\" stroke-width=\"1\"/><line x1=\"40.0\" y1=\"208.4\" x2=\"40.0\" y2=\"242.9\" stroke=\"#fff\" stroke-width=\"1.6\" stroke-opacity=\".85\"/><line x1=\"53.0\" y1=\"207.9\" x2=\"53.0\" y2=\"243.6\" stroke=\"#fff\" stroke-width=\"1.6\" stroke-opacity=\".85\"/><line x1=\"27.0\" y1=\"225.5\" x2=\"66.0\" y2=\"225.9\" stroke=\"#fff\" stroke-width=\"1.6\" stroke-opacity=\".85\"/><polygon points=\"80.0,152.1 119.0,145.5 119.0,185.9 80.0,189.0\" fill=\"url(#gl)\" stroke=\"#12306b\" stroke-opacity=\".35\" stroke-width=\"1\"/><line x1=\"93.0\" y1=\"149.9\" x2=\"93.0\" y2=\"188.0\" stroke=\"#fff\" stroke-width=\"1.6\" stroke-opacity=\".85\"/><line x1=\"106.0\" y1=\"147.7\" x2=\"106.0\" y2=\"186.9\" stroke=\"#fff\" stroke-width=\"1.6\" stroke-opacity=\".85\"/><line x1=\"80.0\" y1=\"170.6\" x2=\"119.0\" y2=\"165.7\" stroke=\"#fff\" stroke-width=\"1.6\" stroke-opacity=\".85\"/><polygon points=\"80.0,206.9 119.0,205.5 119.0,247.2 80.0,245.1\" fill=\"url(#gl)\" stroke=\"#12306b\" stroke-opacity=\".35\" stroke-width=\"1\"/><line x1=\"93.0\" y1=\"206.4\" x2=\"93.0\" y2=\"245.8\" stroke=\"#fff\" stroke-width=\"1.6\" stroke-opacity=\".85\"/><line x1=\"106.0\" y1=\"205.9\" x2=\"106.0\" y2=\"246.5\" stroke=\"#fff\" stroke-width=\"1.6\" stroke-opacity=\".85\"/><line x1=\"80.0\" y1=\"226.0\" x2=\"119.0\" y2=\"226.3\" stroke=\"#fff\" stroke-width=\"1.6\" stroke-opacity=\".85\"/><polygon points=\"133.0,143.1 172.0,136.5 172.0,181.6 133.0,184.8\" fill=\"url(#gl)\" stroke=\"#12306b\" stroke-opacity=\".35\" stroke-width=\"1\"/><line x1=\"146.0\" y1=\"140.9\" x2=\"146.0\" y2=\"183.7\" stroke=\"#fff\" stroke-width=\"1.6\" stroke-opacity=\".85\"/><line x1=\"159.0\" y1=\"138.7\" x2=\"159.0\" y2=\"182.7\" stroke=\"#fff\" stroke-width=\"1.6\" stroke-opacity=\".85\"/><line x1=\"133.0\" y1=\"163.9\" x2=\"172.0\" y2=\"159.1\" stroke=\"#fff\" stroke-width=\"1.6\" stroke-opacity=\".85\"/><polygon points=\"133.0,204.9 172.0,203.5 172.0,250.1 133.0,247.9\" fill=\"url(#gl)\" stroke=\"#12306b\" stroke-opacity=\".35\" stroke-width=\"1\"/><line x1=\"146.0\" y1=\"204.4\" x2=\"146.0\" y2=\"248.6\" stroke=\"#fff\" stroke-width=\"1.6\" stroke-opacity=\".85\"/><line x1=\"159.0\" y1=\"204.0\" x2=\"159.0\" y2=\"249.4\" stroke=\"#fff\" stroke-width=\"1.6\" stroke-opacity=\".85\"/><line x1=\"133.0\" y1=\"226.4\" x2=\"172.0\" y2=\"226.8\" stroke=\"#fff\" stroke-width=\"1.6\" stroke-opacity=\".85\"/><polygon points=\"186.0,134.1 225.0,127.5 225.0,177.4 186.0,180.5\" fill=\"url(#gl)\" stroke=\"#12306b\" stroke-opacity=\".35\" stroke-width=\"1\"/><line x1=\"199.0\" y1=\"131.9\" x2=\"199.0\" y2=\"179.5\" stroke=\"#fff\" stroke-width=\"1.6\" stroke-opacity=\".85\"/><line x1=\"212.0\" y1=\"129.7\" x2=\"212.0\" y2=\"178.4\" stroke=\"#fff\" stroke-width=\"1.6\" stroke-opacity=\".85\"/><line x1=\"186.0\" y1=\"157.3\" x2=\"225.0\" y2=\"152.4\" stroke=\"#fff\" stroke-width=\"1.6\" stroke-opacity=\".85\"/><polygon points=\"186.0,202.9 225.0,201.5 225.0,252.9 186.0,250.8\" fill=\"url(#gl)\" stroke=\"#12306b\" stroke-opacity=\".35\" stroke-width=\"1\"/><line x1=\"199.0\" y1=\"202.5\" x2=\"199.0\" y2=\"251.5\" stroke=\"#fff\" stroke-width=\"1.6\" stroke-opacity=\".85\"/><line x1=\"212.0\" y1=\"202.0\" x2=\"212.0\" y2=\"252.2\" stroke=\"#fff\" stroke-width=\"1.6\" stroke-opacity=\".85\"/><line x1=\"186.0\" y1=\"226.9\" x2=\"225.0\" y2=\"227.2\" stroke=\"#fff\" stroke-width=\"1.6\" stroke-opacity=\".85\"/><polygon points=\"239.0,125.2 278.0,118.5 278.0,173.1 239.0,176.2\" fill=\"url(#gl)\" stroke=\"#12306b\" stroke-opacity=\".35\" stroke-width=\"1\"/><line x1=\"252.0\" y1=\"122.9\" x2=\"252.0\" y2=\"175.2\" stroke=\"#fff\" stroke-width=\"1.6\" stroke-opacity=\".85\"/><line x1=\"265.0\" y1=\"120.7\" x2=\"265.0\" y2=\"174.1\" stroke=\"#fff\" stroke-width=\"1.6\" stroke-opacity=\".85\"/><line x1=\"239.0\" y1=\"150.7\" x2=\"278.0\" y2=\"145.8\" stroke=\"#fff\" stroke-width=\"1.6\" stroke-opacity=\".85\"/><polygon points=\"239.0,201.0 278.0,199.5 278.0,255.8 239.0,253.7\" fill=\"url(#gl)\" stroke=\"#12306b\" stroke-opacity=\".35\" stroke-width=\"1\"/><line x1=\"252.0\" y1=\"200.5\" x2=\"252.0\" y2=\"254.4\" stroke=\"#fff\" stroke-width=\"1.6\" stroke-opacity=\".85\"/><line x1=\"265.0\" y1=\"200.0\" x2=\"265.0\" y2=\"255.1\" stroke=\"#fff\" stroke-width=\"1.6\" stroke-opacity=\".85\"/><line x1=\"239.0\" y1=\"227.3\" x2=\"278.0\" y2=\"227.7\" stroke=\"#fff\" stroke-width=\"1.6\" stroke-opacity=\".85\"/><polygon points=\"17.0,150.6 23.0,149.4 23.0,252.2 17.0,251.8\" fill=\"#3f78c4\" /><polygon points=\"70.0,139.8 76.0,138.6 76.0,256.6 70.0,256.2\" fill=\"#3f78c4\" /><polygon points=\"123.0,129.0 129.0,127.8 129.0,261.0 123.0,260.6\" fill=\"#3f78c4\" /><polygon points=\"176.0,118.2 182.0,117.0 182.0,265.4 176.0,265.0\" fill=\"#3f78c4\" /><polygon points=\"229.0,107.4 235.0,106.2 235.0,269.8 229.0,269.4\" fill=\"#3f78c4\" /><polygon points=\"282.0,96.6 288.0,95.4 288.0,274.2 282.0,273.8\" fill=\"#3f78c4\" /><polygon points=\"275,62 542,62 542,75 281,75\" fill=\"#8fb6e8\"/><rect x=\"275\" y=\"56\" width=\"267\" height=\"7\" fill=\"#3f78c4\"/><rect x=\"285\" y=\"75\" width=\"235\" height=\"199\" fill=\"url(#wl)\"/><rect x=\"281\" y=\"75\" width=\"10\" height=\"199\" fill=\"#3f78c4\"/><rect x=\"288\" y=\"75\" width=\"3\" height=\"199\" fill=\"#12306b\" fill-opacity=\".25\"/><rect x=\"363\" y=\"75\" width=\"10\" height=\"199\" fill=\"#3f78c4\"/><rect x=\"370\" y=\"75\" width=\"3\" height=\"199\" fill=\"#12306b\" fill-opacity=\".25\"/><rect x=\"442\" y=\"75\" width=\"10\" height=\"199\" fill=\"#3f78c4\"/><rect x=\"449\" y=\"75\" width=\"3\" height=\"199\" fill=\"#12306b\" fill-opacity=\".25\"/><rect x=\"514\" y=\"75\" width=\"10\" height=\"199\" fill=\"#3f78c4\"/><rect x=\"521\" y=\"75\" width=\"3\" height=\"199\" fill=\"#12306b\" fill-opacity=\".25\"/><rect x=\"297\" y=\"140\" width=\"60\" height=\"52\" fill=\"url(#gl)\" stroke=\"#12306b\" stroke-opacity=\".35\"/><line x1=\"317.0\" y1=\"140\" x2=\"317.0\" y2=\"192\" stroke=\"#fff\" stroke-width=\"1.6\" stroke-opacity=\".85\"/><line x1=\"337.0\" y1=\"140\" x2=\"337.0\" y2=\"192\" stroke=\"#fff\" stroke-width=\"1.6\" stroke-opacity=\".85\"/><line x1=\"297\" y1=\"166\" x2=\"357\" y2=\"166\" stroke=\"#fff\" stroke-width=\"1.6\" stroke-opacity=\".85\"/><rect x=\"379\" y=\"140\" width=\"57\" height=\"52\" fill=\"url(#gl)\" stroke=\"#12306b\" stroke-opacity=\".35\"/><line x1=\"398.0\" y1=\"140\" x2=\"398.0\" y2=\"192\" stroke=\"#fff\" stroke-width=\"1.6\" stroke-opacity=\".85\"/><line x1=\"417.0\" y1=\"140\" x2=\"417.0\" y2=\"192\" stroke=\"#fff\" stroke-width=\"1.6\" stroke-opacity=\".85\"/><line x1=\"379\" y1=\"166\" x2=\"436\" y2=\"166\" stroke=\"#fff\" stroke-width=\"1.6\" stroke-opacity=\".85\"/><rect x=\"458\" y=\"140\" width=\"50\" height=\"52\" fill=\"url(#gl)\" stroke=\"#12306b\" stroke-opacity=\".35\"/><line x1=\"474.7\" y1=\"140\" x2=\"474.7\" y2=\"192\" stroke=\"#fff\" stroke-width=\"1.6\" stroke-opacity=\".85\"/><line x1=\"491.3\" y1=\"140\" x2=\"491.3\" y2=\"192\" stroke=\"#fff\" stroke-width=\"1.6\" stroke-opacity=\".85\"/><line x1=\"458\" y1=\"166\" x2=\"508\" y2=\"166\" stroke=\"#fff\" stroke-width=\"1.6\" stroke-opacity=\".85\"/><rect x=\"279\" y=\"198\" width=\"263\" height=\"8\" fill=\"#8fb6e8\"/><rect x=\"279\" y=\"198\" width=\"263\" height=\"3\" fill=\"#3f78c4\"/><rect x=\"458\" y=\"216\" width=\"50\" height=\"52\" fill=\"url(#gl)\" stroke=\"#12306b\" stroke-opacity=\".35\"/><line x1=\"483.0\" y1=\"216\" x2=\"483.0\" y2=\"268\" stroke=\"#fff\" stroke-width=\"1.6\"/><rect x=\"377\" y=\"212\" width=\"61\" height=\"62\" fill=\"#12306b\"/><rect x=\"381\" y=\"216\" width=\"53\" height=\"58\" fill=\"url(#gl)\"/><line x1=\"407.5\" y1=\"216\" x2=\"407.5\" y2=\"274\" stroke=\"#12306b\" stroke-width=\"3\"/><line x1=\"381\" y1=\"236\" x2=\"434\" y2=\"236\" stroke=\"#fff\" stroke-width=\"1.6\"/><rect x=\"458\" y=\"216\" width=\"50\" height=\"52\" fill=\"url(#gl)\" stroke=\"#12306b\" stroke-opacity=\".35\"/><line x1=\"483.0\" y1=\"216\" x2=\"483.0\" y2=\"268\" stroke=\"#fff\" stroke-width=\"1.6\"/><rect x=\"305\" y=\"82\" width=\"195\" height=\"46\" rx=\"4\" fill=\"#fff\" stroke=\"#8fb6e8\" stroke-width=\"2\"/><text x=\"402.5\" y=\"114\" text-anchor=\"middle\" font-family=\"Arial Black,Arial,Helvetica,sans-serif\" font-weight=\"900\" font-size=\"25\" letter-spacing=\"1\" fill=\"#12306b\">SMK WIMATA</text><rect x=\"271\" y=\"274\" width=\"281\" height=\"8\" fill=\"#e6edf7\"/><rect x=\"259\" y=\"282\" width=\"305\" height=\"8\" fill=\"#d5dfee\"/><rect x=\"187\" y=\"244\" width=\"6\" height=\"38\" fill=\"#7a5a3a\"/><circle cx=\"190.0\" cy=\"244.0\" r=\"22.0\" fill=\"#4f9b52\"/><circle cx=\"174.6\" cy=\"255.0\" r=\"16.5\" fill=\"#6db36b\"/><circle cx=\"205.4\" cy=\"253.9\" r=\"17.6\" fill=\"#3f8a4a\"/><circle cx=\"190.0\" cy=\"230.8\" r=\"15.4\" fill=\"#79bd75\"/><ellipse cx=\"60\" cy=\"283\" rx=\"18.0\" ry=\"12\" fill=\"#5aa05a\"/><ellipse cx=\"66.0\" cy=\"278.8\" rx=\"12\" ry=\"9.0\" fill=\"#3f8a4a\"/><ellipse cx=\"120\" cy=\"285\" rx=\"15.0\" ry=\"10\" fill=\"#6db36b\"/><ellipse cx=\"125.0\" cy=\"281.5\" rx=\"10\" ry=\"7.5\" fill=\"#4f9b52\"/><ellipse cx=\"250\" cy=\"286\" rx=\"15.0\" ry=\"10\" fill=\"#5aa05a\"/><ellipse cx=\"255.0\" cy=\"282.5\" rx=\"10\" ry=\"7.5\" fill=\"#3f8a4a\"/><rect x=\"545\" y=\"218\" width=\"6\" height=\"70\" fill=\"#7a5a3a\"/><circle cx=\"548.0\" cy=\"218.0\" r=\"30.0\" fill=\"#4f9b52\"/><circle cx=\"527.0\" cy=\"233.0\" r=\"22.5\" fill=\"#6db36b\"/><circle cx=\"569.0\" cy=\"231.5\" r=\"24.0\" fill=\"#3f8a4a\"/><circle cx=\"548.0\" cy=\"200.0\" r=\"21.0\" fill=\"#79bd75\"/><ellipse cx=\"540\" cy=\"288\" rx=\"18.0\" ry=\"12\" fill=\"#6db36b\"/><ellipse cx=\"546.0\" cy=\"283.8\" rx=\"12\" ry=\"9.0\" fill=\"#4f9b52\"/><ellipse cx=\"300\" cy=\"290\" rx=\"9.0\" ry=\"6\" fill=\"#5aa05a\"/><ellipse cx=\"303.0\" cy=\"287.9\" rx=\"6\" ry=\"4.5\" fill=\"#3f8a4a\"/></svg>";
+  var IKON_COVER = {
+    kelas: '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6.5 12 3l9 3.5-9 3.5z"/><path d="M7 9v5c0 1.4 2.2 2.6 5 2.6s5-1.2 5-2.6V9"/><path d="M21 7v6"/></svg>',
+    program: '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2.8v3M12 18.2v3M2.8 12h3M18.2 12h3M5.5 5.5l2.1 2.1M16.4 16.4l2.1 2.1M18.5 5.5l-2.1 2.1M7.6 16.4l-2.1 2.1"/></svg>',
+    ta: '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>'
+  };
+  BI.htmlCover = function (kelas, profil, logo, taTeks) {
+    profil = profil || {};
+    var kemdik = new URL('assets/logo-kemdikdasmen.png', g.location.href).href;
+    var nmSekolah = String(profil.nama_sekolah || 'SMK Widya Mandala Tambak').toUpperCase();
+    var taNama = String(taTeks || '').replace(/^Tahun Ajaran\s*/i, '');
+    function baris(ikon, label, nilai) {
+      return '<div class="cv-row"><div class="cv-ic">' + IKON_COVER[ikon] + '</div><div><div class="cv-lb">' + label + '</div><div class="cv-vl2">' + esc(nilai) + '</div></div></div>';
+    }
+    var rows = baris('kelas', 'KELAS', kelas.nama || '-');
+    if (kelas.program_keahlian) rows += '<div class="cv-sep"></div>' + baris('program', 'PROGRAM KEAHLIAN', kelas.program_keahlian);
+    if (taNama) rows += '<div class="cv-sep"></div>' + baris('ta', 'TAHUN AJARAN', taNama);
+    return '<div class="hal"><div class="cv">' +
+      '<div class="cv-dk1"></div><div class="cv-dk2"></div><div class="cv-dk3"></div>' +
+      '<div class="cv-head"><img src="' + esc(logo) + '" alt=""><div class="cv-sk">' + esc(nmSekolah) + '</div></div>' +
+      '<div class="cv-t1">BUKU INDUK</div><div class="cv-t2">PESERTA DIDIK</div>' +
+      '<div class="cv-line"></div><div class="cv-pill">SEKOLAH MENENGAH KEJURUAN (SMK)</div>' +
+      '<div class="cv-card">' + rows + '</div>' +
+      '<div class="cv-arc"></div><div class="cv-gd">' + SVG_GEDUNG + '</div>' +
+      '<div class="cv-foot"><img src="' + esc(kemdik) + '" alt=""><span class="cv-vb"></span><div>KEMENTERIAN PENDIDIKAN<br>DASAR DAN MENENGAH<br>REPUBLIK INDONESIA</div></div>' +
+      '<div class="cv-bars"><i></i><i></i></div>' +
+      '</div></div>';
+  };
+
+  // Cetak Cover + Daftar Siswa sekaligus (satu kali cetak per kelas)
+  // list: siswa kelas tsb (urut nama). kelas: {id, nama, tingkat, program_keahlian}
+  BI.cetakCoverDaftar = async function (list, kelas) {
+    if (!kelas) { alert('Pilih kelas dulu.'); return; }
+    if (!list.length) { alert('Tidak ada siswa di kelas ini.'); return; }
+    var w = window.open('', '_blank');
+    if (!w) { alert('Pop-up diblokir browser. Izinkan pop-up untuk situs ini lalu coba lagi.'); return; }
+    w.document.write('<p style="font-family:sans-serif;">Menyiapkan cover & daftar siswa...</p>');
+    try {
+      var pr = await sb().from('profil_sekolah').select('*').maybeSingle();
+      var profil = pr.data || {};
+      var logo = new URL('assets/logo.png', g.location.href).href;
+      var ta = BI.ctx.ta;
+      var urut = list.slice().sort(function (a, b) { return (a.nama || '').localeCompare(b.nama || ''); });
+      var taTeks = ta ? 'Tahun Ajaran ' + ta.nama : '';
+      var cover = BI.htmlCover(kelas, profil, logo, taTeks);
+
+      var tgl = new Date();
+      var tglCetak = tgl.getDate() + ' ' + BULAN[tgl.getMonth()] + ' ' + tgl.getFullYear();
+      // Tanggal TTD = tanggal diterima siswa baru (yang paling umum; seri -> paling awal)
+      var hitungTgl = {};
+      urut.forEach(function (x) {
+        if (keteranganMasuk(x) === 'Baru' && !kosong(x.tanggal_masuk)) { var t = String(x.tanggal_masuk).slice(0, 10); hitungTgl[t] = (hitungTgl[t] || 0) + 1; }
+      });
+      var tglTtd = Object.keys(hitungTgl).sort(function (a, b) { return (hitungTgl[b] - hitungTgl[a]) || a.localeCompare(b); })[0] || '';
+      var tglTtdTeks = tglTtd ? fmtTgl(tglTtd) : tglCetak;
+      var ttdKepsek = '<div class="ttd" style="justify-content:flex-end;"><div>' + esc(profil.kota_ttd || 'Tambak') + ', ' + tglTtdTeks + '<br>Kepala Sekolah,<div class="sp"></div><b><u>' + esc(profil.kepala_sekolah || '...............................') + '</u></b>' +
+        (profil.nip_kepala_sekolah ? '<br>NIP. ' + esc(profil.nip_kepala_sekolah) : '') + '</div></div>';
+      var baris = urut.map(function (s, i) {
+        return '<tr><td class="c">' + (i + 1) + '</td><td>' + esc(s.nama) + '</td><td class="c">' + esc(s.nis || '') + '</td><td class="c">' + esc(s.nisn || '') + '</td><td class="c">' + keteranganMasuk(s) + '</td></tr>';
+      }).join('');
+      var daftar = '<div class="hal">' + kopHtml(profil, logo) +
+        '<div class="judul"><div class="t">DAFTAR SISWA</div><div class="n">Kelas <b>' + esc(kelas.nama) + '</b>' + (taTeks ? ' &nbsp;|&nbsp; ' + esc(taTeks) : '') + ' &nbsp;|&nbsp; Jumlah <b>' + urut.length + '</b> siswa</div></div>' +
+        '<table class="ds"><thead><tr><th style="width:8%;">No</th><th>Nama</th><th style="width:17%;">NIS</th><th style="width:20%;">NISN</th><th style="width:15%;">Keterangan</th></tr></thead><tbody>' + baris + '</tbody></table>' + ttdKepsek +
+        '<div class="ft"><span>Daftar Siswa Kelas ' + esc(kelas.nama) + '</span><span>Dicetak ' + tglCetak + '</span></div></div>';
+
+      w.document.open();
+      w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Cover & Daftar Siswa ' + esc(kelas.nama) + '</title><style>' + cssCetak() + '</style></head><body>' + cover + daftar + '</body></html>');
+      w.document.close();
+      w.focus();
+      var imgs = Array.prototype.slice.call(w.document.images);
+      await Promise.race([Promise.all(imgs.map(function (im) { return im.complete ? Promise.resolve() : new Promise(function (ok) { im.onload = im.onerror = ok; }); })), new Promise(function (ok) { setTimeout(ok, 10000); })]);
       setTimeout(function () { w.print(); }, 300);
     } catch (e) {
       w.document.body.innerHTML = '<p style="font-family:sans-serif;color:#b91c1c;">Gagal menyiapkan cetak: ' + esc(pesanError(e)) + '</p>';
@@ -1125,11 +1177,12 @@
     return String(v);
   }
 
-  function halamanSiswa(s, foto, rw, ct, profil, logo) {
+  function halamanSiswa(s, foto, rw, ct, profil, logo, jenis) {
     foto = foto || {};
+    jenis = jenis || 'lengkap';
 
     // Isian: grid 2 kolom; isian "full" / textarea selebar baris
-    var bagianHtml = F.TAB.map(function (tab) {
+    var bagianTab = F.TAB.map(function (tab) {
       return tab.bagian.map(function (bg) {
         return '<div class="sec"><h4>' + esc(bg.judul) + '</h4><div class="kv">' + bg.fields.map(function (f) {
           var v = nilaiCetak(f, s);
@@ -1137,7 +1190,18 @@
           return '<div class="r' + (full ? ' full' : '') + '"><span class="l">' + esc(f.l) + '</span><span class="v' + (v === '' ? ' kosong' : '') + '">' + (v === '' ? '—' : esc(v)) + '</span></div>';
         }).join('') + '</div></div>';
       }).join('');
-    }).join('');
+    });
+    var bagianHtml = bagianTab.join('');
+    // Biodata 2 halaman: bagian A-E (sampai Ibu Kandung) di halaman 1, sisanya di halaman 2
+    var bagianFlat = [];
+    F.TAB.forEach(function (tab) { tab.bagian.forEach(function (bg) {
+      bagianFlat.push('<div class="sec"><h4>' + esc(bg.judul) + '</h4><div class="kv">' + bg.fields.map(function (f) {
+        var v = nilaiCetak(f, s);
+        var full = f.full || f.tipe === 'textarea';
+        return '<div class="r' + (full ? ' full' : '') + '"><span class="l">' + esc(f.l) + '</span><span class="v' + (v === '' ? ' kosong' : '') + '">' + (v === '' ? '—' : esc(v)) + '</span></div>';
+      }).join('') + '</div></div>');
+    }); });
+    var BATAS_HAL1 = 5; // jumlah bagian di halaman 1 (A, B, C, D, E)
 
     var lg = legerHtml(rw, true);
     var perkembangan = '<div class="sec" style="page-break-inside:auto;"><h4>K. Perkembangan Belajar (dari E-Rapor)</h4>' +
@@ -1180,11 +1244,111 @@
       '<tr><td class="l">Status</td><td class="c">:</td><td class="v"><span class="lencana">' + esc(LABEL_OPSI[s.status] || s.status || '') + '</span></td></tr>' +
       '</table></div>' + kotakFoto(foto.lulus, 'Saat Lulus', s.status === 'aktif' ? '' : s.tanggal_keluar) + '</div>';
 
-    return '<div class="hal"><div class="kop"><img src="' + esc(logo) + '" alt=""><div class="tx"><div class="nm">' + esc((profil.nama_sekolah || 'SMK Widya Mandala Tambak').toUpperCase()) + '</div>' +
-      '<div class="al">' + esc(profil.alamat_sekolah || '') + '</div></div><span class="sp"></span></div>' +
-      '<div class="judul"><div class="t">BUKU INDUK PESERTA DIDIK</div><div class="n">NIS <b>' + esc(s.nis || '—') + '</b> &nbsp;|&nbsp; NISN <b>' + esc(s.nisn || '—') + '</b></div></div>' +
-      kartu + bagianHtml + perkembangan + koku + catatan + ttd +
-      '<div class="ft"><span>Buku Induk Peserta Didik · ' + esc(s.nama) + '</span><span>Dicetak ' + tglCetak + '</span></div></div>';
+    var judulDok = jenis === 'nilai' ? 'NILAI PESERTA DIDIK' : jenis === 'biodata' ? 'BIODATA PESERTA DIDIK' : 'BUKU INDUK PESERTA DIDIK';
+    var isi = jenis === 'nilai' ? (kartuNilai() + perkembangan + koku) : jenis === 'biodata' ? (kartu + bagianFlat.slice(0, BATAS_HAL1).join('') + '<div class="pb"></div>' + bagianFlat.slice(BATAS_HAL1).join('') + catatan) : (kartu + bagianHtml + perkembangan + koku + catatan);
+    // Ringkasan identitas singkat (tanpa foto) untuk halaman Nilai
+    function kartuNilai() {
+      return '<div class=\"kartu\"><div class=\"ringkas\"><div class=\"nama\">' + esc(s.nama) + '</div><table>' +
+        '<tr><td class=\"l\">Tempat, Tgl. Lahir</td><td class=\"c\">:</td><td class=\"v\">' + esc([s.tempat_lahir, s.tanggal_lahir ? fmtTgl(s.tanggal_lahir) : ''].filter(Boolean).join(', ')) + '</td></tr>' +
+        '<tr><td class=\"l\">Kelas Saat Ini</td><td class=\"c\">:</td><td class=\"v\">' + esc(s.kelas ? s.kelas.nama : '') + '</td></tr>' +
+        '<tr><td class=\"l\">Status</td><td class=\"c\">:</td><td class=\"v\"><span class=\"lencana\">' + esc(LABEL_OPSI[s.status] || s.status || '') + '</span></td></tr>' +
+        '</table></div></div>';
+    }
+
+    return '<div class=\"hal' + (jenis === 'biodata' ? ' bio' : '') + '\">' + kopHtml(profil, logo) +
+      '<div class=\"judul\"><div class=\"t\">' + judulDok + '</div><div class=\"n\">NIS <b>' + esc(s.nis || '—') + '</b> &nbsp;|&nbsp; NISN <b>' + esc(s.nisn || '—') + '</b></div></div>' +
+      isi +
+      '<div class=\"ft\"><span>' + (jenis === 'nilai' ? 'Nilai' : jenis === 'biodata' ? 'Biodata' : 'Buku Induk') + ' Peserta Didik · ' + esc(s.nama) + '</span><span>Dicetak ' + tglCetak + '</span></div></div>';
+  }
+
+  function kopHtml(profil, logo) {
+    return '<div class=\"kop\"><img src=\"' + esc(logo) + '\" alt=\"\"><div class=\"tx\"><div class=\"nm\">' + esc((profil.nama_sekolah || 'SMK Widya Mandala Tambak').toUpperCase()) + '</div>' +
+      '<div class=\"al\">' + esc(profil.alamat_sekolah || '') + '</div></div><span class=\"sp\"></span></div>';
+  }
+
+  // CSS cetak bersama (biodata, nilai, cover, daftar siswa)
+  function cssCetak() {
+    var NAVY = '#12306b';
+    return [
+        '@page{size:A4;margin:12mm 13mm 14mm}',
+        '*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}',
+        'body{font-family:"Segoe UI",Calibri,Arial,Helvetica,sans-serif;font-size:10pt;color:#000;margin:0;line-height:1.35}',
+        '.hal{page-break-after:always}.hal:last-child{page-break-after:auto}',
+        /* kop surat */
+        '.kop{display:flex;align-items:center;gap:14px;padding-bottom:9px;border-bottom:2.5px solid ' + NAVY + ';position:relative;margin-bottom:10px}',
+        '.kop:after{content:"";position:absolute;left:0;right:0;bottom:-6px;border-bottom:.8px solid ' + NAVY + '}',
+        '.kop img,.kop .sp{width:64px;height:64px;flex:0 0 64px}.kop img{object-fit:contain}',
+        '.kop .tx{flex:1;text-align:center}.kop .nm{font-size:15pt;font-weight:800;letter-spacing:.5px;color:' + NAVY + '}.kop .al{font-size:8.5pt;color:#000;margin-top:2px}',
+        /* judul */
+        '.judul{text-align:center;margin:16px 0 12px}.judul .t{display:inline-block;background:' + NAVY + ';color:#fff;font-weight:800;font-size:12pt;letter-spacing:2.5px;padding:5px 28px;border-radius:3px}',
+        '.judul .n{margin-top:6px;font-size:9pt;color:#000}.judul .n b{color:#000}',
+        /* kartu identitas + 2 foto */
+        '.kartu{display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid #c7d0e4;border-radius:6px;padding:10px 12px;background:#f6f8fd;margin-bottom:4px}',
+        '.fw{width:32mm;flex:0 0 32mm;text-align:center}',
+        '.foto{width:30mm;height:40mm;margin:0 auto;border:1px solid #6b7280;background:#fff;display:flex;align-items:center;justify-content:center;font-size:7.5pt;line-height:1.3;color:#000;text-align:center;overflow:hidden}',
+        '.foto.kosong{border:1px dashed #9ca3af}.foto img{width:100%;height:100%;object-fit:cover}',
+        '.fw .cap{font-size:8pt;font-weight:700;color:' + NAVY + ';margin-top:5px;text-transform:uppercase;letter-spacing:.4px}.fw .tg{font-size:7.5pt;color:#000;min-height:1em}',
+        '.ringkas{flex:1;min-width:0}.ringkas .nama{font-size:14pt;font-weight:800;color:' + NAVY + ';line-height:1.2;text-align:center;margin-bottom:7px}',
+        '.ringkas table{width:100%;border-collapse:collapse}.ringkas td{padding:2px 3px;font-size:9.5pt;vertical-align:top}.ringkas td.l{color:#000;width:36%}.ringkas td.c{width:3%}.ringkas td.v{font-weight:600}',
+        '.lencana{display:inline-block;padding:0 8px;border-radius:9px;font-size:8.5pt;font-weight:700;border:1px solid ' + NAVY + ';color:' + NAVY + ';background:#fff}',
+        /* bagian isian */
+        '.sec{margin-top:10px;page-break-inside:avoid}',
+        '.sec h4{margin:0 0 4px;font-size:10pt;font-weight:800;letter-spacing:.2px;color:' + NAVY + ';border-left:4px solid ' + NAVY + ';border-bottom:1.5px solid ' + NAVY + ';padding:1px 0 2px 7px;page-break-after:avoid}',
+        '.kv{display:grid;grid-template-columns:1fr 1fr;column-gap:20px}',
+        '.kv .r{display:flex;gap:4px;padding:2.4px 0;border-bottom:.5px dotted #9ca3af;page-break-inside:avoid}.kv .r.full{grid-column:1/-1}',
+        '.kv .l{flex:0 0 41%;color:#000;font-size:9pt}.kv .r.full .l{flex-basis:20.5%}',
+        '.kv .v{flex:1;min-width:0;font-weight:600;word-break:break-word;white-space:pre-wrap;min-height:1.1em}',
+        '.kv .v:before{content:": ";color:#000;font-weight:400}.kv .v.kosong{color:#000;font-weight:400}',
+        /* tabel nilai & catatan */
+        'table.g{width:100%;border-collapse:collapse;font-size:8.5pt;margin-top:4px}',
+        'table.g th{background:' + NAVY + ';color:#fff;font-weight:700;padding:3px 4px;border:1px solid ' + NAVY + ';text-align:center}',
+        'table.g td{border:1px solid #c3cad9;padding:2.5px 4px}table.g tbody tr:nth-child(even) td{background:#f3f6fb}',
+        'table.g tr{page-break-inside:avoid}.kosongnote{font-size:9pt;color:#000;font-style:italic;padding:3px 0}',
+        /* tanda tangan & footer */
+        '.ttd{display:flex;justify-content:space-between;margin-top:20px;page-break-inside:avoid;font-size:9.5pt}.ttd>div{text-align:center;width:44%}.ttd .sp{height:58px}',
+        '.ft{margin-top:14px;padding-top:4px;border-top:.5px solid #cbd5e1;font-size:7.5pt;color:#000;display:flex;justify-content:space-between}',
+      /* biodata: padat, 2 halaman */
+      '.pb{page-break-before:always;height:0}',
+      '.bio{line-height:1.25}.bio .judul{margin:10px 0 8px}.bio .kartu{padding:7px 10px}',
+      '.bio .sec{margin-top:8px}.bio .sec h4{margin-bottom:3px}',
+      '.bio .kv .r{padding:1.7px 0}.bio .kv .r.full .l{flex-basis:31%}.bio .kv .l,.bio .kv .v{font-size:9pt}',
+      '.bio .ringkas .nama{margin-bottom:4px}.bio .ringkas td{padding:1px 3px}',
+      '.bio table.g td{padding:2px 4px}.bio .ft{margin-top:8px}',
+      /* cover (modern) */
+      '.cv{position:relative;width:100%;height:268mm;overflow:hidden;background:#fff;padding:15mm 14mm 0 18mm;font-family:"Segoe UI","Plus Jakarta Sans",Calibri,Arial,sans-serif;color:' + NAVY + '}',
+      '.cv-dk1,.cv-dk2,.cv-dk3{position:absolute;border-radius:99px;transform:rotate(-45deg)}',
+      '.cv-dk1{width:46mm;height:9mm;background:' + NAVY + ';right:-12mm;top:5mm}',
+      '.cv-dk2{width:46mm;height:9mm;background:#c9dcf4;right:-1mm;top:14mm}',
+      '.cv-dk3{width:40mm;height:2.6mm;background:#c9dcf4;right:20mm;top:6mm}',
+      '.cv-head{display:flex;align-items:center;gap:6mm;position:relative}',
+      '.cv-head img{width:25mm;height:25mm;object-fit:contain;flex:0 0 25mm}',
+      '.cv-sk{font-size:17pt;font-weight:800;line-height:1.2;letter-spacing:.3px;max-width:100mm}',
+      '.cv-t1{margin-top:15mm;font-family:"Arial Black","Segoe UI Black","Segoe UI",Arial,sans-serif;font-size:56pt;font-weight:900;line-height:1;letter-spacing:-1px;white-space:nowrap}',
+      '.cv-t2{margin-top:3mm;font-family:"Arial Black","Segoe UI Black","Segoe UI",Arial,sans-serif;font-size:31pt;font-weight:900;line-height:1.1;letter-spacing:.5px;white-space:nowrap}',
+      '.cv-line{margin-top:7mm;width:128mm;height:.7mm;background:' + NAVY + '}',
+      '.cv-pill{margin-top:5mm;width:150mm;text-align:center;background:#cfe0f6;border-radius:99px;padding:3.2mm 0;font-size:13.5pt;font-weight:700;letter-spacing:1.6px}',
+      '.cv-card{margin-top:11mm;z-index:2;width:112mm;background:#eaf2fc;border-radius:6mm;padding:6mm 7mm;position:relative}',
+      '.cv-row{display:flex;align-items:center;gap:6mm}',
+      '.cv-ic{width:15mm;height:15mm;flex:0 0 15mm;border-radius:50%;background:' + NAVY + ';display:flex;align-items:center;justify-content:center}',
+      '.cv-ic svg{width:8mm;height:8mm}',
+      '.cv-lb{font-size:9.5pt;letter-spacing:1.6px;color:#4a5a7a}',
+      '.cv-vl2{font-size:17pt;font-weight:800;line-height:1.2;color:#0f2a5c;margin-top:.6mm}',
+      '.cv-sep{height:.3mm;background:#b7cbe6;margin:4mm 0 4mm 21mm}',
+      '.cv-arc{position:absolute;right:-34mm;bottom:-40mm;width:128mm;height:128mm;border-radius:50%;background:linear-gradient(180deg,#eef4fc 35%,#fff 92%)}',
+      '.cv-gd{position:absolute;right:-4mm;bottom:22mm;width:100mm}',
+      '.cv-foot{position:absolute;left:14mm;bottom:12mm;display:flex;align-items:center;gap:4mm;font-size:7.6pt;letter-spacing:.8px;line-height:1.5;color:#1b3566}',
+      '.cv-foot img{width:19mm;height:19mm;object-fit:contain}',
+      '.cv-vb{width:.3mm;height:12mm;background:#8aa2c8}',
+      '.cv-bars{position:absolute;left:0;bottom:4mm;display:flex;gap:3mm;align-items:center}',
+      '.cv-bars i{display:block;height:2.4mm;border-radius:0 99px 99px 0}',
+      '.cv-bars i:first-child{width:40mm;background:' + NAVY + '}',
+      '.cv-bars i:last-child{width:30mm;background:#c9dcf4}',
+      /* daftar siswa */
+      'table.ds{width:100%;border-collapse:collapse;font-size:10pt;margin-top:6px}',
+      'table.ds th{background:' + NAVY + ';color:#fff;padding:5px 6px;border:1px solid ' + NAVY + ';text-align:center}',
+      'table.ds td{border:1px solid #94a3b8;padding:4px 6px}table.ds tr{page-break-inside:avoid}',
+      'table.ds td.c{text-align:center}'
+    ].join('');
   }
 
   // ================= Excel =================
@@ -1663,13 +1827,23 @@
     });
   };
 
-  // Cetak Buku Induk: seluruh kelas / pilihan siswa.
+  // Cetak Buku Induk: 4 bagian -> Cover, Daftar Siswa, Biodata, Nilai.
+  // Cover + Daftar Siswa dicetak sekaligus (1 kali per kelas); Biodata & Nilai masing-masing punya tombol cetak sendiri.
   BI.renderCetak = async function (opts) {
     var root = opts.root;
     root.innerHTML = '<div class="panel-head"><div><div class="panel-head__title">Cetak Buku Induk</div><div class="panel-head__desc">Memuat...</div></div></div>';
     var list, kelasList = [];
     try { list = await BI.muatSiswa({ kelasId: opts.kelasId || null }); if (!opts.kelasId) kelasList = await BI.muatKelas(); } catch (e) { root.innerHTML = '<div class="panel-note">' + esc(pesanError(e)) + '</div>'; return; }
-    var kelasPilih = '';
+    var kelasPilih = opts.kelasId || '';
+    var kelasWali = opts.kelasId ? BI.ctx.kelasWali : null;
+
+    function kelasAktif() {
+      if (opts.kelasId) return kelasWali;
+      return kelasList.find(function (k) { return k.id === kelasPilih; }) || null;
+    }
+    function siswaKelas() {
+      return list.filter(function (s) { return s.status === 'aktif' && s.kelas && s.kelas.id === (kelasAktif() || {}).id; });
+    }
     function tampil() {
       var f = list.filter(function (s) {
         if (opts.admin && s.status !== 'aktif' && !root.querySelector('#cetAlumni').checked) return false;
@@ -1681,23 +1855,40 @@
       }).join('') || '<tr><td colspan="5">Tidak ada siswa.</td></tr>';
       root.querySelector('#cetAll').checked = true;
     }
+    function terpilih() {
+      var ids = Array.prototype.filter.call(root.querySelectorAll('.cetChk'), function (c) { return c.checked; }).map(function (c) { return c.value; });
+      if (!ids.length) { alert('Centang minimal satu siswa.'); return null; }
+      if (ids.length > 60 && !confirm('Mencetak ' + ids.length + ' siswa sekaligus bisa berat. Lanjutkan?')) return null;
+      return list.filter(function (s) { return ids.indexOf(s.id) !== -1; });
+    }
+
     root.innerHTML =
-      '<div class="panel-head"><div><div class="panel-head__title">Cetak Buku Induk</div><div class="panel-head__desc">Centang siswa yang ingin dicetak. Satu siswa = satu lembar Buku Induk (2–3 halaman A4). Di jendela cetak, pilih "Simpan sebagai PDF" bila perlu file.</div></div></div>' +
+      '<div class="panel-head"><div><div class="panel-head__title">Cetak Buku Induk</div><div class="panel-head__desc">Buku Induk terdiri dari 4 bagian: <b>Cover</b>, <b>Daftar Siswa</b>, <b>Biodata</b>, dan <b>Nilai</b>. Cover dan Daftar Siswa dicetak sekaligus (cukup satu per kelas); Biodata dan Nilai dicetak sendiri-sendiri per siswa. Di jendela cetak, pilih "Simpan sebagai PDF" bila perlu file.</div></div></div>' +
+
+      '<div class="section-title">1 & 2. Cover + Daftar Siswa <span style="font-weight:400;font-size:12px;color:var(--ink-soft);">(satu kali cetak per kelas)</span></div>' +
       '<div class="toolbar" style="align-items:flex-end;">' +
-      (!opts.kelasId ? '<div class="field" style="margin-bottom:0;"><label>Kelas</label><select id="cetKelas"><option value="">Semua</option>' + kelasList.map(function (k) { return '<option value="' + k.id + '">' + esc(k.nama) + '</option>'; }).join('') + '</select></div>' : '') +
+      (!opts.kelasId ? '<div class="field" style="margin-bottom:0;"><label>Kelas</label><select id="cetKelas"><option value="">— pilih kelas —</option>' + kelasList.map(function (k) { return '<option value="' + k.id + '">' + esc(k.nama) + '</option>'; }).join('') + '</select></div>' :
+        '<div class="field" style="margin-bottom:0;"><label>Kelas</label><div style="padding:8px 0;font-weight:600;">' + esc(kelasWali ? kelasWali.nama : '—') + '</div></div>') +
+      '<button class="btn-small btn-small--primary" id="cetCover">🖨 Cetak Cover + Daftar Siswa</button></div>' +
+      '<div class="panel-note" style="margin-top:-4px;">Cover: judul, kelas, program keahlian, tahun ajaran. Daftar Siswa: No, Nama, NIS, NISN, Keterangan (Baru / Pindahan, dari isian "Diterima Sebagai"). Hanya siswa aktif di kelas tersebut. Tanda tangan hanya Kepala Sekolah, tanggalnya mengikuti tanggal diterima siswa baru.</div>' +
+
+      '<div class="section-title" style="margin-top:22px;">3 & 4. Biodata dan Nilai <span style="font-weight:400;font-size:12px;color:var(--ink-soft);">(centang siswa yang ingin dicetak)</span></div>' +
+      '<div class="toolbar" style="align-items:flex-end;">' +
       (opts.admin ? '<label style="display:flex;gap:6px;align-items:center;font-size:12.5px;padding-bottom:10px;"><input type="checkbox" id="cetAlumni"> sertakan lulus/pindah/keluar</label>' : '<input type="checkbox" id="cetAlumni" checked style="display:none;">') +
-      '<button class="btn-small btn-small--primary" id="cetMulai">🖨 Cetak yang Dicentang</button></div>' +
+      '<button class="btn-small btn-small--primary" id="cetBiodata">🖨 Cetak Biodata</button>' +
+      '<button class="btn-small btn-small--primary" id="cetNilai">🖨 Cetak Nilai</button></div>' +
       '<div class="table-wrap"><table class="data-table"><thead><tr><th style="width:36px;"><input type="checkbox" id="cetAll" checked></th><th>Nama</th><th>NIS</th><th>Kelas</th><th>Status</th></tr></thead><tbody id="cetTbody"></tbody></table></div>';
     tampil();
     var k = root.querySelector('#cetKelas'); if (k) k.addEventListener('change', function (e) { kelasPilih = e.target.value; tampil(); });
     root.querySelector('#cetAlumni').addEventListener('change', tampil);
     root.querySelector('#cetAll').addEventListener('change', function (e) { root.querySelectorAll('.cetChk').forEach(function (c) { c.checked = e.target.checked; }); });
-    root.querySelector('#cetMulai').addEventListener('click', function () {
-      var ids = Array.prototype.filter.call(root.querySelectorAll('.cetChk'), function (c) { return c.checked; }).map(function (c) { return c.value; });
-      if (!ids.length) { alert('Centang minimal satu siswa.'); return; }
-      if (ids.length > 60 && !confirm('Mencetak ' + ids.length + ' siswa sekaligus bisa berat. Lanjutkan?')) return;
-      BI.cetak(list.filter(function (s) { return ids.indexOf(s.id) !== -1; }));
+    root.querySelector('#cetCover').addEventListener('click', function () {
+      var kl = kelasAktif();
+      if (!kl) { alert('Pilih kelas dulu.'); return; }
+      BI.cetakCoverDaftar(siswaKelas(), kl);
     });
+    root.querySelector('#cetBiodata').addEventListener('click', function () { var l = terpilih(); if (l) BI.cetak(l, 'biodata'); });
+    root.querySelector('#cetNilai').addEventListener('click', function () { var l = terpilih(); if (l) BI.cetak(l, 'nilai'); });
   };
 
   // Unduh/Impor Excel.
