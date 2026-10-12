@@ -107,6 +107,8 @@
     if (err && err.code === '23505') return 'Data bentrok: NIS/NISN sudah dipakai siswa lain.';
     if (/kokurikuler/i.test(m) && /column|schema cache/i.test(m)) return 'Kolom kokurikuler belum ada di arsip Buku Induk. Jalankan ulang migrasi_buku_induk.sql di Supabase SQL Editor (aman diulang), lalu muat ulang halaman.';
     if (/foto_lulus/i.test(m)) return 'Kolom foto lulus belum ada. Jalankan ulang migrasi_buku_induk.sql di Supabase SQL Editor (aman diulang), lalu muat ulang halaman.';
+    if (/bi_dekripsi/i.test(m) && /does not exist|schema cache|could not find/i.test(m)) return 'Fungsi dekripsi NIK/KK belum ada. Jalankan migrasi_enkripsi_nik_kk.sql di Supabase SQL Editor, lalu muat ulang halaman.';
+    if (/tidak berizin/i.test(m)) return 'Kamu tidak punya izin membaca NIK / No. KK.';
     if (/row-level security|permission denied/i.test(m)) return 'Kamu tidak punya izin untuk mengubah data ini. (Pastikan migrasi_buku_induk.sql sudah dijalankan.)';
     if (/relation .* does not exist|bi_siswa_detail|bi_riwayat|bi_catatan/i.test(m) && /does not exist|schema cache/i.test(m)) return 'Tabel Buku Induk belum ada. Jalankan migrasi_buku_induk.sql di Supabase SQL Editor dulu.';
     return m;
@@ -114,6 +116,34 @@
   BI.pesanError = pesanError;
 
   var KOLOM_DETAIL = F.SEMUA.filter(function (f) { return f.t === 'detail'; }).map(function (f) { return f.k; });
+
+  // ================= Enkripsi NIK & No. KK =================
+  // Di database kolom nik & no_kk tersimpan terenkripsi ("enc:...").
+  // Menulis: tetap kirim teks biasa — trigger di database yang mengenkripsi.
+  // Membaca: nilai "enc:..." didekripsi lewat fungsi rpc bi_dekripsi
+  // (hanya admin & wali kelas yang diizinkan). Lihat migrasi_enkripsi_nik_kk.sql.
+  var KOLOM_ENKRIP = ['nik', 'no_kk'];
+  BI.dekripsiBaris = async function (rows) {
+    var perlu = [], ada = {};
+    rows.forEach(function (r) {
+      KOLOM_ENKRIP.forEach(function (k) {
+        var v = r[k];
+        if (typeof v === 'string' && v.indexOf('enc:') === 0 && !ada[v]) { ada[v] = true; perlu.push(v); }
+      });
+    });
+    if (!perlu.length) return rows;
+    var peta = {};
+    for (var i = 0; i < perlu.length; i += 300) {
+      var potong = perlu.slice(i, i + 300);
+      var r = await sb().rpc('bi_dekripsi', { p_vals: potong });
+      if (r.error) throw r.error;
+      potong.forEach(function (v, j) { peta[v] = (r.data && r.data[j]) || null; });
+    }
+    rows.forEach(function (r) {
+      KOLOM_ENKRIP.forEach(function (k) { if (typeof r[k] === 'string' && r[k].indexOf('enc:') === 0) r[k] = peta[r[k]]; });
+    });
+    return rows;
+  };
 
   // ================= Muat data siswa =================
   // Hasil: daftar siswa (biodata + isian tambahan digabung datar) beserta
@@ -157,6 +187,7 @@
         return sb().from('bi_siswa_detail').select(kolomDetail).order('siswa_id').range(a, b);
       });
     }
+    await BI.dekripsiBaris(detail);
     var dMap = {};
     detail.forEach(function (d) { dMap[d.siswa_id] = d; });
 
