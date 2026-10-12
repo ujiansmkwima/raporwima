@@ -496,11 +496,233 @@
     await unduhWorkbook(wb, opts.namaFile || 'data.xlsx');
   }
 
+
+  // =========================================================
+  // 4) DATA RAPOR LENGKAP 1 KELAS (dipakai Admin -> Unduh Data Rapor)
+  // =========================================================
+  //
+  // Menghasilkan 1 file Excel (Blob) untuk 1 kelas, berformat sama dengan
+  // Rekap Nilai/Leger (judul, identitas, tabel bergaris, tanda tangan):
+  //   - Sheet "Rekap Nilai"  : nilai akhir semua mapel, 1 baris per siswa
+  //   - Sheet "Rekap Rapor"  : ketidakhadiran, ekskul, kokurikuler, catatan wali
+  //   - Sheet per siswa      : isi kartu rapor lengkap (nilai + capaian
+  //                            kompetensi, kokurikuler, ekskul, ketidakhadiran,
+  //                            catatan wali kelas, tanda tangan)
+  //
+  // opts = {
+  //   profilSekolah, tahunAjaran: { nama, semester }, kelas: { nama, tingkat, program_keahlian },
+  //   waliKelasNama, fase, semesterKe,
+  //   siswaList: [{ id, nis, nisn, nama, agama }],
+  //   mapelUmum: [{ id, nama, agama_spesifik? }], mapelKejuruan: [...],   (sudah urut)
+  //   namaMapelFn: function (nama, agama) -> nama tampil,
+  //   nilaiMap: { [siswaId]: { [mapelId]: { nilai, capaian_pembelajaran } } },
+  //   ekskulMap: { [siswaId]: [{ nama, predikat, deskripsi }] },
+  //   kokuMap: { [siswaId]: [{ nama_kegiatan, deskripsi }] },
+  //   presMap: { [siswaId]: { jumlah_sakit, jumlah_izin, jumlah_alpha, catatan_wali_kelas } }
+  // }
+  async function buatBlobDataRaporKelas(opts) {
+    var profil = opts.profilSekolah || {};
+    var namaSekolah = (profil.nama_sekolah || 'SMK Widya Mandala Tambak').toUpperCase();
+    var siswaList = opts.siswaList || [];
+    var wb = new ExcelJS.Workbook();
+    wb.creator = 'Portal Data dan Penilaian SMK Widya Mandala Tambak';
+    wb.created = new Date();
+
+    function relevan(list, siswa) {
+      var l = list.filter(function (m) { return !m.agama_spesifik || m.agama_spesifik === siswa.agama; });
+      return l.filter(function (m) { return m.agama_spesifik && m.agama_spesifik === siswa.agama; })
+        .concat(l.filter(function (m) { return !(m.agama_spesifik && m.agama_spesifik === siswa.agama); }));
+    }
+    function nilaiBulat(n) { return (n && n.nilai !== undefined && n.nilai !== null) ? Math.round(Number(n.nilai)) : ''; }
+
+    var mapelSemua = (opts.mapelUmum || []).concat(opts.mapelKejuruan || []);
+    var judulBase = [namaSekolah];
+    if (profil.alamat_sekolah) judulBase.push(profil.alamat_sekolah);
+    var identKelas = [
+      ['Kelas', opts.kelas.nama, 'Tahun Ajaran', opts.tahunAjaran.nama],
+      ['Program Keahlian', opts.kelas.program_keahlian, 'Semester', (opts.semesterKe ? opts.semesterKe + ' (' : '') + opts.tahunAjaran.semester + (opts.semesterKe ? ')' : '')],
+      ['Wali Kelas', opts.waliKelasNama, 'Jumlah Peserta Didik', String(siswaList.length)]
+    ];
+    var ttdKelas = {
+      kotaTanggal: kotaTanggalDariProfil(profil),
+      kepalaSekolah: profil.kepala_sekolah,
+      nipKepalaSekolah: profil.nip_kepala_sekolah,
+      waliKelas: opts.waliKelasNama
+    };
+
+    // ---------- Sheet 1: Rekap Nilai ----------
+    var ws1 = buatWorksheet(wb, 'Rekap Nilai');
+    var tk1 = Math.max(9, 3 + mapelSemua.length);
+    var nx = tulisJudul(ws1, tk1, ['REKAP NILAI RAPOR'].concat(judulBase));
+    nx = tulisIdentitas(ws1, nx, tk1, identKelas);
+    var head1 = ['No', 'NIS', 'Nama Peserta Didik'].concat(mapelSemua.map(function (m) { return m.nama; }));
+    var rows1 = siswaList.map(function (s, i) {
+      var row = [i + 1, s.nis || '-', s.nama];
+      mapelSemua.forEach(function (m) {
+        if (m.agama_spesifik && s.agama !== m.agama_spesifik) { row.push({ v: '-', abu: true }); return; }
+        row.push(nilaiBulat((opts.nilaiMap[s.id] || {})[m.id]));
+      });
+      return row;
+    });
+    var tengah1 = [0, 1]; for (var c = 3; c < tk1; c++) tengah1.push(c);
+    var akhir1 = tulisTabel(ws1, nx, head1, rows1, { tengahKolom: tengah1 });
+    ws1.getColumn(1).width = 5; ws1.getColumn(2).width = 13; ws1.getColumn(3).width = 27;
+    for (var c2 = 4; c2 <= tk1; c2++) ws1.getColumn(c2).width = 12;
+    ws1.views = [{ state: 'frozen', xSplit: 3, ySplit: nx, showGridLines: false }];
+    tulisTandaTangan(ws1, akhir1, tk1, ttdKelas);
+
+    // ---------- Sheet 2: Rekap Rapor (non-nilai) ----------
+    var ws2 = buatWorksheet(wb, 'Rekap Rapor');
+    var tk2 = 9;
+    var nx2 = tulisJudul(ws2, tk2, ['REKAP RAPOR — KETIDAKHADIRAN, EKSTRAKURIKULER, KOKURIKULER, CATATAN'].concat(judulBase));
+    nx2 = tulisIdentitas(ws2, nx2, tk2, identKelas);
+    var head2 = ['No', 'NIS', 'Nama Peserta Didik', 'Sakit', 'Izin', 'Tanpa Ket.', 'Ekstrakurikuler', 'Kokurikuler', 'Catatan Wali Kelas'];
+    var rows2 = siswaList.map(function (s, i) {
+      var p = opts.presMap[s.id] || {};
+      var ek = (opts.ekskulMap[s.id] || []).map(function (e) { return e.nama + (e.predikat ? ' (' + e.predikat + ')' : '') + (e.deskripsi ? ' — ' + e.deskripsi : ''); }).join('\n');
+      var kk = (opts.kokuMap[s.id] || []).map(function (k) { return (k.nama_kegiatan || 'Tanpa nama kegiatan') + (k.deskripsi ? ' — ' + k.deskripsi : ''); }).join('\n');
+      return [i + 1, s.nis || '-', s.nama, p.jumlah_sakit || 0, p.jumlah_izin || 0, p.jumlah_alpha || 0, ek, kk, p.catatan_wali_kelas || ''];
+    });
+    var akhir2 = tulisTabel(ws2, nx2, head2, rows2, { tengahKolom: [0, 1, 3, 4, 5] });
+    [5, 13, 27, 8, 8, 10, 38, 55, 45].forEach(function (w, i) { ws2.getColumn(i + 1).width = w; });
+    ws2.views = [{ state: 'frozen', xSplit: 3, ySplit: nx2, showGridLines: false }];
+    tulisTandaTangan(ws2, akhir2, tk2, ttdKelas);
+
+    // ---------- Sheet per siswa: isi kartu rapor ----------
+    var dipakai = {};
+    siswaList.forEach(function (s, idx) {
+      var nama = (idx + 1) + ' ' + s.nama;
+      nama = nama.replace(/[*?:\\\/\[\]]/g, '-').slice(0, 31);
+      if (dipakai[nama]) nama = nama.slice(0, 28) + '~' + (++dipakai[nama]); else dipakai[nama] = 1;
+      var ws = wb.addWorksheet(nama, {
+        pageSetup: { orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0, paperSize: 9, margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 } },
+        views: [{ showGridLines: false }]
+      });
+      var TK = 4;
+      var r = tulisJudul(ws, TK, ['RAPOR PESERTA DIDIK'].concat(judulBase));
+      r = tulisIdentitasRingkas(ws, r, TK, [
+        ['Nama Peserta Didik', s.nama], ['NIS / NISN', (s.nis || '-') + ' / ' + (s.nisn || '-')],
+        ['Kelas', opts.kelas.nama], ['Fase', opts.fase || '-'],
+        ['Semester', (opts.semesterKe ? opts.semesterKe + ' (' : '') + opts.tahunAjaran.semester + (opts.semesterKe ? ')' : '')],
+        ['Tahun Ajaran', opts.tahunAjaran.nama]
+      ]);
+
+      // Tabel nilai + capaian, dengan baris kelompok A/B
+      var hr = r;
+      ['No', 'Mata Pelajaran', 'Nilai Akhir', 'Capaian Kompetensi'].forEach(function (t, k) {
+        var cell = ws.getCell(hr, k + 1);
+        cell.value = t; cell.font = { bold: true, size: 10 };
+        cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+        cell.fill = ISI_HEADER; cell.border = GARIS_SEL;
+      });
+      r = hr + 1;
+      var no = 0;
+      [['A. Mata Pelajaran Umum', opts.mapelUmum || []], ['B. Mata Pelajaran Kejuruan', opts.mapelKejuruan || []]].forEach(function (g) {
+        ws.mergeCells(r, 1, r, TK);
+        var gc = ws.getCell(r, 1);
+        gc.value = g[0]; gc.font = { bold: true, size: 10 };
+        gc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } };
+        for (var cc = 1; cc <= TK; cc++) ws.getCell(r, cc).border = GARIS_SEL;
+        r++;
+        relevan(g[1], s).forEach(function (m) {
+          var n = (opts.nilaiMap[s.id] || {})[m.id] || {};
+          no++;
+          var vals = [no, opts.namaMapelFn ? opts.namaMapelFn(m.nama, s.agama) : m.nama, nilaiBulat(n), n.capaian_pembelajaran || ''];
+          vals.forEach(function (v, k) {
+            var cell = ws.getCell(r, k + 1);
+            cell.value = v; cell.border = GARIS_SEL; cell.font = { size: 10 };
+            cell.alignment = { vertical: 'top', horizontal: (k === 0 || k === 2) ? 'center' : 'left', wrapText: true };
+          });
+          r++;
+        });
+      });
+      r++;
+
+      function bar(teks) {
+        ws.mergeCells(r, 1, r, TK);
+        var c = ws.getCell(r, 1);
+        c.value = teks; c.font = { bold: true, size: 10 }; c.fill = ISI_HEADER;
+        for (var cc = 1; cc <= TK; cc++) ws.getCell(r, cc).border = GARIS_SEL;
+        r++;
+      }
+      function kotak(teks) {
+        ws.mergeCells(r, 1, r, TK);
+        var c = ws.getCell(r, 1);
+        c.value = teks || '-'; c.font = { size: 10 };
+        c.alignment = { vertical: 'top', wrapText: true };
+        for (var cc = 1; cc <= TK; cc++) ws.getCell(r, cc).border = GARIS_SEL;
+        ws.getRow(r).height = Math.max(20, 15 * Math.ceil(String(teks || '-').length / 95));
+        r++;
+      }
+
+      bar('Kokurikuler');
+      kotak((opts.kokuMap[s.id] || []).map(function (k) { return (k.nama_kegiatan || 'Tanpa nama kegiatan') + (k.deskripsi ? ' — ' + k.deskripsi : ''); }).join('\n'));
+      r++;
+
+      ['No', 'Ekstrakurikuler', 'Keterangan'].forEach(function (t, k) {
+        if (k === 2) ws.mergeCells(r, 3, r, TK);
+        var cell = ws.getCell(r, k + 1);
+        cell.value = t; cell.font = { bold: true, size: 10 };
+        cell.alignment = { horizontal: 'center' }; cell.fill = ISI_HEADER;
+      });
+      for (var cc = 1; cc <= TK; cc++) ws.getCell(r, cc).border = GARIS_SEL;
+      r++;
+      var eks = opts.ekskulMap[s.id] || [];
+      if (!eks.length) eks = [{ nama: '-', predikat: '', deskripsi: '' }];
+      eks.forEach(function (e, i) {
+        ws.mergeCells(r, 3, r, TK);
+        ws.getCell(r, 1).value = e.nama === '-' ? '-' : i + 1;
+        ws.getCell(r, 1).alignment = { horizontal: 'center', vertical: 'top' };
+        ws.getCell(r, 2).value = e.nama;
+        ws.getCell(r, 3).value = [e.predikat, e.deskripsi].filter(Boolean).join(' — ') || '-';
+        ws.getCell(r, 3).alignment = { vertical: 'top', wrapText: true };
+        for (var c3 = 1; c3 <= TK; c3++) { ws.getCell(r, c3).border = GARIS_SEL; ws.getCell(r, c3).font = { size: 10 }; }
+        r++;
+      });
+      r++;
+
+      var p = opts.presMap[s.id] || {};
+      bar('Ketidakhadiran');
+      [['Sakit', p.jumlah_sakit || 0], ['Izin', p.jumlah_izin || 0], ['Tanpa Keterangan', p.jumlah_alpha || 0]].forEach(function (x) {
+        ws.mergeCells(r, 1, r, 2);
+        ws.getCell(r, 1).value = x[0];
+        ws.getCell(r, 3).value = x[1];
+        ws.getCell(r, 3).alignment = { horizontal: 'center' };
+        ws.getCell(r, 4).value = 'Hari';
+        for (var c4 = 1; c4 <= TK; c4++) { ws.getCell(r, c4).border = GARIS_SEL; ws.getCell(r, c4).font = { size: 10 }; }
+        r++;
+      });
+      r++;
+      bar('Catatan Wali Kelas');
+      kotak(p.catatan_wali_kelas || '');
+
+      tulisTtdRingkas(ws, r, TK, {
+        kotaTanggal: kotaTanggalDariProfil(profil), labelKiri: 'Wali Kelas', namaKiri: opts.waliKelasNama,
+        kepalaSekolah: profil.kepala_sekolah, nipKepalaSekolah: profil.nip_kepala_sekolah
+      });
+
+      ws.getColumn(1).width = 6; ws.getColumn(2).width = 40; ws.getColumn(3).width = 12; ws.getColumn(4).width = 70;
+    });
+
+    return await workbookKeBlob(wb);
+  }
+
+  // Zip generik: files = [{ nama, blob }]
+  async function unduhZipBerkas(files, namaZip) {
+    if (typeof JSZip === 'undefined') throw new Error('Library JSZip belum termuat. Muat ulang halaman lalu coba lagi.');
+    var zip = new JSZip();
+    files.forEach(function (f) { zip.file(f.nama, f.blob); });
+    var zipBlob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+    unduhBlob(zipBlob, namaZip);
+  }
+
   global.RekapExcel = {
     unduhRekapNilaiSemester: unduhRekapNilaiSemester,
     unduhRekapNilaiSemesterZip: unduhRekapNilaiSemesterZip,
     unduhLegerSiswa: unduhLegerSiswa,
     unduhTabel: unduhTabel,
+    buatBlobDataRaporKelas: buatBlobDataRaporKelas,
+    unduhZipBerkas: unduhZipBerkas,
     namaFileAman: namaFileAman,
     formatTanggalId: formatTanggalId
   };

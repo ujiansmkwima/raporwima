@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dashboard Admin — E-Rapor SMK Widya Mandala Tambak</title>
+<title>Dashboard Admin E-Rapor — PORTAL DATA DAN PENILAIAN SMK WIDYA MANDALA TAMBAK</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css?v=11">
@@ -13,7 +13,8 @@
 <script src="xlsx-autofit.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<script src="excel-rekap.js?v=2"></script>
+<script src="excel-rekap.js?v=3"></script>
+<script src="excel-data-rapor.js?v=1"></script>
 <script src="unsaved-guard.js?v=1"></script>
 <script src="supabase-client.js"></script>
 <script src="bukuinduk-fields.js?v=1"></script>
@@ -64,6 +65,7 @@
       <a href="#" class="menu-item" data-view="leger"><i data-lucide="layers" class="menu-icon"></i><span class="menu-item__title">Leger Nilai 6 Semester</span></a>
       <div class="sidebar__section-label">Rapor Siswa</div>
       <a href="#" class="menu-item" data-view="terbitRapor"><i data-lucide="send" class="menu-icon"></i><span class="menu-item__title">Terbitkan Rapor</span></a>
+      <a href="#" class="menu-item" data-view="unduhDataRapor"><i data-lucide="file-spreadsheet" class="menu-icon"></i><span class="menu-item__title">Unduh Data Rapor (ZIP)</span></a>
       <div class="sidebar__section-label">Lainnya</div>
       <a href="#" class="menu-item" data-view="slideshowLogin"><i data-lucide="images" class="menu-icon"></i><span class="menu-item__title">Slideshow Login</span></a>
       <a href="#" class="menu-item" data-view="tarikBukuInduk"><i data-lucide="book-user" class="menu-icon"></i><span class="menu-item__title">Tarik Data Buku Induk</span></a>
@@ -1055,6 +1057,70 @@
     try {
       return d.toLocaleString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }).replace(/\./g, ':') + ' WIB';
     } catch (e) { return d.toString(); }
+  }
+
+
+  // ================= Unduh Seluruh Data Rapor (Excel) =================
+  // Admin mengunduh semua yang tampil di rapor (nilai akhir, capaian
+  // kompetensi, ekskul, kokurikuler, ketidakhadiran, catatan wali kelas)
+  // dalam satu file Excel. Logika pengambilan data ada di excel-data-rapor.js.
+  async function renderUnduhDataRapor() {
+    content.innerHTML =
+      '<div class="panel-head"><div><div class="panel-head__title">Unduh Data Rapor (Excel)</div>' +
+      '<div class="panel-head__desc">Unduh seluruh isi rapor dalam satu file Excel: nilai akhir, capaian kompetensi, ekstrakurikuler, kokurikuler, ketidakhadiran, dan catatan wali kelas. ' +
+      'Berbeda dari Leger (rekap nilai 6 semester), file ini berisi data rapor per semester.</div></div></div>' +
+      '<div class="panel-note" id="udrNote">Memuat...</div>';
+
+    var r = await Promise.all([
+      supabaseClient.from('tahun_ajaran').select('id, nama, semester, is_aktif').order('nama', { ascending: false }),
+      supabaseClient.from('kelas').select('id, nama, tingkat, program_keahlian').order('nama')
+    ]);
+    if (r[0].error || r[1].error) {
+      document.getElementById('udrNote').textContent = 'Gagal memuat data: ' + ((r[0].error || r[1].error).message);
+      return;
+    }
+    var taList = r[0].data || [];
+    var kelasList = (r[1].data || []).slice().sort(function (a, b) {
+      return (Number(a.tingkat) - Number(b.tingkat)) || String(a.nama).localeCompare(String(b.nama));
+    });
+    if (!taList.length || !kelasList.length) {
+      document.getElementById('udrNote').textContent = 'Belum ada tahun ajaran atau kelas.';
+      return;
+    }
+
+    var taDefault = taList.find(function (t) { return t.is_aktif; }) || taList[0];
+    content.innerHTML =
+      '<div class="panel-head"><div><div class="panel-head__title">Unduh Data Rapor (Excel)</div>' +
+      '<div class="panel-head__desc">Satu klik mengunduh <b>seluruh kelas</b> dalam satu file <b>ZIP</b>. Isi ZIP: satu file Excel per kelas (format sama seperti Rekap Nilai &amp; Leger). ' +
+      'Tiap file Excel berisi sheet <b>Rekap Nilai</b>, <b>Rekap Rapor</b> (ketidakhadiran, ekskul, kokurikuler, catatan wali kelas), lalu satu sheet per siswa berisi isi rapor lengkap ' +
+      '(nilai akhir, capaian kompetensi, kokurikuler, ekstrakurikuler, ketidakhadiran, catatan wali kelas). Mata pelajaran dan urutannya sama dengan yang tercetak di rapor.</div></div></div>' +
+      '<div class="field" style="max-width:360px;"><label for="udrTa">Tahun Ajaran &amp; Semester</label><select id="udrTa">' +
+      taList.map(function (t) {
+        return '<option value="' + t.id + '"' + (t.id === taDefault.id ? ' selected' : '') + '>' + escapeHtml(t.nama) + ' — ' + escapeHtml(t.semester) + (t.is_aktif ? ' (aktif)' : '') + '</option>';
+      }).join('') + '</select></div>' +
+      '<div class="toolbar" style="margin-top:12px;"><button class="btn-small btn-small--primary" id="udrUnduh">⬇ Unduh Semua Kelas (ZIP)</button></div>' +
+      '<div class="panel-note" id="udrStatus" style="margin-top:12px;display:none;"></div>';
+
+    var btn = document.getElementById('udrUnduh');
+    var status = document.getElementById('udrStatus');
+    btn.addEventListener('click', async function () {
+      var ta = taList.find(function (t) { return t.id === document.getElementById('udrTa').value; });
+      btn.disabled = true;
+      status.style.display = '';
+      status.textContent = 'Menyiapkan...';
+      try {
+        var hasil = await DataRaporExcel.unduh({
+          tahunAjaran: ta,
+          kelasList: kelasList,
+          onProgress: function (t) { status.textContent = t; }
+        });
+        status.textContent = 'Selesai: ' + hasil.siswa + ' siswa dari ' + hasil.kelas + ' kelas diunduh sebagai ' + hasil.namaFile + '.';
+      } catch (e) {
+        status.textContent = 'Gagal mengunduh: ' + (e && e.message ? e.message : e);
+      } finally {
+        btn.disabled = false;
+      }
+    });
   }
 
   async function renderTerbitRapor() {
@@ -6479,7 +6545,7 @@
     if (body.previousElementSibling && body.previousElementSibling.scrollIntoView) body.previousElementSibling.scrollIntoView({ block: 'start' });
   }
 
-  var views = { dashboard: renderDashboard, kokurikuler: renderKokurikuler, profilSekolah: renderProfilSekolah, slideshowLogin: renderSlideshowLogin, tahunAjaran: renderTahunAjaran, terbitRapor: renderTerbitRapor, siswa: renderSiswa, rekapNilai: renderRekapNilai, leger: renderLeger, urutanLeger: renderUrutanLeger, kelas: renderKelas, mapel: renderMapel, mapelTingkat: renderMapelTingkat, penugasan: renderPenugasan, tujuanPembelajaran: renderTujuanPembelajaran, guru: renderGuru, ekskul: renderEkstrakurikuler, pkl: renderPkl, tarikBukuInduk: renderTarikBukuInduk };
+  var views = { dashboard: renderDashboard, unduhDataRapor: renderUnduhDataRapor, kokurikuler: renderKokurikuler, profilSekolah: renderProfilSekolah, slideshowLogin: renderSlideshowLogin, tahunAjaran: renderTahunAjaran, terbitRapor: renderTerbitRapor, siswa: renderSiswa, rekapNilai: renderRekapNilai, leger: renderLeger, urutanLeger: renderUrutanLeger, kelas: renderKelas, mapel: renderMapel, mapelTingkat: renderMapelTingkat, penugasan: renderPenugasan, tujuanPembelajaran: renderTujuanPembelajaran, guru: renderGuru, ekskul: renderEkstrakurikuler, pkl: renderPkl, tarikBukuInduk: renderTarikBukuInduk };
 
   document.querySelectorAll('#menuAdmin .menu-item').forEach(function (item) {
     item.addEventListener('click', function (e) {
