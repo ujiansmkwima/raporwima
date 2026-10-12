@@ -1,0 +1,1040 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portal Siswa — SMK Widya Mandala Tambak</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=15">
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-client.js"></script>
+<script src="bukuinduk-fields.js?v=1"></script>
+<script src="mobile.js?v=1" defer></script>
+<style>
+  /* ---- Kartu menu di Beranda (gaya sama dengan portal.html) ---- */
+  .sw-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-top: 18px; }
+  .app-card { display: flex; flex-direction: column; gap: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 22px; text-decoration: none; color: var(--ink); box-shadow: var(--shadow-sm); transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease; cursor: pointer; }
+  .app-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); border-color: var(--primary-soft); }
+  .app-card__icon { width: 46px; height: 46px; border-radius: 14px; display: flex; align-items: center; justify-content: center; background: var(--primary-tint-strong); color: var(--primary-dim); }
+  .app-card__icon i, .app-card__icon svg { width: 22px; height: 22px; }
+  .app-card--hijau .app-card__icon { background: var(--success-tint); color: var(--success); }
+  .app-card--kuning .app-card__icon { background: var(--accent-tint); color: var(--accent); }
+  .app-card--merah .app-card__icon { background: var(--danger-tint); color: var(--danger); }
+  .app-card__title { font-family: var(--font-display); font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+  .app-card__desc { font-size: 13px; color: var(--ink-soft); line-height: 1.55; flex: 1; }
+
+  /* ---- Pemilih Tahun Ajaran + Semester ---- */
+  .periode-bar { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end; margin: 0 0 16px; padding: 14px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg, 12px); }
+  .periode-bar .pb-field { display: flex; flex-direction: column; gap: 5px; min-width: 170px; }
+  .periode-bar label { font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+  .periode-bar select { padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; font-size: 14px; }
+  .periode-bar .pb-info { font-size: 12.5px; color: var(--ink-soft); padding-bottom: 8px; }
+
+  /* ---- Biodata Buku Induk ---- */
+  .bi-foto-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+  .bi-foto { width: 108px; text-align: center; font-size: 11px; color: var(--ink-soft); }
+  .bi-foto img, .bi-foto__kosong { width: 108px; height: 144px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-tint-strong, #f1f5f9); display: flex; align-items: center; justify-content: center; margin-bottom: 4px; }
+  .bi-sec { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg, 12px); padding: 16px 18px; margin-bottom: 14px; break-inside: avoid; }
+  .bi-sec__t { font-family: var(--font-display); font-weight: 700; font-size: 14.5px; margin-bottom: 10px; color: var(--primary-dim); }
+  .bi-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 22px; }
+  .bi-it--full { grid-column: 1 / -1; }
+  .bi-it__l { font-size: 11.5px; color: var(--ink-soft); margin-bottom: 1px; }
+  .bi-it__v { font-size: 14px; font-weight: 600; word-break: break-word; }
+  .bi-it__v--kosong { color: var(--ink-faint); font-weight: 400; font-style: italic; }
+  @media (max-width: 640px) { .bi-grid { grid-template-columns: 1fr; } }
+
+  /* ---- Form ganti sandi ---- */
+  .sandi-box { max-width: 420px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg, 12px); padding: 20px; }
+  .sandi-box .sb-field { margin-bottom: 14px; }
+  .sandi-box label { display: block; font-size: 12.5px; font-weight: 700; margin-bottom: 5px; }
+  .sandi-box input { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font: inherit; box-sizing: border-box; }
+  .sw-pesan { margin-top: 12px; font-size: 13px; }
+  .sw-pesan--ok { color: var(--success); }
+  .sw-pesan--err { color: var(--danger); }
+
+  /* Judul yang hanya muncul di kertas cetak */
+  .print-only { display: none; }
+  @media print {
+    .print-only { display: block; text-align: center; font-weight: 700; margin-bottom: 12px; }
+    .bi-sec { border: 1px solid #999; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <aside class="sidebar">
+    <div class="sidebar__brand">
+      <img class="sidebar__brand-logo" src="assets/logo.png" alt="Logo SMK Widya Mandala Tambak">
+      <div class="sidebar__brand-text">
+        <span class="sidebar__brand-mark">Portal Siswa</span>
+        <span class="sidebar__brand-school">SMK Widya Mandala Tambak</span>
+      </div>
+    </div>
+    <div class="sidebar__role"><i data-lucide="graduation-cap" style="width:13px;height:13px;"></i> Siswa</div>
+
+    <div class="sidebar__section-label">Menu Siswa</div>
+    <nav class="menu-list" id="menuSiswa">
+      <a href="#beranda" class="menu-item" data-view="beranda"><i data-lucide="layout-dashboard" class="menu-icon"></i><span class="menu-item__title">Beranda</span></a>
+      <a href="#biodata" class="menu-item" data-view="biodata"><i data-lucide="book-user" class="menu-icon"></i><span class="menu-item__title">Lihat Biodata Buku Induk</span></a>
+      <a href="#rapor" class="menu-item" data-view="rapor"><i data-lucide="file-text" class="menu-icon"></i><span class="menu-item__title">Lihat Rapor</span></a>
+      <a href="#presensi" class="menu-item" data-view="presensi"><i data-lucide="calendar-check" class="menu-icon"></i><span class="menu-item__title">Lihat Presensi</span></a>
+      <a href="#pelanggaran" class="menu-item" data-view="pelanggaran"><i data-lucide="shield-alert" class="menu-icon"></i><span class="menu-item__title">Lihat Catatan Pelanggaran</span></a>
+      <a href="#pengajuan" class="menu-item" data-view="pengajuan"><i data-lucide="pencil-line" class="menu-icon"></i><span class="menu-item__title">Pengajuan Pembetulan Data</span></a>
+    </nav>
+
+    <div class="sidebar__section-label">Akun</div>
+    <nav class="menu-list">
+      <a href="#sandi" class="menu-item" data-view="sandi"><i data-lucide="key-round" class="menu-icon"></i><span class="menu-item__title">Ganti Kata Sandi</span></a>
+    </nav>
+
+    <div class="sidebar__footer">
+      <div style="margin-bottom:8px; opacity:0.8;">SMK Widya Mandala Tambak · Banyumas</div>
+      <div style="margin-top:8px;font-size:10px;opacity:0.45;">developed by Hanif Shohibul A.</div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <div class="topbar__title">Portal Siswa</div>
+        <div class="topbar__meta" id="topbarMeta">Memuat data...</div>
+      </div>
+      <div class="user-chip">
+        <div class="user-chip__text">
+          <div class="user-chip__name" id="userName">Memuat...</div>
+          <div class="user-chip__role" id="userRoleLabel">Siswa</div>
+          <a href="index.html" id="logoutBtn" class="user-chip__logout"><i data-lucide="log-out" style="width:13px;height:13px;"></i> Keluar</a>
+        </div>
+        <div class="user-chip__avatar" id="userAvatar">•</div>
+      </div>
+    </div>
+
+    <div class="content" id="content">
+      <div class="empty-state"><div class="empty-state__title">Memuat...</div></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  lucide.createIcons();
+
+  // =====================================================================
+  // Helper umum
+  // =====================================================================
+  function escapeHtml(s) {
+    return (s === null || s === undefined) ? '' : String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  var NAMA_BULAN_ID = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+  function formatTanggalIndonesia(tanggalIso) {
+    if (!tanggalIso) return '';
+    var b = String(tanggalIso).slice(0, 10).split('-');
+    if (b.length !== 3) return '';
+    var th = parseInt(b[0], 10), bl = parseInt(b[1], 10), tg = parseInt(b[2], 10);
+    if (!th || !bl || !tg || bl < 1 || bl > 12) return '';
+    return tg + ' ' + NAMA_BULAN_ID[bl - 1] + ' ' + th;
+  }
+
+  // Tingkat 10 Gasal=1, Genap=2; Tingkat 11 Gasal=3, Genap=4; Tingkat 12 Gasal=5, Genap=6
+  function hitungSemesterKe(tingkat, semesterTA) {
+    if (!tingkat || !semesterTA) return null;
+    var basis = (Number(tingkat) - 10) * 2;
+    if (semesterTA === 'Gasal') return basis + 1;
+    if (semesterTA === 'Genap') return basis + 2;
+    return null;
+  }
+  function faseDariTingkat(tingkat) {
+    var t = Number(tingkat);
+    if (t === 10) return 'E';
+    if (t === 11 || t === 12) return 'F';
+    return '—';
+  }
+  function isPendidikanAgama(n) { return /pendidikan\s+agama/i.test(n || ''); }
+  function namaMapelUntukSiswa(namaMapel, agama) {
+    if (!isPendidikanAgama(namaMapel) || !agama) return namaMapel;
+    var pakaiBudiPekerti = /dan budi pekerti/i.test(namaMapel);
+    return 'Pendidikan Agama ' + agama + (pakaiBudiPekerti ? ' dan Budi Pekerti' : '');
+  }
+  function ruangTtdKepalaSekolah(profil, konteks) {
+    var kolom = konteks === 'rapor' ? 'tampil_ttd_rapor' : null;
+    var tampil = kolom ? (profil[kolom] !== false) : true;
+    var gambar = profil.ttd_kepala_sekolah;
+    if (tampil && gambar) {
+      return '<div class="rapor-cetak__ttd-space rapor-cetak__ttd-space--gambar"><img src="' + escapeHtml(gambar) + '" alt="Tanda tangan Kepala Sekolah"></div>';
+    }
+    return '<div class="rapor-cetak__ttd-space"></div>';
+  }
+
+  // Mengukur tinggi kotak Identitas supaya halaman 1 cetak pas 1 kertas
+  // (sama persis dengan yang dipakai guru.html pada Cetak Rapor).
+  function terapkanTinggiIdentitasCetak(area) {
+    var PX_PER_MM = 96 / 25.4, GAP_MM = 3, TOP = 12.7, BOTTOM = 12.7, BIODATA_MB = 16, PENYANGGA = 4;
+    var salinan = area.querySelectorAll('.rapor-cetak__print-frame > thead .rapor-cetak__biodata');
+    var maxPx = 0;
+    salinan.forEach(function (el) { var t = el.offsetHeight + BIODATA_MB; if (t > maxPx) maxPx = t; });
+    if (!maxPx) return;
+    var tinggi = 297 - TOP - BOTTOM - (maxPx / PX_PER_MM) - GAP_MM - PENYANGGA;
+    var st = document.getElementById('cetakIdentitasDinamis');
+    if (!st) { st = document.createElement('style'); st.id = 'cetakIdentitasDinamis'; document.head.appendChild(st); }
+    st.textContent = '@media print { .rapor-cetak__page1 { min-height: ' + tinggi.toFixed(2) + 'mm; } }';
+  }
+
+  // Semua query ke Supabase lewat sini: error ditampilkan, tidak diam-diam kosong.
+  function cekError(res, konteks) {
+    if (res && res.error) throw new Error(konteks + ': ' + res.error.message);
+    return res;
+  }
+
+  // =====================================================================
+  // State
+  // =====================================================================
+  var content = document.getElementById('content');
+  var S = {
+    user: null,
+    siswa: null,
+    tahunAktif: null,
+    periodeList: [],     // tahun_ajaran yang relevan untuk siswa ini
+    periodeId: null,     // periode terpilih (dipakai bersama menu Rapor & Presensi)
+    kelasMap: {},        // kelas_id -> kelas
+    kelasPerTA: {},      // tahun_ajaran_id -> kelas siswa pada periode itu
+    noAbsenPerTA: {},
+    terbitPerTA: {},     // tahun_ajaran_id -> Date waktu terbit rapor (dari rapor_terbit)
+    rekap: []            // semua baris rekap_presensi milik siswa
+  };
+
+  // Rapor baru boleh dilihat jika sudah diterbitkan admin DAN waktu terbit sudah lewat.
+  // (Pembatasan sebenarnya ada di database/RLS; ini hanya untuk pesan di layar.)
+  function waktuTerbit(taId) { return S.terbitPerTA[taId] || null; }
+  function raporSudahTerbit(taId) {
+    var w = waktuTerbit(taId);
+    return !!w && w.getTime() <= Date.now();
+  }
+  function formatWaktuTerbit(d) {
+    try {
+      return d.toLocaleString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }).replace(/\./g, ':') + ' WIB';
+    } catch (e) { return d.toString(); }
+  }
+
+  function periodeById(id) {
+    for (var i = 0; i < S.periodeList.length; i++) if (S.periodeList[i].id === id) return S.periodeList[i];
+    return null;
+  }
+  function namaKelasAktif() {
+    var k = S.tahunAktif ? S.kelasPerTA[S.tahunAktif.id] : null;
+    return k ? k.nama : null;
+  }
+
+  function headHtml(judul, desc) {
+    return '<div class="panel-head"><div><div class="panel-head__title">' + escapeHtml(judul) + '</div>' +
+      '<div class="panel-head__desc">' + escapeHtml(desc || '') + '</div></div></div>';
+  }
+  function kosongHtml(judul, desc) {
+    return '<div class="empty-state"><div class="empty-state__mark">！</div><div class="empty-state__title">' + escapeHtml(judul) +
+      '</div><div class="empty-state__desc">' + escapeHtml(desc) + '</div></div>';
+  }
+
+  // =====================================================================
+  // Pemilih Tahun Ajaran + Semester
+  // =====================================================================
+  function periodeBarHtml() {
+    var p = periodeById(S.periodeId);
+    var namaSet = [];
+    S.periodeList.forEach(function (x) { if (namaSet.indexOf(x.nama) === -1) namaSet.push(x.nama); });
+    var smt = S.periodeList.filter(function (x) { return p && x.nama === p.nama; });
+
+    var kelas = p ? S.kelasPerTA[p.id] : null;
+    var smtKe = kelas ? hitungSemesterKe(kelas.tingkat, p.semester) : null;
+    var info = kelas ? ('Kelas ' + kelas.nama + (smtKe ? ' · Semester ke-' + smtKe : '')) : '';
+
+    return '<div class="periode-bar no-print">' +
+      '<div class="pb-field"><label for="pbTahun">Tahun Ajaran</label><select id="pbTahun">' +
+      namaSet.map(function (n) { return '<option value="' + escapeHtml(n) + '"' + (p && p.nama === n ? ' selected' : '') + '>' + escapeHtml(n) + '</option>'; }).join('') +
+      '</select></div>' +
+      '<div class="pb-field"><label for="pbSemester">Semester</label><select id="pbSemester">' +
+      smt.map(function (x) { return '<option value="' + x.id + '"' + (p && p.id === x.id ? ' selected' : '') + '>' + escapeHtml(x.semester) + '</option>'; }).join('') +
+      '</select></div>' +
+      '<div class="pb-info" id="pbInfo">' + escapeHtml(info) + '</div></div>';
+  }
+
+  function pasangPeriodeBar(onChange) {
+    var selTahun = document.getElementById('pbTahun');
+    var selSmt = document.getElementById('pbSemester');
+    if (!selTahun || !selSmt) return;
+
+    selTahun.addEventListener('change', function () {
+      var namaBaru = selTahun.value;
+      var lama = periodeById(S.periodeId);
+      var kandidat = S.periodeList.filter(function (x) { return x.nama === namaBaru; });
+      var pilih = kandidat.filter(function (x) { return lama && x.semester === lama.semester; })[0] || kandidat[kandidat.length - 1];
+      S.periodeId = pilih.id;
+      selSmt.innerHTML = kandidat.map(function (x) {
+        return '<option value="' + x.id + '"' + (x.id === pilih.id ? ' selected' : '') + '>' + escapeHtml(x.semester) + '</option>';
+      }).join('');
+      perbaruiInfoPeriode();
+      onChange();
+    });
+    selSmt.addEventListener('change', function () {
+      S.periodeId = selSmt.value;
+      perbaruiInfoPeriode();
+      onChange();
+    });
+  }
+
+  function perbaruiInfoPeriode() {
+    var el = document.getElementById('pbInfo');
+    if (!el) return;
+    var p = periodeById(S.periodeId);
+    var kelas = p ? S.kelasPerTA[p.id] : null;
+    var smtKe = kelas ? hitungSemesterKe(kelas.tingkat, p.semester) : null;
+    el.textContent = kelas ? ('Kelas ' + kelas.nama + (smtKe ? ' · Semester ke-' + smtKe : '')) : '';
+  }
+
+  // =====================================================================
+  // BERANDA
+  // =====================================================================
+  function renderBeranda() {
+    var s = S.siswa;
+    var kelas = namaKelasAktif();
+    content.innerHTML =
+      '<div class="panel-head"><div><div class="panel-head__title">Halo, ' + escapeHtml((s.nama || '').split(' ')[0]) + '!</div>' +
+      '<div class="panel-head__desc">' + escapeHtml(s.nama) + ' · NIS ' + escapeHtml(s.nis || '—') +
+      (kelas ? ' · Kelas ' + escapeHtml(kelas) : '') + '</div></div></div>' +
+      '<div class="sw-cards">' +
+      kartu('biodata', 'app-card--kuning', 'book-user', 'Lihat Biodata Buku Induk', 'Data diri, orang tua, dan riwayat pendidikan yang tercatat di Buku Induk sekolah.') +
+      kartu('rapor', '', 'file-text', 'Lihat Rapor', 'Nilai, capaian kompetensi, ekstrakurikuler, dan ketidakhadiran. Tersedia setelah rapor diterbitkan sekolah.') +
+      kartu('presensi', 'app-card--hijau', 'calendar-check', 'Lihat Presensi', 'Rekap sakit, izin, dan tanpa keterangan per tahun ajaran dan semester.') +
+      kartu('pelanggaran', 'app-card--merah', 'shield-alert', 'Lihat Catatan Pelanggaran', 'Catatan pelanggaran dan pembinaan (segera tersedia).') +
+      kartu('pengajuan', '', 'pencil-line', 'Pengajuan Pembetulan Data', 'Ada data dirimu yang keliru? Betulkan lalu ajukan ke wali kelas untuk disetujui.') +
+      '</div>' +
+      '<div class="panel-note" style="margin-top:18px;">Kata sandi awal semua siswa sama. Demi keamanan, segera ganti lewat menu <b>Ganti Kata Sandi</b>. ' +
+      'Kalau ada data yang keliru, sampaikan ke wali kelas.</div>';
+    lucide.createIcons();
+    content.querySelectorAll('[data-go]').forEach(function (a) {
+      a.addEventListener('click', function (e) { e.preventDefault(); tampilkan(a.getAttribute('data-go')); });
+    });
+
+    function kartu(view, kelasCss, ikon, judul, desc) {
+      return '<a href="#' + view + '" class="app-card ' + kelasCss + '" data-go="' + view + '">' +
+        '<div class="app-card__icon"><i data-lucide="' + ikon + '"></i></div>' +
+        '<div class="app-card__title">' + judul + '</div><div class="app-card__desc">' + desc + '</div></a>';
+    }
+  }
+
+  // =====================================================================
+  // LIHAT RAPOR
+  // =====================================================================
+  var tokenRapor = 0;
+
+  async function renderRapor() {
+    content.innerHTML = headHtml('Lihat Rapor', 'Pilih tahun ajaran dan semester untuk melihat rapormu. Kamu juga bisa mencetak atau menyimpannya sebagai PDF.') +
+      periodeBarHtml() + '<div id="areaRapor"></div>';
+    pasangPeriodeBar(isiRapor);
+    await isiRapor();
+  }
+
+  async function isiRapor() {
+    var token = ++tokenRapor;
+    var area = document.getElementById('areaRapor');
+    var ta = periodeById(S.periodeId);
+    if (!ta) { area.innerHTML = kosongHtml('Belum ada data', 'Belum ada tahun ajaran yang tercatat untukmu.'); return; }
+    var kelas = S.kelasPerTA[ta.id];
+    if (!kelas) {
+      area.innerHTML = kosongHtml('Data kelas belum tersedia', 'Kamu belum tercatat di kelas manapun pada ' + ta.nama + ' semester ' + ta.semester + '.');
+      return;
+    }
+    if (!raporSudahTerbit(ta.id)) {
+      var wt = waktuTerbit(ta.id);
+      area.innerHTML = kosongHtml('Rapor belum diterbitkan',
+        wt ? 'Rapor ' + ta.nama + ' semester ' + ta.semester + ' dijadwalkan terbit pada ' + formatWaktuTerbit(wt) + '. Silakan buka lagi setelah waktu tersebut.'
+           : 'Rapor ' + ta.nama + ' semester ' + ta.semester + ' belum diterbitkan oleh sekolah. Silakan tunggu informasi dari wali kelas.');
+      return;
+    }
+    area.innerHTML = '<div class="panel-note no-print">Memuat rapor...</div>';
+
+    try {
+      var html = await buatKartuRapor(ta, kelas);
+      if (token !== tokenRapor) return; // pilihan sudah berganti, abaikan hasil lama
+      area.innerHTML =
+        '<div class="no-print" style="display:flex;gap:8px;margin:0 0 12px;align-items:center;flex-wrap:wrap;">' +
+        '<button class="btn-small btn-small--primary" id="btnCetakRapor"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak / Simpan PDF</button></div>' +
+        '<div id="cetakRaporArea">' + html.html + '</div>' +
+        (html.adaNilai ? '' : '<div class="panel-note no-print" style="margin-top:12px;">Nilai rapor semester ini belum diisi oleh guru, sehingga kolom nilai masih kosong (—).</div>');
+      lucide.createIcons();
+      document.getElementById('btnCetakRapor').addEventListener('click', function () { cetakRapor(ta, kelas); });
+    } catch (err) {
+      if (token !== tokenRapor) return;
+      area.innerHTML = '<div class="panel-note">Gagal memuat rapor: ' + escapeHtml(err.message || err) + '</div>';
+    }
+  }
+
+  async function cetakRapor(ta, kelas) {
+    var area = document.getElementById('cetakRaporArea');
+    if (!area) return;
+    var judulAsli = document.title;
+    var smtKe = hitungSemesterKe(kelas.tingkat, ta.semester);
+    document.title = S.siswa.nama + ' - Semester ' + (smtKe || ta.semester) + ' - ' + kelas.nama;
+    await new Promise(function (r) { setTimeout(r, 150); });
+    terapkanTinggiIdentitasCetak(area);
+    window.print();
+    document.title = judulAsli;
+  }
+
+  // Menyusun kartu rapor 1 siswa (dirinya sendiri) untuk 1 periode.
+  // Logika mata pelajaran, urutan, dan agama sama dengan Cetak Rapor di guru.html.
+  async function buatKartuRapor(ta, kelas) {
+    var siswa = S.siswa;
+    var sid = siswa.id;
+
+    var r = await Promise.all([
+      supabaseClient.from('profil_sekolah').select('*').maybeSingle(),
+      supabaseClient.from('mata_pelajaran').select('id, nama, jenis_mapel, urutan_rapor, berlaku_untuk, berlaku_semester, agama_spesifik'),
+      supabaseClient.from('mapel_kelas').select('mapel_id').eq('kelas_id', kelas.id),
+      supabaseClient.from('mapel_urutan_kelas').select('mapel_id, urutan_rapor').eq('kelas_id', kelas.id),
+      supabaseClient.from('mapel_semester').select('mapel_id, semester_ke'),
+      supabaseClient.from('nilai').select('mapel_id, nilai, capaian_pembelajaran').eq('siswa_id', sid).eq('tahun_ajaran_id', ta.id).eq('jenis', 'rapor'),
+      supabaseClient.from('ekstrakurikuler_siswa').select('ekstrakurikuler:ekstrakurikuler_id(id, nama)').eq('siswa_id', sid).eq('tahun_ajaran_id', ta.id),
+      supabaseClient.from('nilai_ekstrakurikuler').select('ekstrakurikuler_id, predikat, deskripsi').eq('siswa_id', sid).eq('tahun_ajaran_id', ta.id),
+      supabaseClient.from('nilai_kokurikuler').select('nama_kegiatan, deskripsi').eq('siswa_id', sid).eq('kelas_id', kelas.id).eq('tahun_ajaran_id', ta.id),
+      supabaseClient.from('rekap_presensi').select('jumlah_sakit, jumlah_izin, jumlah_alpha, catatan_wali_kelas').eq('siswa_id', sid).eq('kelas_id', kelas.id).eq('tahun_ajaran_id', ta.id).maybeSingle(),
+      supabaseClient.rpc('nama_wali_kelas_siswa', { p_tahun_ajaran: ta.id })
+    ]);
+    var profil = cekError(r[0], 'profil sekolah').data || {};
+    var semuaMapel = cekError(r[1], 'mata pelajaran').data || [];
+    var mapelKelasSet = {};
+    (cekError(r[2], 'mapel kelas').data || []).forEach(function (x) { mapelKelasSet[x.mapel_id] = true; });
+    var urutanKelas = {};
+    (cekError(r[3], 'urutan mapel').data || []).forEach(function (x) { urutanKelas[x.mapel_id] = x.urutan_rapor; });
+    var mapelSemesterSet = {};
+    (cekError(r[4], 'semester mapel').data || []).forEach(function (x) {
+      (mapelSemesterSet[x.mapel_id] = mapelSemesterSet[x.mapel_id] || []).push(x.semester_ke);
+    });
+    var nilaiRows = cekError(r[5], 'nilai').data || [];
+    var ekskulRows = cekError(r[6], 'ekstrakurikuler').data || [];
+    var ekskulNilaiRows = cekError(r[7], 'nilai ekstrakurikuler').data || [];
+    var kokuList = cekError(r[8], 'kokurikuler').data || [];
+    var rp = cekError(r[9], 'presensi').data || {};
+    var namaWali = (r[10] && !r[10].error && r[10].data) ? r[10].data : '';
+
+    var NAMA_SEKOLAH = profil.nama_sekolah || 'SMK Widya Mandala Tambak';
+    var ALAMAT_SEKOLAH = profil.alamat_sekolah || '';
+    var NAMA_KEPSEK = profil.kepala_sekolah || '—';
+    var NAMA_KOTA_TTD = profil.kota_ttd || 'Tambak';
+    var TANGGAL_RAPOR = formatTanggalIndonesia(profil.tanggal_rapor);
+
+    var fase = faseDariTingkat(kelas.tingkat);
+    var smtKe = hitungSemesterKe(kelas.tingkat, ta.semester);
+
+    function efektifUrutan(m) {
+      if (urutanKelas[m.id] !== undefined && urutanKelas[m.id] !== null) return urutanKelas[m.id];
+      return (m.urutan_rapor === null || m.urutan_rapor === undefined) ? 9999 : m.urutan_rapor;
+    }
+    function urutkan(a, b) {
+      var ua = efektifUrutan(a), ub = efektifUrutan(b);
+      if (ua !== ub) return ua - ub;
+      return a.nama.localeCompare(b.nama);
+    }
+    var mapelKelasIni = semuaMapel.filter(function (m) {
+      if (m.berlaku_untuk === 'tertentu' && !mapelKelasSet[m.id]) return false;
+      if (m.berlaku_semester === 'tertentu' && smtKe && (mapelSemesterSet[m.id] || []).indexOf(smtKe) === -1) return false;
+      return true;
+    });
+    var mapelUmum = mapelKelasIni.filter(function (m) { return m.jenis_mapel !== 'kejuruan'; }).sort(urutkan);
+    var mapelKejuruan = mapelKelasIni.filter(function (m) { return m.jenis_mapel === 'kejuruan'; }).sort(urutkan);
+
+    var nilaiMap = {};
+    nilaiRows.forEach(function (x) { nilaiMap[x.mapel_id] = x; });
+    var adaNilai = nilaiRows.some(function (x) { return x.nilai !== null && x.nilai !== undefined; });
+
+    function barisNilai(list) {
+      var relevan = list.filter(function (m) { return !m.agama_spesifik || m.agama_spesifik === siswa.agama; });
+      relevan = relevan.filter(function (m) { return m.agama_spesifik && m.agama_spesifik === siswa.agama; })
+        .concat(relevan.filter(function (m) { return !(m.agama_spesifik && m.agama_spesifik === siswa.agama); }));
+      return relevan.map(function (m, i) {
+        var n = nilaiMap[m.id] || {};
+        var nilaiTampil = (n.nilai === undefined || n.nilai === null) ? '—' : Math.round(Number(n.nilai));
+        return '<tr><td class="tc-center">' + (i + 1) + '</td><td>' + escapeHtml(namaMapelUntukSiswa(m.nama, siswa.agama)) + '</td>' +
+          '<td class="tc-center">' + nilaiTampil + '</td>' +
+          '<td class="rc-td-capaian">' + escapeHtml(n.capaian_pembelajaran || '—') + '</td></tr>';
+      }).join('');
+    }
+    var nilaiRowsHtml =
+      '<tr class="rapor-cetak__section-row"><td colspan="4">A. Mata Pelajaran Umum</td></tr>' +
+      (barisNilai(mapelUmum) || '<tr><td colspan="4" class="tc-center tc-soft">Belum ada mata pelajaran umum.</td></tr>') +
+      '<tr class="rapor-cetak__section-row"><td colspan="4">B. Mata Pelajaran Kejuruan</td></tr>' +
+      (barisNilai(mapelKejuruan) || '<tr><td colspan="4" class="tc-center tc-soft">Belum ada mata pelajaran kejuruan.</td></tr>');
+
+    var ekskulList = ekskulRows.filter(function (x) { return x.ekstrakurikuler; }).map(function (x) { return x.ekstrakurikuler; });
+    var ekskulNilaiMap = {};
+    ekskulNilaiRows.forEach(function (x) { ekskulNilaiMap[x.ekstrakurikuler_id] = x; });
+    var ekskulRowsHtml = ekskulList.length ? ekskulList.map(function (ek, i) {
+      var n = ekskulNilaiMap[ek.id] || {};
+      var ket = [n.predikat, n.deskripsi].filter(Boolean).join(' — ');
+      return '<tr><td class="tc-center">' + (i + 1) + '</td><td>' + escapeHtml(ek.nama) + '</td><td>' + escapeHtml(ket || '—') + '</td></tr>';
+    }).join('') : '<tr><td class="tc-center">-</td><td>-</td><td>-</td></tr>';
+
+    var kokuHtml = kokuList.length ? kokuList.map(function (k) {
+      return '<div class="rapor-cetak__koku-item"><strong>' + escapeHtml(k.nama_kegiatan || 'Tanpa nama kegiatan') + '</strong>' +
+        (k.deskripsi ? ' — ' + escapeHtml(k.deskripsi) : '') + '</div>';
+    }).join('') : '—';
+
+    var tally = { sakit: rp.jumlah_sakit || 0, izin: rp.jumlah_izin || 0, alpha: rp.jumlah_alpha || 0 };
+    var catatanWali = rp.catatan_wali_kelas || '';
+    var tahunAkhir = (String(ta.nama).split('/')[1] || ta.nama).trim();
+
+    var biodata =
+      '<table class="rapor-cetak__biodata"><tbody>' +
+      '<tr><td class="rc-label">Nama</td><td class="rc-colon">:</td><td class="rc-value">' + escapeHtml(siswa.nama) + '</td>' +
+      '<td class="rc-label rc-label--kanan">Kelas</td><td class="rc-colon">:</td><td class="rc-value">' + escapeHtml(kelas.nama) + '</td></tr>' +
+      '<tr><td class="rc-label">NIS / NISN</td><td class="rc-colon">:</td><td class="rc-value">' + escapeHtml((siswa.nis || '—') + ' / ' + (siswa.nisn || '—')) + '</td>' +
+      '<td class="rc-label rc-label--kanan">Fase</td><td class="rc-colon">:</td><td class="rc-value">' + escapeHtml(fase) + '</td></tr>' +
+      '<tr><td class="rc-label">Sekolah</td><td class="rc-colon">:</td><td class="rc-value">' + escapeHtml(NAMA_SEKOLAH.toUpperCase()) + '</td>' +
+      '<td class="rc-label rc-label--kanan">Semester</td><td class="rc-colon">:</td><td class="rc-value">' + escapeHtml((smtKe || '—') + ' (' + ta.semester + ')') + '</td></tr>' +
+      '<tr><td class="rc-label">Alamat</td><td class="rc-colon">:</td><td class="rc-value">' + escapeHtml(ALAMAT_SEKOLAH || '—') + '</td>' +
+      '<td class="rc-label rc-label--kanan">Tahun Ajaran</td><td class="rc-colon">:</td><td class="rc-value">' + escapeHtml(ta.nama) + '</td></tr>' +
+      '</tbody></table>';
+
+    var html =
+      '<div class="rapor-cetak rapor-cetak--f13">' +
+      '<table class="rapor-cetak__print-frame"><thead><tr><td>' + biodata + '</td></tr></thead><tbody><tr><td>' +
+
+      '<div class="rapor-cetak__page1">' +
+      '<table class="rapor-cetak__nilai"><thead><tr><th class="rc-th-no">NO</th><th>Mata Pelajaran</th><th class="rc-th-nilai">Nilai Akhir</th><th>Capaian Kompetensi</th></tr></thead>' +
+      '<tbody>' + nilaiRowsHtml + '</tbody></table>' +
+      '</div>' +
+
+      '<div class="rapor-cetak__page2">' +
+      '<div class="rapor-cetak__bar">Kokurikuler</div>' +
+      '<div class="rapor-cetak__box">' + kokuHtml + '</div>' +
+
+      '<table class="rapor-cetak__ekskul"><thead><tr><th class="rc-th-no">No.</th><th class="rc-th-ekskul-nama">Ekstrakurikuler</th><th class="rc-th-ekskul-ket">Keterangan</th></tr></thead>' +
+      '<tbody>' + ekskulRowsHtml + '</tbody></table>' +
+
+      '<div class="rapor-cetak__row2">' +
+      '<div class="rapor-cetak__col rapor-cetak__col--kehadiran">' +
+      '<div class="rapor-cetak__bar">Ketidakhadiran</div>' +
+      '<table class="rapor-cetak__kehadiran"><tbody>' +
+      '<tr><td class="rc-label">Sakit</td><td class="rc-colon">:</td><td class="tc-center">' + tally.sakit + '</td><td>Hari</td></tr>' +
+      '<tr><td class="rc-label">Izin</td><td class="rc-colon">:</td><td class="tc-center">' + tally.izin + '</td><td>Hari</td></tr>' +
+      '<tr><td class="rc-label">Tanpa Keterangan</td><td class="rc-colon">:</td><td class="tc-center">' + tally.alpha + '</td><td>Hari</td></tr>' +
+      '</tbody></table></div>' +
+      '<div class="rapor-cetak__col rapor-cetak__col--catatan">' +
+      '<div class="rapor-cetak__bar">Catatan Wali Kelas</div>' +
+      '<div class="rapor-cetak__box">' + (catatanWali ? escapeHtml(catatanWali) : '—') + '</div></div>' +
+      '</div>' +
+
+      '<div class="rapor-cetak__akhir">' +
+      '<div class="rapor-cetak__bar">Tanggapan Orangtua/ Wali</div>' +
+      '<div class="rapor-cetak__box rapor-cetak__box--tall"></div>' +
+      '<div class="rapor-cetak__footer"><div class="rapor-cetak__footer-cols">' +
+      '<div class="rapor-cetak__footer-col"><div class="rapor-cetak__footer-col-spacer">&nbsp;</div><div>Orangtua/ Wali</div><div class="rapor-cetak__ttd-space"></div><div>…...........................................</div></div>' +
+      '<div class="rapor-cetak__footer-col"><div class="rapor-cetak__footer-col-spacer">&nbsp;</div><div>Kepala Sekolah</div>' + ruangTtdKepalaSekolah(profil, 'rapor') + '<div><strong>' + escapeHtml(NAMA_KEPSEK) + '</strong></div></div>' +
+      '<div class="rapor-cetak__footer-col"><div class="rapor-cetak__footer-date">' + escapeHtml(NAMA_KOTA_TTD) + ', ' + (TANGGAL_RAPOR ? escapeHtml(TANGGAL_RAPOR) : '…........' + escapeHtml(tahunAkhir)) + '</div><div>Wali Kelas</div><div class="rapor-cetak__ttd-space"></div><div><strong>' + escapeHtml(namaWali || '…...........................') + '</strong></div></div>' +
+      '</div></div></div>' +
+      '</div>' +
+
+      '</td></tr></tbody></table></div>';
+
+    return { html: html, adaNilai: adaNilai };
+  }
+
+  // =====================================================================
+  // LIHAT PRESENSI
+  // =====================================================================
+  function renderPresensi() {
+    content.innerHTML = headHtml('Lihat Presensi', 'Rekap ketidakhadiranmu per tahun ajaran dan semester, sesuai yang dicatat wali kelas.') +
+      periodeBarHtml() + '<div id="areaPresensi"></div>';
+    pasangPeriodeBar(isiPresensi);
+    isiPresensi();
+  }
+
+  function isiPresensi() {
+    var area = document.getElementById('areaPresensi');
+    var ta = periodeById(S.periodeId);
+    if (!ta) { area.innerHTML = kosongHtml('Belum ada data', 'Belum ada tahun ajaran yang tercatat untukmu.'); return; }
+
+    var baris = null;
+    S.rekap.forEach(function (x) { if (x.tahun_ajaran_id === ta.id) baris = x; });
+
+    var atas;
+    if (!baris) {
+      atas = '<div class="panel-note">Belum ada data presensi untuk ' + escapeHtml(ta.nama) + ' semester ' + escapeHtml(ta.semester) +
+        '. Data diisi wali kelas, biasanya menjelang pembagian rapor.</div>';
+    } else {
+      var total = (baris.jumlah_sakit || 0) + (baris.jumlah_izin || 0) + (baris.jumlah_alpha || 0);
+      atas = '<div class="stat-grid">' +
+        stat('Sakit', baris.jumlah_sakit || 0) + stat('Izin', baris.jumlah_izin || 0) +
+        stat('Tanpa Keterangan (Alpha)', baris.jumlah_alpha || 0) + stat('Total Tidak Hadir', total) + '</div>';
+    }
+
+    // Rekap seluruh semester yang ada
+    var urut = S.periodeList.slice();
+    var rows = urut.map(function (p) {
+      var b = null;
+      S.rekap.forEach(function (x) { if (x.tahun_ajaran_id === p.id) b = x; });
+      var k = S.kelasPerTA[p.id];
+      var sel = p.id === ta.id ? ' style="background:var(--primary-tint, #eff6ff);"' : '';
+      if (!b) return '<tr' + sel + '><td>' + escapeHtml(p.nama) + '</td><td>' + escapeHtml(p.semester) + '</td><td>' + escapeHtml(k ? k.nama : '—') + '</td><td class="tc-center" colspan="4">Belum ada data</td></tr>';
+      var t = (b.jumlah_sakit || 0) + (b.jumlah_izin || 0) + (b.jumlah_alpha || 0);
+      return '<tr' + sel + '><td>' + escapeHtml(p.nama) + '</td><td>' + escapeHtml(p.semester) + '</td><td>' + escapeHtml(k ? k.nama : '—') + '</td>' +
+        '<td class="tc-center">' + (b.jumlah_sakit || 0) + '</td><td class="tc-center">' + (b.jumlah_izin || 0) + '</td>' +
+        '<td class="tc-center">' + (b.jumlah_alpha || 0) + '</td><td class="tc-center"><b>' + t + '</b></td></tr>';
+    }).join('');
+
+    area.innerHTML = atas +
+      '<div class="section-title" style="margin-top:20px;">Rekap semua semester</div>' +
+      '<div class="table-wrap"><table class="data-table"><thead><tr><th>Tahun Ajaran</th><th>Semester</th><th>Kelas</th>' +
+      '<th class="tc-center">Sakit</th><th class="tc-center">Izin</th><th class="tc-center">Alpha</th><th class="tc-center">Total</th></tr></thead><tbody>' +
+      (rows || '<tr><td colspan="7">Belum ada data.</td></tr>') + '</tbody></table></div>' +
+      '<div class="panel-note" style="margin-top:12px;">Satuan dalam hari. Kalau ada yang tidak sesuai, hubungi wali kelasmu.</div>';
+
+    function stat(label, nilai) {
+      return '<div class="stat-card"><div class="stat-card__label">' + escapeHtml(label) + '</div><div class="stat-card__value">' + nilai + '</div></div>';
+    }
+  }
+
+  // =====================================================================
+  // LIHAT BIODATA BUKU INDUK
+  // =====================================================================
+  // Isian yang TIDAK ditampilkan ke siswa (catatan internal sekolah).
+  var BI_DISEMBUNYIKAN = { catatan_khusus: true };
+  var bukuIndukCache = null;
+
+  async function renderBiodata() {
+    content.innerHTML = headHtml('Biodata Buku Induk', 'Data dirimu yang tercatat di Buku Induk sekolah. Bagian yang masih kosong perlu dilengkapi lewat wali kelas.') +
+      '<div class="panel-note">Memuat biodata...</div>';
+    try {
+      bukuIndukCache = await muatBukuInduk();   // selalu segar: isian bisa berubah setelah pengajuan disetujui
+      var d = bukuIndukCache;
+      content.innerHTML =
+        headHtml('Biodata Buku Induk', 'Data dirimu yang tercatat di Buku Induk sekolah. Bagian yang masih kosong perlu dilengkapi lewat wali kelas.') +
+        '<div class="no-print" style="display:flex;gap:8px;margin:0 0 14px;flex-wrap:wrap;">' +
+        '<button class="btn-small btn-small--primary" id="btnCetakBio"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak Biodata</button></div>' +
+        '<div class="print-only">BIODATA PESERTA DIDIK — SMK WIDYA MANDALA TAMBAK</div>' +
+        fotoHtml(d) + sectionsHtml(d);
+      lucide.createIcons();
+      document.getElementById('btnCetakBio').addEventListener('click', function () {
+        var asli = document.title;
+        document.title = 'Biodata - ' + S.siswa.nama;
+        window.print();
+        document.title = asli;
+      });
+    } catch (err) {
+      content.innerHTML = headHtml('Biodata Buku Induk', '') +
+        '<div class="panel-note">Gagal memuat biodata: ' + escapeHtml(err.message || err) + '</div>';
+    }
+  }
+
+  async function muatBukuInduk() {
+    var segar = await supabaseClient.from('siswa').select('*').eq('id', S.siswa.id).maybeSingle();
+    if (segar.data) S.siswa = segar.data;
+    var det = cekError(await supabaseClient.from('bi_siswa_detail').select('*').eq('siswa_id', S.siswa.id).maybeSingle(), 'buku induk').data || {};
+    var gabung = Object.assign({}, det, S.siswa); // kolom tabel siswa menang untuk isian bersama
+
+    // NIK & No. KK tersimpan terenkripsi ("enc:...").
+    ['nik', 'no_kk'].forEach(function (k) { gabung[k] = det[k]; });
+    var perlu = [];
+    ['nik', 'no_kk'].forEach(function (k) {
+      if (typeof gabung[k] === 'string' && gabung[k].indexOf('enc:') === 0) perlu.push(gabung[k]);
+    });
+    if (perlu.length) {
+      var dek = await supabaseClient.rpc('bi_dekripsi', { p_vals: perlu });
+      var peta = {};
+      perlu.forEach(function (v, i) { peta[v] = (!dek.error && dek.data) ? dek.data[i] : null; });
+      ['nik', 'no_kk'].forEach(function (k) {
+        if (typeof gabung[k] === 'string' && gabung[k].indexOf('enc:') === 0) gabung[k] = peta[gabung[k]];
+      });
+    }
+
+    var foto = { masuk: null, lulus: null };
+    async function urlFoto(v) {
+      if (!v) return null;
+      if (String(v).indexOf('data:') === 0) return v;
+      var r = await supabaseClient.storage.from('buku-induk-foto').createSignedUrl(v, 3600);
+      return (r.error || !r.data) ? null : r.data.signedUrl;
+    }
+    foto.masuk = await urlFoto(det.foto);
+    foto.lulus = await urlFoto(det.foto_lulus);
+    return { data: gabung, foto: foto };
+  }
+
+  function nilaiTampilBI(f, v) {
+    if (v === null || v === undefined || String(v).trim() === '') return '';
+    if (f.tipe === 'date') return formatTanggalIndonesia(v);
+    if (f.k === 'jenis_kelamin') return v === 'L' ? 'Laki-laki' : (v === 'P' ? 'Perempuan' : v);
+    if (f.k === 'status') return String(v).charAt(0).toUpperCase() + String(v).slice(1);
+    if (f.k === 'jarak_sekolah' && /^[\d.,]+$/.test(String(v).trim())) return v + ' km';
+    if (f.k === 'tinggi_badan') return v + ' cm';
+    if (f.k === 'berat_badan') return v + ' kg';
+    return String(v);
+  }
+
+  function fotoHtml(d) {
+    function satu(src, label) {
+      return '<div class="bi-foto">' + (src ? '<img src="' + escapeHtml(src) + '" alt="Foto ' + escapeHtml(label) + '">' : '<div class="bi-foto__kosong">Foto<br>3 × 4</div>') + escapeHtml(label) + '</div>';
+    }
+    return '<div class="bi-foto-row">' + satu(d.foto.masuk, 'Saat Masuk') + (d.foto.lulus ? satu(d.foto.lulus, 'Saat Lulus') : '') + '</div>';
+  }
+
+  function sectionsHtml(d) {
+    var out = [];
+    BI_FIELDS.TAB.forEach(function (tb) {
+      tb.bagian.forEach(function (bg) {
+        var fields = bg.fields.filter(function (f) { return !BI_DISEMBUNYIKAN[f.k]; });
+        if (!fields.length) return;
+        out.push('<div class="bi-sec"><div class="bi-sec__t">' + escapeHtml(tb.judul) + ' — ' + escapeHtml(bg.judul) + '</div><div class="bi-grid">' +
+          fields.map(function (f) {
+            var v = nilaiTampilBI(f, d.data[f.k]);
+            var penuh = f.full || f.tipe === 'textarea';
+            return '<div class="bi-it' + (penuh ? ' bi-it--full' : '') + '"><div class="bi-it__l">' + escapeHtml(f.l) + '</div>' +
+              (v === '' ? '<div class="bi-it__v bi-it__v--kosong">Belum diisi</div>' : '<div class="bi-it__v">' + escapeHtml(v) + '</div>') + '</div>';
+          }).join('') + '</div></div>');
+      });
+    });
+    return out.join('');
+  }
+
+
+  // =====================================================================
+  // PENGAJUAN PEMBETULAN DATA
+  // =====================================================================
+  // Siswa membetulkan isian lalu mengajukan. Perubahan TIDAK langsung tersimpan:
+  // masuk ke pengajuan_data_siswa, menunggu diterima / ditolak wali kelas.
+  // Tidak boleh diubah: NIS, NISN, NIK, No. KK (dipaksa juga di database),
+  // serta status siswa & tab "Keluar Sekolah" (urusan sekolah).
+  var PB_TERKUNCI = { nis: true, nisn: true, nik: true, no_kk: true };
+  var PB_DISEMBUNYIKAN = { status: true, catatan_khusus: true };
+  var PB_TAB_DILEWATI = { keluar: true };
+
+  function pbNormal(f, v) {
+    if (v === null || v === undefined) return null;
+    if (f.tipe === 'number') {
+      if (String(v).trim() === '') return null;
+      var n = Number(v);
+      return isNaN(n) ? null : n;
+    }
+    var t = String(v).trim();
+    if (t === '') return null;
+    return f.tipe === 'date' ? t.slice(0, 10) : t;
+  }
+
+  async function renderPengajuan() {
+    content.innerHTML = headHtml('Pengajuan Pembetulan Data', 'Betulkan data dirimu yang keliru, lalu ajukan. Perubahan baru tersimpan setelah disetujui wali kelas.') +
+      '<div class="panel-note">Memuat data...</div>';
+    try {
+      var r = await Promise.all([
+        muatBukuInduk(),
+        supabaseClient.from('pengajuan_data_siswa').select('id, perubahan, diajukan_pada').eq('siswa_id', S.siswa.id).maybeSingle()
+      ]);
+      var d = r[0];
+      if (r[1].error) throw new Error(r[1].error.message + ' — pastikan migrasi_pengajuan_data_siswa.sql sudah dijalankan.');
+      var pending = r[1].data;
+      if (pending) tampilMenunggu(pending, d);
+      else tampilBaca(d);
+    } catch (err) {
+      content.innerHTML = headHtml('Pengajuan Pembetulan Data', '') +
+        '<div class="panel-note">Gagal memuat: ' + escapeHtml(err.message || err) + '</div>';
+    }
+  }
+
+  function labelPB(k) {
+    var l = k;
+    BI_FIELDS.SEMUA.forEach(function (f) { if (f.k === k) l = f.l; });
+    return l;
+  }
+  function fieldPB(k) {
+    var hasil = null;
+    BI_FIELDS.SEMUA.forEach(function (f) { if (f.k === k) hasil = f; });
+    return hasil || { k: k, l: k, tipe: 'text' };
+  }
+
+  // --- ada pengajuan yang menunggu ---
+  function tampilMenunggu(pending, d) {
+    var baris = Object.keys(pending.perubahan || {}).map(function (k) {
+      var f = fieldPB(k);
+      var x = pending.perubahan[k] || {};
+      return '<tr><td>' + escapeHtml(f.l) + '</td><td>' + (escapeHtml(nilaiTampilBI(f, x.lama)) || '<i>(kosong)</i>') + '</td><td><b>' + (escapeHtml(nilaiTampilBI(f, x.baru)) || '<i>(kosong)</i>') + '</b></td></tr>';
+    }).join('');
+    content.innerHTML = headHtml('Pengajuan Pembetulan Data', 'Pengajuanmu sedang menunggu persetujuan wali kelas.') +
+      '<div class="panel-note" style="margin-bottom:12px;"><b>Menunggu persetujuan wali kelas.</b> Diajukan ' + escapeHtml(formatWaktuTerbit(new Date(pending.diajukan_pada))) +
+      '. Kalau disetujui, datamu otomatis diperbarui. Kalau ditolak, pengajuan hilang dan datamu tidak berubah. Mau mengubah isi pengajuan? Batalkan dulu, lalu ajukan ulang.</div>' +
+      '<div class="table-wrap"><table class="data-table"><thead><tr><th>Isian</th><th>Data sekarang</th><th>Usulanmu</th></tr></thead><tbody>' + baris + '</tbody></table></div>' +
+      '<div class="pb-bar"><button class="btn-small btn-small--danger" id="btnBatalAjuan">Batalkan Pengajuan</button><span class="sw-pesan" id="pesanAjuan"></span></div>';
+    document.getElementById('btnBatalAjuan').addEventListener('click', async function () {
+      if (!confirm('Batalkan pengajuan ini? Perubahan yang kamu usulkan akan dihapus.')) return;
+      this.disabled = true;
+      var res = await supabaseClient.rpc('batalkan_pengajuan_data');
+      if (res.error) { alert('Gagal membatalkan: ' + res.error.message); this.disabled = false; return; }
+      renderPengajuan();
+    });
+  }
+
+  // --- tampilan baca + tombol Edit ---
+  function tampilBaca(d) {
+    content.innerHTML = headHtml('Pengajuan Pembetulan Data', 'Klik Edit, betulkan data yang keliru, lalu ajukan ke wali kelas.') +
+      '<div class="panel-note" style="margin-bottom:12px;">NIS, NISN, NIK, dan No. KK <b>tidak bisa diubah</b> di sini. Kalau keliru, sampaikan langsung ke wali kelas / admin.</div>' +
+      '<div class="no-print" style="display:flex;gap:8px;margin:0 0 14px;"><button class="btn-small btn-small--primary" id="btnEditData"><i data-lucide="pencil" style="width:14px;height:14px;"></i> Edit</button></div>' +
+      formPB(d, false);
+    lucide.createIcons();
+    document.getElementById('btnEditData').addEventListener('click', function () { tampilEdit(d); });
+  }
+
+  // --- mode edit ---
+  function tampilEdit(d) {
+    content.innerHTML = headHtml('Pengajuan Pembetulan Data', 'Ubah isian yang keliru. Isian yang kamu ubah ditandai hijau. Setelah selesai klik Ajukan.') +
+      formPB(d, true) +
+      '<div class="pb-bar"><button class="btn-small btn-small--primary" id="btnAjukan"><i data-lucide="send" style="width:14px;height:14px;"></i> Ajukan</button>' +
+      '<button class="btn-small" id="btnBatalEdit">Batal</button><span class="sw-pesan" id="pesanAjuan"></span></div>';
+    lucide.createIcons();
+
+    var semua = [];
+    BI_FIELDS.TAB.forEach(function (tb) {
+      if (PB_TAB_DILEWATI[tb.id]) return;
+      tb.bagian.forEach(function (bg) { bg.fields.forEach(function (f) {
+        if (!PB_TERKUNCI[f.k] && !PB_DISEMBUNYIKAN[f.k]) semua.push(f);
+      }); });
+    });
+
+    function bacaNilai(f) {
+      var el = document.getElementById('pb_' + f.k);
+      return el ? pbNormal(f, el.value) : null;
+    }
+    function tandai(f) {
+      var el = document.getElementById('pb_' + f.k);
+      if (!el) return;
+      var asli = pbNormal(f, d.data[f.k]);
+      el.parentNode.classList.toggle('pb-it--ubah', bacaNilai(f) !== asli);
+    }
+    semua.forEach(function (f) {
+      var el = document.getElementById('pb_' + f.k);
+      if (!el) return;
+      el.addEventListener('input', function () { tandai(f); });
+      el.addEventListener('change', function () { tandai(f); });
+    });
+
+    document.getElementById('btnBatalEdit').addEventListener('click', function () { tampilBaca(d); });
+    document.getElementById('btnAjukan').addEventListener('click', async function () {
+      var btn = this;
+      var pesan = document.getElementById('pesanAjuan');
+      function tampil(teks, ok) { pesan.textContent = teks; pesan.className = 'sw-pesan ' + (ok ? 'sw-pesan--ok' : 'sw-pesan--err'); }
+      var baru = {};
+      var jumlah = 0;
+      for (var i = 0; i < semua.length; i++) {
+        var f = semua[i];
+        var v = bacaNilai(f);
+        if (v !== pbNormal(f, d.data[f.k])) { baru[f.k] = v; jumlah++; }
+      }
+      if (!jumlah) { tampil('Belum ada data yang kamu ubah.', false); return; }
+      if (baru.nama === null) { tampil('Nama tidak boleh kosong.', false); return; }
+      if (!confirm('Ajukan ' + jumlah + ' perubahan data ke wali kelas?')) return;
+      btn.disabled = true;
+      var res = await supabaseClient.rpc('ajukan_pembetulan_data', { p_baru: baru });
+      btn.disabled = false;
+      if (res.error) { tampil('Gagal mengajukan: ' + res.error.message, false); return; }
+      renderPengajuan();
+    });
+  }
+
+  function formPB(d, edit) {
+    var out = [];
+    BI_FIELDS.TAB.forEach(function (tb) {
+      if (PB_TAB_DILEWATI[tb.id]) return;
+      tb.bagian.forEach(function (bg) {
+        var fields = bg.fields.filter(function (f) { return !PB_DISEMBUNYIKAN[f.k]; });
+        if (!fields.length) return;
+        out.push('<div class="pb-sec"><div class="pb-sec__t">' + escapeHtml(tb.judul) + ' — ' + escapeHtml(bg.judul) + '</div><div class="pb-grid">' +
+          fields.map(function (f) {
+            var penuh = f.full || f.tipe === 'textarea';
+            var mentah = d.data[f.k];
+            var kunci = !!PB_TERKUNCI[f.k];
+            var lbl = escapeHtml(f.l) + (kunci ? '<span class="pb-kunci">🔒 tidak dapat diubah</span>' : '');
+            var isi;
+            if (!edit || kunci) {
+              var v = nilaiTampilBI(f, mentah);
+              isi = '<div class="pb-val' + (kunci ? ' pb-val--kunci' : '') + '">' + (v === '' ? '<i>Belum diisi</i>' : escapeHtml(v)) + '</div>';
+            } else if (f.tipe === 'select') {
+              var cur = mentah === null || mentah === undefined ? '' : String(mentah);
+              isi = '<select id="pb_' + f.k + '"><option value="">— Pilih —</option>' + f.opsi.map(function (o) {
+                var teks = f.k === 'jenis_kelamin' ? (o === 'L' ? 'Laki-laki' : 'Perempuan') : o;
+                return '<option value="' + escapeHtml(o) + '"' + (cur === o ? ' selected' : '') + '>' + escapeHtml(teks) + '</option>';
+              }).join('') + '</select>';
+            } else if (f.tipe === 'textarea') {
+              isi = '<textarea id="pb_' + f.k + '">' + escapeHtml(mentah === null || mentah === undefined ? '' : mentah) + '</textarea>';
+            } else {
+              var tp = f.tipe === 'date' ? 'date' : (f.tipe === 'number' ? 'number' : 'text');
+              var val = mentah === null || mentah === undefined ? '' : (f.tipe === 'date' ? String(mentah).slice(0, 10) : mentah);
+              isi = '<input type="' + tp + '"' + (tp === 'number' ? ' step="any"' : '') + ' id="pb_' + f.k + '" value="' + escapeHtml(val) + '">';
+            }
+            return '<div class="pb-it' + (penuh ? ' pb-it--full' : '') + '"><label>' + lbl + '</label>' + isi + '</div>';
+          }).join('') + '</div></div>');
+      });
+    });
+    return out.join('');
+  }
+
+  // =====================================================================
+  // LIHAT CATATAN PELANGGARAN  (menu saja — tabelnya menyusul)
+  // =====================================================================
+  function renderPelanggaran() {
+    // TODO (setelah tabel pelanggaran dibuat):
+    //   1) buat policy RLS "siswa baca miliknya": using (siswa_id = public.siswa_id_saya())
+    //   2) ganti isi fungsi ini dengan query supabaseClient.from('<tabel>').select(...).eq('siswa_id', S.siswa.id)
+    //      lalu tampilkan sebagai tabel (tanggal, jenis pelanggaran, keterangan, tindak lanjut).
+    content.innerHTML = headHtml('Catatan Pelanggaran', 'Catatan pelanggaran dan pembinaan kedisiplinan.') +
+      kosongHtml('Segera tersedia', 'Menu ini sedang disiapkan oleh sekolah. Setelah datanya siap, catatanmu akan tampil di sini.');
+  }
+
+  // =====================================================================
+  // GANTI KATA SANDI
+  // =====================================================================
+  function renderSandi() {
+    content.innerHTML = headHtml('Ganti Kata Sandi', 'Gunakan kata sandi yang hanya kamu yang tahu. Minimal 6 karakter.') +
+      '<div class="sandi-box">' +
+      '<div class="sb-field"><label for="sandiBaru">Kata sandi baru</label><input type="password" id="sandiBaru" autocomplete="new-password"></div>' +
+      '<div class="sb-field"><label for="sandiUlang">Ulangi kata sandi baru</label><input type="password" id="sandiUlang" autocomplete="new-password"></div>' +
+      '<button class="btn-small btn-small--primary" id="btnSandi">Simpan Kata Sandi</button>' +
+      '<div class="sw-pesan" id="pesanSandi"></div></div>';
+
+    document.getElementById('btnSandi').addEventListener('click', async function () {
+      var btn = this;
+      var a = document.getElementById('sandiBaru').value;
+      var b = document.getElementById('sandiUlang').value;
+      var pesan = document.getElementById('pesanSandi');
+      function tampil(teks, ok) { pesan.textContent = teks; pesan.className = 'sw-pesan ' + (ok ? 'sw-pesan--ok' : 'sw-pesan--err'); }
+      if (a.length < 6) { tampil('Kata sandi minimal 6 karakter.', false); return; }
+      if (a !== b) { tampil('Pengulangan kata sandi tidak sama.', false); return; }
+      if (a.toLowerCase() === 'siswa123') { tampil('Pilih kata sandi yang berbeda dari kata sandi awal.', false); return; }
+      btn.disabled = true;
+      var res = await supabaseClient.auth.updateUser({ password: a });
+      btn.disabled = false;
+      if (res.error) { tampil('Gagal mengubah kata sandi: ' + res.error.message, false); return; }
+      document.getElementById('sandiBaru').value = '';
+      document.getElementById('sandiUlang').value = '';
+      tampil('Kata sandi berhasil diubah. Gunakan kata sandi baru saat masuk berikutnya.', true);
+    });
+  }
+
+  // =====================================================================
+  // Navigasi
+  // =====================================================================
+  var VIEWS = {
+    beranda: renderBeranda,
+    rapor: renderRapor,
+    presensi: renderPresensi,
+    biodata: renderBiodata,
+    pengajuan: renderPengajuan,
+    pelanggaran: renderPelanggaran,
+    sandi: renderSandi
+  };
+
+  function tampilkan(view) {
+    if (!VIEWS[view]) view = 'beranda';
+    document.querySelectorAll('.menu-item[data-view]').forEach(function (m) {
+      m.classList.toggle('menu-item--active', m.getAttribute('data-view') === view);
+    });
+    if (location.hash !== '#' + view) { try { history.replaceState(null, '', '#' + view); } catch (e) { /* abaikan */ } }
+    window.scrollTo(0, 0);
+    VIEWS[view]();
+    if (window.lucide) lucide.createIcons();
+  }
+
+  document.querySelectorAll('.menu-item[data-view]').forEach(function (a) {
+    a.addEventListener('click', function (e) { e.preventDefault(); tampilkan(a.getAttribute('data-view')); });
+  });
+
+  document.getElementById('logoutBtn').addEventListener('click', async function (e) {
+    e.preventDefault();
+    await supabaseClient.auth.signOut();
+    window.location.href = 'index.html';
+  });
+
+  // =====================================================================
+  // Mulai: cek sesi, ambil data diri, tentukan periode yang tersedia
+  // =====================================================================
+  (async function () {
+    try {
+      var ses = await supabaseClient.auth.getSession();
+      if (!ses.data.session) { window.location.href = 'index.html'; return; }
+      S.user = ses.data.session.user;
+
+      var sw = await supabaseClient.from('siswa').select('*').eq('auth_user_id', S.user.id).maybeSingle();
+      if (sw.error) throw new Error(sw.error.message);
+      if (!sw.data) {
+        // Bukan akun siswa: guru/admin kembali ke Menu Utama, selain itu keluar.
+        var pr = await supabaseClient.from('profiles').select('role').eq('id', S.user.id).maybeSingle();
+        if (pr.data) { window.location.href = 'portal.html'; return; }
+        await supabaseClient.auth.signOut();
+        window.location.href = 'index.html';
+        return;
+      }
+      S.siswa = sw.data;
+      document.getElementById('userName').textContent = S.siswa.nama || S.user.email;
+      document.getElementById('userAvatar').textContent = (S.siswa.nama || '?').trim().charAt(0).toUpperCase();
+
+      var id = S.siswa.id;
+      var r = await Promise.all([
+        supabaseClient.from('tahun_ajaran').select('id, nama, semester, is_aktif'),
+        supabaseClient.from('kelas').select('id, nama, tingkat, program_keahlian'),
+        supabaseClient.from('siswa_kelas').select('tahun_ajaran_id, kelas_id, no_absen').eq('siswa_id', id),
+        supabaseClient.from('rekap_presensi').select('tahun_ajaran_id, kelas_id, jumlah_sakit, jumlah_izin, jumlah_alpha').eq('siswa_id', id),
+        supabaseClient.from('nilai').select('tahun_ajaran_id').eq('siswa_id', id).eq('jenis', 'rapor').limit(1000),
+        supabaseClient.from('rapor_terbit').select('tahun_ajaran_id, terbit_pada')
+      ]);
+      var taAll = cekError(r[0], 'tahun ajaran').data || [];
+      (cekError(r[1], 'kelas').data || []).forEach(function (k) { S.kelasMap[k.id] = k; });
+      var sk = cekError(r[2], 'penempatan kelas').data || [];
+      S.rekap = cekError(r[3], 'presensi').data || [];
+      var nv = cekError(r[4], 'nilai').data || [];
+      // Jika migrasi_terbit_rapor.sql belum dijalankan, tabelnya belum ada -> anggap belum ada yang terbit.
+      ((r[5] && !r[5].error && r[5].data) || []).forEach(function (x) { S.terbitPerTA[x.tahun_ajaran_id] = new Date(x.terbit_pada); });
+
+      S.tahunAktif = taAll.filter(function (t) { return t.is_aktif; })[0] || null;
+
+      // Kelas per periode: dari penempatan kelas, cadangan dari rekap presensi.
+      sk.forEach(function (x) { if (S.kelasMap[x.kelas_id]) { S.kelasPerTA[x.tahun_ajaran_id] = S.kelasMap[x.kelas_id]; S.noAbsenPerTA[x.tahun_ajaran_id] = x.no_absen; } });
+      S.rekap.forEach(function (x) { if (!S.kelasPerTA[x.tahun_ajaran_id] && S.kelasMap[x.kelas_id]) S.kelasPerTA[x.tahun_ajaran_id] = S.kelasMap[x.kelas_id]; });
+
+      // Periode yang relevan = yang punya penempatan / presensi / nilai milik siswa ini.
+      var relevan = {};
+      sk.forEach(function (x) { relevan[x.tahun_ajaran_id] = true; });
+      S.rekap.forEach(function (x) { relevan[x.tahun_ajaran_id] = true; });
+      nv.forEach(function (x) { relevan[x.tahun_ajaran_id] = true; });
+      if (S.tahunAktif) relevan[S.tahunAktif.id] = true;
+
+      S.periodeList = taAll.filter(function (t) { return relevan[t.id]; }).sort(function (a, b) {
+        if (a.nama !== b.nama) return a.nama < b.nama ? 1 : -1;       // tahun ajaran terbaru dulu
+        return a.semester === b.semester ? 0 : (a.semester === 'Gasal' ? -1 : 1); // Gasal sebelum Genap
+      });
+
+      var aktifDiList = S.tahunAktif && periodeById(S.tahunAktif.id);
+      if (aktifDiList) S.periodeId = S.tahunAktif.id;
+      else if (S.periodeList.length) {
+        var terbaru = S.periodeList[0].nama;
+        var smtTerbaru = S.periodeList.filter(function (x) { return x.nama === terbaru; });
+        S.periodeId = smtTerbaru[smtTerbaru.length - 1].id;
+      }
+
+      document.getElementById('topbarMeta').textContent = S.tahunAktif
+        ? 'Tahun Ajaran ' + S.tahunAktif.nama + ' — Semester ' + S.tahunAktif.semester
+        : 'Belum ada tahun ajaran aktif';
+      var kelasAktif = namaKelasAktif();
+      document.getElementById('userRoleLabel').textContent = 'Siswa' + (kelasAktif ? ' · ' + kelasAktif : '');
+
+      var awal = (location.hash || '').replace('#', '');
+      tampilkan(VIEWS[awal] ? awal : 'beranda');
+    } catch (err) {
+      content.innerHTML = '<div class="empty-state"><div class="empty-state__mark">！</div><div class="empty-state__title">Gagal memuat data</div>' +
+        '<div class="empty-state__desc">' + escapeHtml(err.message || err) + '<br><br>Coba muat ulang halaman. Kalau tetap gagal, hubungi admin sekolah.</div></div>';
+    }
+  })();
+</script>
+
+</body>
+</html>

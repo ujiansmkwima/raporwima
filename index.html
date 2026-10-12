@@ -36,8 +36,8 @@
     <div class="login-card__sub">SMK Widya Mandala Tambak — Banyumas<br>Buku Induk · E-Rapor · Supervisi</div>
 
     <div class="field">
-      <label for="email">Email</label>
-      <input type="email" id="email" name="email" placeholder="nama@sekolah.sch.id" autocomplete="username">
+      <label for="email">NIS atau Email</label>
+      <input type="text" id="email" name="email" placeholder="NIS (siswa) atau email (guru/admin)" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false">
     </div>
 
     <div class="field">
@@ -52,7 +52,7 @@
 
     <button type="submit" class="btn-primary" id="submitBtn">Masuk</button>
 
-    <div class="login-card__note" id="loginNote">Peran (guru/admin) ditentukan otomatis berdasarkan akun kamu di Supabase.</div>
+    <div class="login-card__note" id="loginNote">Siswa masuk dengan NIS. Guru &amp; admin masuk dengan email. Peran ditentukan otomatis berdasarkan akun.</div>
 
     <div class="login-panduan-alt">
       <a href="panduan-guru.html" target="_blank" rel="noopener" class="btn-panduan">
@@ -300,7 +300,8 @@
   form.addEventListener('submit', async function (e) {
     e.preventDefault();
 
-    var email = document.getElementById('email').value.trim();
+    // Siswa mengetik NIS (tanpa @) -> diubah ke email internal akun siswa.
+    var email = emailDariInputLogin(document.getElementById('email').value);
     var password = document.getElementById('password').value;
 
     submitBtn.disabled = true;
@@ -312,7 +313,7 @@
     var authResult = await supabaseClient.auth.signInWithPassword({ email: email, password: password });
 
     if (authResult.error) {
-      note.textContent = 'Email atau kata sandi salah.';
+      note.textContent = 'NIS/email atau kata sandi salah.';
       note.style.color = '#B3261E';
       submitBtn.disabled = false;
       submitBtn.textContent = 'Masuk';
@@ -328,7 +329,18 @@
       .eq('id', userId)
       .single();
 
+    // Akun siswa tidak punya baris di profiles; dikenali lewat siswa.auth_user_id.
     if (profileResult.error || !profileResult.data) {
+      var siswaResult = await supabaseClient
+        .from('siswa')
+        .select('id')
+        .eq('auth_user_id', userId)
+        .maybeSingle();
+      if (siswaResult.data) {
+        window.location.href = 'siswa.html';
+        return;
+      }
+      await supabaseClient.auth.signOut();
       note.textContent = 'Akun ini belum punya role. Hubungi admin.';
       note.style.color = '#B3261E';
       submitBtn.disabled = false;

@@ -79,6 +79,9 @@
 
     var pr = await supabaseClient.from('profiles').select('nama, role').eq('id', user.id).single();
     if (pr.error || !pr.data) {
+      // Akun siswa tidak punya profil guru/admin -> arahkan ke halaman siswa.
+      var sw = await supabaseClient.from('siswa').select('id').eq('auth_user_id', user.id).maybeSingle();
+      if (sw.data) { window.location.href = 'siswa.html'; return; }
       document.getElementById('userName').textContent = user.email;
       document.getElementById('grid').innerHTML = '';
       var n = document.getElementById('note');

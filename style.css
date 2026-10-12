@@ -3166,3 +3166,30 @@ table.rapor-cetak__nilai tbody tr.rapor-cetak__section-row td {
   .an-row__bar { grid-column: 1 / -1; grid-row: 2; }
   .an-rank { grid-template-columns: 1fr; }
 }
+
+/* ---- Pengajuan pembetulan data siswa (pengajuan-data.js, siswa.html) ---- */
+.menu-badge { margin-left: auto; min-width: 20px; padding: 1px 7px; border-radius: 999px; background: #dc2626; color: #fff; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; }
+.menu-badge[hidden] { display: none; }
+.pd-toast { position: fixed; right: 18px; bottom: 18px; z-index: 9999; max-width: 340px; background: #fff; border: 1px solid var(--border, #e5e7eb); border-left: 4px solid #dc2626; border-radius: 10px; padding: 14px 16px; box-shadow: 0 10px 30px rgba(0,0,0,.18); }
+.pd-toast__t { font-weight: 800; font-size: 14px; margin-bottom: 4px; }
+.pd-toast__d { font-size: 13px; color: #444; margin-bottom: 10px; }
+.pd-card { border: 1px solid var(--border, #e5e7eb); border-radius: 12px; padding: 14px; margin-bottom: 14px; background: var(--surface, #fff); }
+.pd-card__head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.pd-card__nama { font-weight: 800; font-size: 15px; }
+.pd-card__meta { font-size: 12.5px; color: #666; margin-top: 2px; }
+.pd-card__aksi { display: flex; gap: 8px; }
+.pd-kosong { color: #999; font-style: italic; }
+.pd-baru { font-weight: 700; background: #f0fdf4; }
+/* siswa: form pembetulan */
+.pb-sec { margin-bottom: 18px; }
+.pb-sec__t { font-weight: 800; font-size: 13.5px; margin: 0 0 8px; }
+.pb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px 14px; }
+.pb-it--full { grid-column: 1 / -1; }
+.pb-it label { display: block; font-size: 12px; font-weight: 700; margin-bottom: 3px; color: #444; }
+.pb-it input, .pb-it select, .pb-it textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border, #d1d5db); border-radius: 8px; font: inherit; box-sizing: border-box; background: #fff; }
+.pb-it textarea { min-height: 64px; resize: vertical; }
+.pb-it--ubah input, .pb-it--ubah select, .pb-it--ubah textarea { border-color: #16a34a; background: #f0fdf4; }
+.pb-val { padding: 8px 10px; border: 1px dashed var(--border, #d1d5db); border-radius: 8px; background: #f9fafb; min-height: 20px; font-size: 14px; word-break: break-word; }
+.pb-val--kunci { color: #6b7280; }
+.pb-kunci { font-size: 11px; color: #6b7280; font-weight: 600; margin-left: 4px; }
+.pb-bar { position: sticky; bottom: 0; background: #fff; border-top: 1px solid var(--border, #e5e7eb); padding: 12px 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }

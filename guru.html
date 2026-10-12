@@ -15,6 +15,7 @@
 <script src="excel-rekap.js?v=2"></script>
 <script src="unsaved-guard.js?v=1"></script>
 <script src="supabase-client.js"></script>
+<script src="bukuinduk-fields.js?v=1"></script>
 <script src="simpan-atas.js?v=1"></script>
 <script src="sticky-nama.js?v=1"></script>
 <script src="sambutan-guru.js?v=1"></script>
@@ -284,6 +285,8 @@
     // 2. Ambil nama dari tabel profiles
     var profileResult = await supabaseClient
       .from('profiles').select('nama, role').eq('id', user.id).single();
+    // Tanpa profil guru/admin (mis. akun siswa) -> keluar dari halaman ini.
+    if (profileResult.error || !profileResult.data) { window.location.href = 'portal.html'; return; }
     var nama = (profileResult.data && profileResult.data.nama) ? profileResult.data.nama : user.email;
     document.getElementById('userName').textContent = nama;
     document.getElementById('userAvatar').textContent = nama.trim().charAt(0).toUpperCase();

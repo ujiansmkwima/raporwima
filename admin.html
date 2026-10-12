@@ -16,6 +16,7 @@
 <script src="excel-rekap.js?v=2"></script>
 <script src="unsaved-guard.js?v=1"></script>
 <script src="supabase-client.js"></script>
+<script src="bukuinduk-fields.js?v=1"></script>
 <script src="simpan-atas.js?v=1"></script>
 <script src="sticky-nama.js?v=1"></script>
 <script src="mobile.js?v=1" defer></script>
@@ -61,6 +62,8 @@
       <a href="#" class="menu-item" data-view="tujuanPembelajaran"><i data-lucide="list-checks" class="menu-icon"></i><span class="menu-item__title">Tujuan Pembelajaran</span></a>
       <a href="#" class="menu-item" data-view="rekapNilai"><i data-lucide="bar-chart-3" class="menu-icon"></i><span class="menu-item__title">Rekap Nilai Semester</span></a>
       <a href="#" class="menu-item" data-view="leger"><i data-lucide="layers" class="menu-icon"></i><span class="menu-item__title">Leger Nilai 6 Semester</span></a>
+      <div class="sidebar__section-label">Rapor Siswa</div>
+      <a href="#" class="menu-item" data-view="terbitRapor"><i data-lucide="send" class="menu-icon"></i><span class="menu-item__title">Terbitkan Rapor</span></a>
       <div class="sidebar__section-label">Lainnya</div>
       <a href="#" class="menu-item" data-view="slideshowLogin"><i data-lucide="images" class="menu-icon"></i><span class="menu-item__title">Slideshow Login</span></a>
       <a href="#" class="menu-item" data-view="tarikBukuInduk"><i data-lucide="book-user" class="menu-icon"></i><span class="menu-item__title">Tarik Data Buku Induk</span></a>
@@ -1034,6 +1037,138 @@
     }
   }
 
+
+
+
+  // ================= TERBITKAN RAPOR KE SISWA =================
+  // Siswa baru bisa melihat rapor setelah periode (tahun ajaran + semester)
+  // diterbitkan di sini, dan baru sejak tanggal & jam terbit yang diatur.
+  // Satu klik berlaku untuk SEMUA siswa & kelas pada periode itu.
+  // Data disimpan di tabel rapor_terbit (migrasi_terbit_rapor.sql).
+
+  // Date -> nilai untuk <input type="datetime-local"> (waktu lokal browser)
+  function keInputWaktuLokal(d) {
+    function dua(n) { return (n < 10 ? '0' : '') + n; }
+    return d.getFullYear() + '-' + dua(d.getMonth() + 1) + '-' + dua(d.getDate()) + 'T' + dua(d.getHours()) + ':' + dua(d.getMinutes());
+  }
+  function formatWaktuTerbitAdmin(d) {
+    try {
+      return d.toLocaleString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }).replace(/\./g, ':') + ' WIB';
+    } catch (e) { return d.toString(); }
+  }
+
+  async function renderTerbitRapor() {
+    content.innerHTML =
+      '<div class="panel-head"><div><div class="panel-head__title">Terbitkan Rapor</div>' +
+      '<div class="panel-head__desc">Rapor tidak langsung terlihat oleh siswa. Pilih periode, atur tanggal & jam terbit, lalu klik Terbitkan. ' +
+      'Berlaku untuk semua siswa dan semua kelas pada periode tersebut.</div></div></div>' +
+      '<div class="panel-note" id="trNote" style="margin-bottom:12px;">Memuat...</div>';
+
+    var r = await Promise.all([
+      supabaseClient.from('tahun_ajaran').select('id, nama, semester, is_aktif').order('nama', { ascending: false }),
+      supabaseClient.from('rapor_terbit').select('tahun_ajaran_id, terbit_pada')
+    ]);
+    if (r[0].error) { document.getElementById('trNote').textContent = 'Gagal memuat tahun ajaran: ' + r[0].error.message; return; }
+    if (r[1].error) {
+      document.getElementById('trNote').innerHTML = 'Tabel <b>rapor_terbit</b> belum ada. Jalankan <b>migrasi_terbit_rapor.sql</b> di Supabase (SQL Editor) terlebih dahulu. (' + escapeHtml(r[1].error.message) + ')';
+      return;
+    }
+    var periode = (r[0].data || []).slice().sort(function (a, b) {
+      if (a.nama !== b.nama) return a.nama < b.nama ? 1 : -1;
+      return a.semester === b.semester ? 0 : (a.semester === 'Gasal' ? -1 : 1);
+    });
+    var terbit = {};
+    (r[1].data || []).forEach(function (x) { terbit[x.tahun_ajaran_id] = new Date(x.terbit_pada); });
+
+    if (!periode.length) { document.getElementById('trNote').textContent = 'Belum ada tahun ajaran.'; return; }
+
+    var aktif = periode.filter(function (p) { return p.is_aktif; })[0] || periode[0];
+    var opsi = periode.map(function (p) {
+      return '<option value="' + p.id + '"' + (p.id === aktif.id ? ' selected' : '') + '>' + escapeHtml(p.nama) + ' — Semester ' + escapeHtml(p.semester) + (p.is_aktif ? ' (aktif)' : '') + '</option>';
+    }).join('');
+
+    function statusChip(id) {
+      var w = terbit[id];
+      if (!w) return '<span class="chip chip--muted">Belum terbit</span>';
+      if (w.getTime() <= Date.now()) return '<span class="chip chip--aktif">Sudah terbit</span>';
+      return '<span class="chip">Terjadwal</span>';
+    }
+
+    document.getElementById('trNote').outerHTML =
+      '<form class="add-form" id="formTerbit">' +
+      '<div class="field"><label>Periode</label><select id="trPeriode">' + opsi + '</select></div>' +
+      '<div class="field"><label>Tanggal & jam terbit (WIB)</label><input type="datetime-local" id="trWaktu" required></div>' +
+      '<button type="submit" class="btn-small btn-small--primary" id="btnTerbit"><i data-lucide="send" style="width:14px;height:14px;"></i> Terbitkan</button>' +
+      '</form>' +
+      '<div class="panel-note" style="margin:10px 0 14px;">Isi tanggal & jam sekarang atau yang sudah lewat untuk menerbitkan seketika. ' +
+      'Isi waktu di masa depan untuk menjadwalkan: rapor otomatis terlihat oleh siswa saat waktunya tiba. ' +
+      'Menerbitkan ulang periode yang sama akan mengubah jadwalnya.</div>' +
+      '<div class="table-wrap"><table class="data-table"><thead><tr><th>Periode</th><th>Status</th><th>Waktu terbit</th><th></th></tr></thead><tbody id="trBody"></tbody></table></div>';
+
+    var elPeriode = document.getElementById('trPeriode');
+    var elWaktu = document.getElementById('trWaktu');
+
+    // Isi awal: jadwal yang sudah ada untuk periode terpilih, atau waktu sekarang.
+    function isiWaktuAwal() {
+      var w = terbit[elPeriode.value];
+      elWaktu.value = keInputWaktuLokal(w || new Date());
+    }
+    isiWaktuAwal();
+    elPeriode.addEventListener('change', isiWaktuAwal);
+
+    var body = document.getElementById('trBody');
+    periode.forEach(function (p) {
+      var w = terbit[p.id];
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td>' + escapeHtml(p.nama) + ' — Semester ' + escapeHtml(p.semester) + (p.is_aktif ? ' <span class="chip chip--aktif">Aktif</span>' : '') + '</td>' +
+        '<td>' + statusChip(p.id) + '</td>' +
+        '<td>' + (w ? escapeHtml(formatWaktuTerbitAdmin(w)) : '—') + '</td>' +
+        '<td>' + (w ? '<button class="btn-small" data-tarik="' + p.id + '">Tarik kembali</button>' : '') + '</td>';
+      body.appendChild(tr);
+    });
+    lucide.createIcons();
+
+    document.getElementById('formTerbit').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var taId = elPeriode.value;
+      var p = periode.filter(function (x) { return x.id === taId; })[0];
+      if (!elWaktu.value) { alert('Atur tanggal dan jam terbit terlebih dahulu.'); return; }
+      var waktu = new Date(elWaktu.value);       // dibaca sebagai waktu lokal browser
+      if (isNaN(waktu.getTime())) { alert('Tanggal / jam tidak valid.'); return; }
+
+      // Hitung siswa pada periode ini untuk konfirmasi.
+      var cnt = await supabaseClient.from('siswa_kelas').select('siswa_id', { count: 'exact', head: true }).eq('tahun_ajaran_id', taId);
+      var jumlah = cnt.error ? null : cnt.count;
+      var sekarang = waktu.getTime() <= Date.now();
+      var pesan = 'Terbitkan rapor ' + p.nama + ' semester ' + p.semester + (jumlah !== null ? ' untuk ' + jumlah + ' siswa' : ' untuk semua siswa') + '?\n\n' +
+        (sekarang ? 'Rapor langsung bisa dilihat siswa sekarang.' : 'Rapor bisa dilihat siswa mulai ' + formatWaktuTerbitAdmin(waktu) + '.');
+      if (!confirm(pesan)) return;
+
+      var btn = document.getElementById('btnTerbit');
+      btn.disabled = true;
+      var u = await supabaseClient.auth.getUser();
+      var res = await supabaseClient.from('rapor_terbit').upsert({
+        tahun_ajaran_id: taId,
+        terbit_pada: waktu.toISOString(),
+        diterbitkan_oleh: u.data && u.data.user ? u.data.user.id : null,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'tahun_ajaran_id' });
+      btn.disabled = false;
+      if (res.error) { alert('Gagal menerbitkan: ' + res.error.message); return; }
+      renderTerbitRapor();
+    });
+
+    body.querySelectorAll('button[data-tarik]').forEach(function (btn) {
+      btn.addEventListener('click', async function () {
+        var p = periode.filter(function (x) { return x.id === btn.dataset.tarik; })[0];
+        if (!confirm('Tarik kembali rapor ' + p.nama + ' semester ' + p.semester + '? Siswa tidak akan bisa melihatnya lagi sampai diterbitkan ulang.')) return;
+        var res = await supabaseClient.from('rapor_terbit').delete().eq('tahun_ajaran_id', p.id);
+        if (res.error) { alert('Gagal menarik kembali: ' + res.error.message); return; }
+        renderTerbitRapor();
+      });
+    });
+  }
 
   // ================= NAIK KELAS & KELULUSAN =================
   // Dipanggil dari panel Tahun Ajaran. Memindahkan siswa AKTIF dari
@@ -2400,11 +2535,29 @@
           '<td>' + escapeHtml(s.nama) + '</td>' +
           '<td>' + escapeHtml(kelasNama) + '</td>' +
           '<td><button class="btn-small" data-edit="' + s.id + '">Edit</button> ' +
+          '<button class="btn-small" data-reset-sandi="' + s.id + '" title="Kembalikan sandi siswa ke siswa123">Reset Sandi</button> ' +
           '<button class="btn-small btn-small--danger" data-del="' + s.id + '">Hapus</button></td>';
         body.appendChild(tr);
 
         tr.querySelector('[data-edit]').addEventListener('click', function () {
           bukaModalSiswa(s, kelasList, row.kelasId || '');
+        });
+        tr.querySelector('[data-reset-sandi]').addEventListener('click', async function () {
+          if (!confirm('Reset sandi ' + s.nama + ' (NIS ' + (s.nis || '—') + ') ke "siswa123"?\n\nSiswa lalu masuk dengan NIS dan sandi siswa123, dan sebaiknya segera menggantinya.')) return;
+          var btn = this;
+          btn.disabled = true;
+          var res = await supabaseClient.rpc('admin_reset_sandi_siswa', { p_siswa_id: s.id });
+          btn.disabled = false;
+          if (res.error) {
+            var m = res.error.message || '';
+            alert(/admin_reset_sandi_siswa/.test(m) && /not find|does not exist|schema cache/i.test(m)
+              ? 'Fungsi reset belum terpasang. Jalankan migrasi_reset_sandi_siswa.sql di Supabase SQL Editor dulu.'
+              : 'Gagal reset sandi: ' + m);
+            return;
+          }
+          alert(res.data === 'OK'
+            ? 'Sandi ' + s.nama + ' berhasil direset ke "siswa123".'
+            : String(res.data));
         });
         tr.querySelector('[data-del]').addEventListener('click', async function () {
           if (!confirm('Hapus siswa ini beserta seluruh riwayat nilai/presensinya?')) return;
@@ -6326,7 +6479,7 @@
     if (body.previousElementSibling && body.previousElementSibling.scrollIntoView) body.previousElementSibling.scrollIntoView({ block: 'start' });
   }
 
-  var views = { dashboard: renderDashboard, kokurikuler: renderKokurikuler, profilSekolah: renderProfilSekolah, slideshowLogin: renderSlideshowLogin, tahunAjaran: renderTahunAjaran, siswa: renderSiswa, rekapNilai: renderRekapNilai, leger: renderLeger, urutanLeger: renderUrutanLeger, kelas: renderKelas, mapel: renderMapel, mapelTingkat: renderMapelTingkat, penugasan: renderPenugasan, tujuanPembelajaran: renderTujuanPembelajaran, guru: renderGuru, ekskul: renderEkstrakurikuler, pkl: renderPkl, tarikBukuInduk: renderTarikBukuInduk };
+  var views = { dashboard: renderDashboard, kokurikuler: renderKokurikuler, profilSekolah: renderProfilSekolah, slideshowLogin: renderSlideshowLogin, tahunAjaran: renderTahunAjaran, terbitRapor: renderTerbitRapor, siswa: renderSiswa, rekapNilai: renderRekapNilai, leger: renderLeger, urutanLeger: renderUrutanLeger, kelas: renderKelas, mapel: renderMapel, mapelTingkat: renderMapelTingkat, penugasan: renderPenugasan, tujuanPembelajaran: renderTujuanPembelajaran, guru: renderGuru, ekskul: renderEkstrakurikuler, pkl: renderPkl, tarikBukuInduk: renderTarikBukuInduk };
 
   document.querySelectorAll('#menuAdmin .menu-item').forEach(function (item) {
     item.addEventListener('click', function (e) {
@@ -6354,6 +6507,9 @@
       .select('nama, role')
       .eq('id', user.id)
       .single();
+
+    // Tanpa profil guru/admin (mis. akun siswa) -> keluar dari halaman ini.
+    if (profileResult.error || !profileResult.data) { window.location.href = 'portal.html'; return; }
 
     var nama = (profileResult.data && profileResult.data.nama) ? profileResult.data.nama : user.email;
 
