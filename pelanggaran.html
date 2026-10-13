@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Catatan Pelanggaran — PORTAL DATA DAN PENILAIAN SMK WIDYA MANDALA TAMBAK</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=10">
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-client.js"></script>
+<script src="pelanggaran-cp.js?v=1"></script>
+<script src="mobile.js?v=1" defer></script>
+</head>
+<body>
+
+<div class="app">
+
+  <aside class="sidebar">
+    <div class="sidebar__brand">
+      <img class="sidebar__brand-logo" src="assets/logo.png" alt="Logo SMK Widya Mandala Tambak">
+      <div class="sidebar__brand-text">
+        <span class="sidebar__brand-mark">Pelanggaran</span>
+        <span class="sidebar__brand-school">SMK Widya Mandala Tambak</span>
+      </div>
+    </div>
+    <div class="sidebar__role"><i data-lucide="shield-alert" style="width:13px;height:13px;"></i> <span id="roleLabel">Guru</span></div>
+
+    <div class="sidebar__section-label">Aplikasi</div>
+    <nav class="menu-list">
+      <a href="portal.html" class="menu-item"><i data-lucide="layout-grid" class="menu-icon"></i><span class="menu-item__title">Menu Utama</span></a>
+      <a href="#" class="menu-item" id="linkErapor"><i data-lucide="file-text" class="menu-icon"></i><span class="menu-item__title">E-Rapor</span></a>
+    </nav>
+
+    <div class="sidebar__section-label">Catatan</div>
+    <nav class="menu-list">
+      <a href="pelanggaran.html" class="menu-item menu-item--active"><i data-lucide="shield-alert" class="menu-icon"></i><span class="menu-item__title">Catatan Pelanggaran</span></a>
+    </nav>
+
+    <div class="sidebar__footer">
+      <div style="margin-bottom:8px; opacity:0.8;">SMK Widya Mandala Tambak · Banyumas</div>
+      <div style="margin-top:8px;font-size:10px;opacity:0.45;">developed by Hanif Shohibul A.</div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <div class="topbar__title">Catatan Pelanggaran</div>
+        <div class="topbar__meta" id="topbarMeta">Memuat tahun ajaran aktif...</div>
+      </div>
+      <div class="user-chip">
+        <div class="user-chip__text">
+          <div class="user-chip__name" id="userName">Memuat...</div>
+          <div class="user-chip__role" id="userRoleLabel">Guru</div>
+          <a href="#" id="logoutBtn" class="user-chip__logout"><i data-lucide="log-out" style="width:13px;height:13px;"></i> Keluar</a>
+        </div>
+        <div class="user-chip__avatar" id="userAvatar">•</div>
+      </div>
+    </div>
+
+    <div class="content" id="content"></div>
+  </div>
+
+</div>
+
+<script>
+  lucide.createIcons();
+
+  var content = document.getElementById('content');
+  var taAktif = null;
+  var kelasList = [];
+  var siswaKelas = null;   // { kelas, siswa: [...], peta: { siswaId: [catatan] } } untuk kelas yang sedang dibuka
+  var urutMuat = 0;        // mencegah balapan kalau pilihan kelas diganti saat masih memuat
+
+  function esc(s) {
+    return (s === null || s === undefined) ? '' : String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function pesan(judul, desc) {
+    return '<div class="empty-state"><div class="empty-state__mark">！</div><div class="empty-state__title">' + judul + '</div><div class="empty-state__desc">' + desc + '</div></div>';
+  }
+
+  // Rangka halaman: pemilih kelas selalu tampil, isi di bawahnya berganti.
+  function gambarRangka(kelasDipilih) {
+    var opsi = '<option value="">— Pilih kelas —</option>' + kelasList.map(function (k) {
+      return '<option value="' + k.id + '"' + (k.id === kelasDipilih ? ' selected' : '') + '>' + esc(k.nama) + '</option>';
+    }).join('');
+    content.innerHTML =
+      '<div class="panel-head"><div><div class="panel-head__title">Catatan Pelanggaran</div>' +
+      '<div class="panel-head__desc">Dibaca dari aplikasi CP (hanya baca). Pilih kelas untuk melihat seluruh catatan pelanggaran siswanya. Bisa diakses semua guru.</div></div></div>' +
+      '<form class="add-form" id="formPilih" onsubmit="return false;">' +
+      '<div class="field"><label>Kelas</label><select id="pilihKelas">' + opsi + '</select></div>' +
+      '</form>' +
+      '<div id="isiKelas"></div>';
+    document.getElementById('pilihKelas').addEventListener('change', function () {
+      bukaKelas(this.value);
+    });
+  }
+
+  async function bukaKelas(kelasId) {
+    var isi = document.getElementById('isiKelas');
+    var nomor = ++urutMuat;
+    if (!kelasId) { siswaKelas = null; isi.innerHTML = '<div class="panel-note">Pilih kelas di atas untuk menampilkan catatan pelanggarannya.</div>'; return; }
+    var kelas = kelasList.filter(function (k) { return k.id === kelasId; })[0];
+    isi.innerHTML = '<div class="panel-note">Mengambil catatan pelanggaran kelas ' + esc(kelas.nama) + ' dari CP...</div>';
+
+    var res = await supabaseClient.from('siswa_kelas')
+      .select('siswa:siswa_id(id, nis, nama)')
+      .eq('kelas_id', kelasId).eq('tahun_ajaran_id', taAktif.id);
+    if (nomor !== urutMuat) return;
+    if (res.error) { isi.innerHTML = pesan('Gagal memuat siswa', esc(res.error.message)); return; }
+    var siswa = (res.data || []).map(function (r) { return r.siswa; }).filter(Boolean);
+    siswa.sort(function (a, b) { return a.nama.localeCompare(b.nama, 'id'); });
+    if (!siswa.length) { isi.innerHTML = pesan('Belum ada siswa', 'Kelas ' + esc(kelas.nama) + ' belum punya siswa pada tahun ajaran aktif.'); return; }
+
+    var peta;
+    try {
+      peta = await PelanggaranCP.ambil(siswa.map(function (s) { return { id: s.id, nis: s.nis, nama: s.nama, kelasNama: kelas.nama }; }), { segar: true });
+    } catch (e) {
+      if (nomor !== urutMuat) return;
+      isi.innerHTML = pesan('Gagal memuat', 'Data pelanggaran dari CP tidak dapat diambil: ' + esc(e.message || String(e)));
+      return;
+    }
+    if (nomor !== urutMuat) return;
+    siswaKelas = { kelas: kelas, siswa: siswa, peta: peta };
+    gambarKelas();
+  }
+
+  function gambarKelas() {
+    var d = siswaKelas, isi = document.getElementById('isiKelas');
+    var ta = taAktif.nama;
+    var totalSemua = 0, poinSemua = 0, totalIni = 0, poinIni = 0, bercatatan = 0;
+    d.siswa.forEach(function (s) {
+      var semua = d.peta[s.id] || [];
+      var ini = semua.filter(function (r) { return r.tahun_ajaran === ta; });
+      totalSemua += semua.length; poinSemua += PelanggaranCP.totalPoin(semua);
+      totalIni += ini.length; poinIni += PelanggaranCP.totalPoin(ini);
+      if (semua.length) bercatatan++;
+    });
+
+    isi.innerHTML =
+      '<div class="stat-grid">' +
+      '<div class="stat-card"><div class="stat-card__label">Jumlah siswa</div><div class="stat-card__value">' + d.siswa.length + '</div></div>' +
+      '<div class="stat-card"><div class="stat-card__label">Siswa bercatatan</div><div class="stat-card__value">' + bercatatan + '</div></div>' +
+      '<div class="stat-card"><div class="stat-card__label">Catatan TA ' + esc(ta) + '</div><div class="stat-card__value">' + totalIni + '</div></div>' +
+      '<div class="stat-card"><div class="stat-card__label">Poin TA ' + esc(ta) + '</div><div class="stat-card__value">' + poinIni + '</div></div>' +
+      '</div>' +
+      '<div class="toolbar">' +
+      '<input type="text" id="cariNama" placeholder="Cari nama / NIS siswa..." style="flex:1 1 220px;min-width:180px;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font:inherit;">' +
+      '<label style="display:inline-flex;align-items:center;gap:6px;font-weight:500;font-size:13px;"><input type="checkbox" id="hanyaCatatan"> Hanya yang punya catatan</label>' +
+      '<button class="btn-small" id="btnBukaSemua">Buka semua detail</button>' +
+      '<button class="btn-small" id="btnTutupSemua">Tutup semua</button>' +
+      '</div>' +
+      '<div class="panel-note">Total seluruh tahun ajaran di kelas ini: <b>' + totalSemua + '</b> catatan, <b>' + poinSemua + '</b> poin. Detail tiap siswa menampilkan catatan dari semua tahun ajaran, lengkap dengan nama pencatat.</div>' +
+      '<div class="table-wrap"><table class="data-table"><thead><tr><th>No</th><th>Nama</th><th>NIS</th><th>Catatan TA ini</th><th>Poin TA ini</th><th>Total catatan</th><th>Detail</th></tr></thead><tbody id="bodySiswa"></tbody></table></div>';
+
+    function tampilkan() {
+      var kata = document.getElementById('cariNama').value.trim().toLowerCase();
+      var hanya = document.getElementById('hanyaCatatan').checked;
+      var baris = '', n = 0;
+      d.siswa.forEach(function (s, i) {
+        var semua = d.peta[s.id] || [];
+        if (hanya && !semua.length) return;
+        if (kata && (String(s.nama).toLowerCase().indexOf(kata) === -1 && String(s.nis || '').toLowerCase().indexOf(kata) === -1)) return;
+        var ini = semua.filter(function (r) { return r.tahun_ajaran === ta; });
+        n++;
+        baris += '<tr><td data-label="No">' + (i + 1) + '</td><td data-label="Nama">' + esc(s.nama) + '</td><td data-label="NIS">' + esc(s.nis || '—') + '</td>' +
+          '<td data-label="Catatan TA ini">' + ini.length + '</td><td data-label="Poin TA ini">' + PelanggaranCP.totalPoin(ini) + '</td><td data-label="Total catatan">' + semua.length + '</td>' +
+          '<td data-label="Detail">' + (semua.length
+            ? '<details><summary style="cursor:pointer;color:var(--primary);">Lihat ' + semua.length + ' catatan</summary>' + PelanggaranCP.tabelHtml(semua, { pelapor: true }) + '</details>'
+            : '<span style="color:var(--ink-soft);">—</span>') + '</td></tr>';
+      });
+      document.getElementById('bodySiswa').innerHTML = baris || '<tr><td colspan="7">Tidak ada siswa yang cocok.</td></tr>';
+    }
+    tampilkan();
+    document.getElementById('cariNama').addEventListener('input', tampilkan);
+    document.getElementById('hanyaCatatan').addEventListener('change', tampilkan);
+    document.getElementById('btnBukaSemua').addEventListener('click', function () {
+      document.querySelectorAll('#bodySiswa details').forEach(function (x) { x.open = true; });
+    });
+    document.getElementById('btnTutupSemua').addEventListener('click', function () {
+      document.querySelectorAll('#bodySiswa details').forEach(function (x) { x.open = false; });
+    });
+  }
+
+  (async function () {
+    var ses = await supabaseClient.auth.getSession();
+    if (!ses.data.session) { window.location.href = 'index.html'; return; }
+    var user = ses.data.session.user;
+
+    var pr = await supabaseClient.from('profiles').select('nama, role').eq('id', user.id).single();
+    if (pr.error || !pr.data) { window.location.href = 'portal.html'; return; } // akun siswa/tanpa role
+    var admin = pr.data.role === 'admin';
+    var nama = pr.data.nama || user.email;
+
+    document.getElementById('userName').textContent = nama;
+    document.getElementById('userAvatar').textContent = nama.trim().charAt(0).toUpperCase();
+    document.getElementById('userRoleLabel').textContent = admin ? 'Admin' : 'Guru';
+    document.getElementById('roleLabel').textContent = admin ? 'Admin' : 'Guru';
+    document.getElementById('linkErapor').href = admin ? 'admin.html' : 'guru.html';
+    document.getElementById('logoutBtn').addEventListener('click', async function (e) {
+      e.preventDefault();
+      await supabaseClient.auth.signOut();
+      window.location.href = 'index.html';
+    });
+
+    var ta = (await supabaseClient.from('tahun_ajaran').select('id, nama, semester').eq('is_aktif', true).maybeSingle()).data;
+    if (!ta) {
+      document.getElementById('topbarMeta').textContent = 'Belum ada tahun ajaran aktif — hubungi admin.';
+      content.innerHTML = pesan('Belum ada tahun ajaran aktif', 'Hubungi admin untuk mengaktifkan tahun ajaran.');
+      return;
+    }
+    taAktif = ta;
+    document.getElementById('topbarMeta').textContent = 'Tahun Ajaran ' + ta.nama + ' — Semester ' + ta.semester;
+
+    var kr = await supabaseClient.from('kelas').select('id, nama').order('nama');
+    kelasList = (kr.data || []).slice().sort(function (a, b) { return a.nama.localeCompare(b.nama, 'id', { numeric: true }); });
+    if (!kelasList.length) { content.innerHTML = pesan('Belum ada kelas', 'Admin perlu menambahkan kelas terlebih dahulu.'); return; }
+
+    gambarRangka('');
+    bukaKelas('');
+  })();
+</script>
+
+</body>
+</html>
