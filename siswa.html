@@ -11,6 +11,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-client.js"></script>
 <script src="bukuinduk-fields.js?v=1"></script>
+<script src="pelanggaran-cp.js?v=1"></script>
 <script src="mobile.js?v=1" defer></script>
 <style>
   /* ---- Kartu menu di Beranda (gaya sama dengan portal.html) ---- */
@@ -311,7 +312,7 @@
       kartu('biodata', 'app-card--kuning', 'book-user', 'Lihat Biodata Buku Induk', 'Data diri, orang tua, dan riwayat pendidikan yang tercatat di Buku Induk sekolah.') +
       kartu('rapor', '', 'file-text', 'Lihat Rapor', 'Nilai, capaian kompetensi, ekstrakurikuler, dan ketidakhadiran. Tersedia setelah rapor diterbitkan sekolah.') +
       kartu('presensi', 'app-card--hijau', 'calendar-check', 'Lihat Presensi', 'Rekap sakit, izin, dan tanpa keterangan per tahun ajaran dan semester.') +
-      kartu('pelanggaran', 'app-card--merah', 'shield-alert', 'Lihat Catatan Pelanggaran', 'Catatan pelanggaran dan pembinaan (segera tersedia).') +
+      kartu('pelanggaran', 'app-card--merah', 'shield-alert', 'Lihat Catatan Pelanggaran', 'Catatan pelanggaran dan pembinaan kedisiplinan dari sekolah, lengkap dengan poinnya.') +
       kartu('pengajuan', '', 'pencil-line', 'Pengajuan Pembetulan Data', 'Ada data dirimu yang keliru? Betulkan lalu ajukan ke wali kelas untuk disetujui.') +
       '</div>' +
       '<div class="panel-note" style="margin-top:18px;">Kata sandi awal semua siswa sama. Demi keamanan, segera ganti lewat menu <b>Ganti Kata Sandi</b>. ' +
@@ -883,12 +884,23 @@
   // LIHAT CATATAN PELANGGARAN  (menu saja — tabelnya menyusul)
   // =====================================================================
   function renderPelanggaran() {
-    // TODO (setelah tabel pelanggaran dibuat):
-    //   1) buat policy RLS "siswa baca miliknya": using (siswa_id = public.siswa_id_saya())
-    //   2) ganti isi fungsi ini dengan query supabaseClient.from('<tabel>').select(...).eq('siswa_id', S.siswa.id)
-    //      lalu tampilkan sebagai tabel (tanggal, jenis pelanggaran, keterangan, tindak lanjut).
-    content.innerHTML = headHtml('Catatan Pelanggaran', 'Catatan pelanggaran dan pembinaan kedisiplinan.') +
-      kosongHtml('Segera tersedia', 'Menu ini sedang disiapkan oleh sekolah. Setelah datanya siap, catatanmu akan tampil di sini.');
+    var head = headHtml('Catatan Pelanggaran', 'Catatan pelanggaran dan pembinaan kedisiplinan milikmu, dicatat oleh guru lewat aplikasi CP.');
+    content.innerHTML = head + '<div class="panel-note">Memuat...</div>';
+    var s = S.siswa;
+    window.PelanggaranCP.ambil([{ id: s.id, nis: s.nis, nama: s.nama, kelasNama: namaKelasAktif() || '' }], { segar: true })
+      .then(function (m) {
+        var rows = m[s.id] || [];
+        if (!rows.length) {
+          content.innerHTML = head + kosongHtml('Tidak ada catatan', 'Belum ada catatan pelanggaran atas namamu. Pertahankan!');
+          return;
+        }
+        content.innerHTML = head +
+          '<div class="panel-note" style="margin-bottom:8px;">Total keseluruhan: <b>' + rows.length + '</b> catatan, <b>' + window.PelanggaranCP.totalPoin(rows) + '</b> poin.</div>' +
+          window.PelanggaranCP.tabelHtml(rows, { pelapor: false });
+      })
+      .catch(function (e) {
+        content.innerHTML = head + kosongHtml('Belum bisa dimuat', 'Data pelanggaran tidak dapat diambil saat ini. Coba lagi nanti. (' + (e.message || e) + ')');
+      });
   }
 
   // =====================================================================

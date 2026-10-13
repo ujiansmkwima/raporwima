@@ -18,8 +18,7 @@
 - Lupa sandi:  `select public.reset_sandi_siswa('NIS');`  (SQL Editor)
 - Migrasi ini MENGETATKAN policy lama "semua user login boleh baca siswa/siswa_kelas/dst"
   menjadi guru/admin saja. Tanpa itu, siswa bisa membaca biodata semua siswa lewat API.
-- Menu Catatan Pelanggaran: kerangka ada di `renderPelanggaran()` (siswa.html) berikut
-  TODO untuk policy RLS-nya.
+- Menu Catatan Pelanggaran: sudah aktif, membaca dari aplikasi CP (lihat `CARA_DEPLOY_PELANGGARAN.md`).
 
 ## Terbitkan Rapor ke Siswa (BARU)
 Rapor tidak lagi langsung terlihat siswa. Admin harus menerbitkannya per periode (tahun ajaran + semester),

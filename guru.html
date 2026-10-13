@@ -16,6 +16,7 @@
 <script src="unsaved-guard.js?v=1"></script>
 <script src="supabase-client.js"></script>
 <script src="bukuinduk-fields.js?v=1"></script>
+<script src="pelanggaran-cp.js?v=1"></script>
 <script src="simpan-atas.js?v=1"></script>
 <script src="sticky-nama.js?v=1"></script>
 <script src="sambutan-guru.js?v=1"></script>
@@ -443,6 +444,18 @@
         renderCatatanWaliKelas(waliKelas);
       });
       menuWali.appendChild(itemCatatanWali);
+
+      // Pelanggaran Kelas — dibaca dari aplikasi CP (hanya baca)
+      var itemPelanggaran = document.createElement('a');
+      itemPelanggaran.href = '#';
+      itemPelanggaran.className = 'menu-item';
+      itemPelanggaran.innerHTML = '<i data-lucide="shield-alert" class="menu-icon"></i><span class="menu-item__title">Pelanggaran Kelas</span><span class="menu-item__sub">' + waliKelas.kelas.nama + '</span>';
+      itemPelanggaran.addEventListener('click', function (e) {
+        e.preventDefault();
+        setActiveMenuItem(itemPelanggaran);
+        renderPelanggaranKelas(waliKelas);
+      });
+      menuWali.appendChild(itemPelanggaran);
 
       // Cetak Identitas — cover/biodata peserta didik (data pribadi,
       // orang tua, wali, keterangan penerimaan), diambil dari data
@@ -5324,6 +5337,40 @@
     // terasa seperti disalin-tempel dari templat yang sama.
     function pilihAcak(daftarKalimat) {
       return daftarKalimat[Math.floor(Math.random() * daftarKalimat.length)];
+    }
+
+    // Catatan pelanggaran siswa satu kelas, dibaca dari aplikasi CP (hanya baca).
+    async function renderPelanggaranKelas(wk) {
+      content.innerHTML = renderPlaceholder('Memuat...', 'Mengambil catatan pelanggaran kelas ' + wk.kelas.nama + ' dari CP.');
+      var siswaList = await ambilSiswaKelas(wk.kelas.id);
+      if (!siswaList.length) {
+        content.innerHTML = renderPlaceholder('Pelanggaran Kelas — ' + wk.kelas.nama, 'Belum ada siswa di kelas ini pada tahun ajaran aktif.');
+        return;
+      }
+      var peta;
+      try {
+        peta = await window.PelanggaranCP.ambil(siswaList.map(function (s) { return { id: s.id, nis: s.nis, nama: s.nama, kelasNama: wk.kelas.nama }; }), { segar: true });
+      } catch (e) {
+        content.innerHTML = renderPlaceholder('Gagal memuat', 'Data pelanggaran dari CP tidak dapat diambil: ' + escapeHtml(e.message || String(e)));
+        return;
+      }
+      var ta = tahunAktif.nama;
+      var totalKasus = 0, bermasalah = 0;
+      var baris = siswaList.map(function (s, i) {
+        var semua = peta[s.id] || [];
+        var tahunIni = semua.filter(function (r) { return r.tahun_ajaran === ta; });
+        totalKasus += tahunIni.length;
+        if (tahunIni.length) bermasalah++;
+        return '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(s.nama) + '</td><td>' + escapeHtml(s.nis || '—') + '</td>' +
+          '<td>' + tahunIni.length + '</td><td>' + window.PelanggaranCP.totalPoin(tahunIni) + '</td>' +
+          '<td>' + (semua.length
+            ? '<details><summary style="cursor:pointer;color:var(--primary);">Lihat ' + semua.length + ' catatan</summary>' + window.PelanggaranCP.tabelHtml(semua, { pelapor: true }) + '</details>'
+            : '<span style="color:var(--ink-soft);">—</span>') + '</td></tr>';
+      }).join('');
+      content.innerHTML =
+        '<div class="panel-head"><div><div class="panel-head__title">Pelanggaran Kelas — ' + escapeHtml(wk.kelas.nama) + '</div>' +
+        '<div class="panel-head__desc">Dibaca dari aplikasi CP (hanya baca). Tahun ajaran ' + escapeHtml(ta) + ': ' + totalKasus + ' catatan pada ' + bermasalah + ' siswa. Detail menampilkan seluruh tahun ajaran.</div></div></div>' +
+        '<div class="table-wrap"><table class="data-table"><thead><tr><th>No</th><th>Nama</th><th>NIS</th><th>Catatan TA ini</th><th>Poin TA ini</th><th>Detail</th></tr></thead><tbody>' + baris + '</tbody></table></div>';
     }
 
     async function renderCatatanWaliKelas(wk) {

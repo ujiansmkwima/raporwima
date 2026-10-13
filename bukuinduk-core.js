@@ -460,7 +460,7 @@
 
     var kel = BI.kelengkapan(s);
     var tabs = F.TAB.map(function (t) { return { id: t.id, judul: t.judul, tab: t }; })
-      .concat([{ id: 'perkembangan', judul: 'Perkembangan Belajar (E-Rapor)' }, { id: 'catatan', judul: 'Prestasi & Catatan' }]);
+      .concat([{ id: 'perkembangan', judul: 'Perkembangan Belajar (E-Rapor)' }, { id: 'catatan', judul: 'Prestasi & Catatan' }, { id: 'pelanggaran', judul: 'Pelanggaran (CP)' }]);
 
     root.innerHTML =
       '<div class="panel-head"><div><div class="panel-head__title">' + esc(s.nama) + '</div>' +
@@ -509,8 +509,24 @@
       root.querySelectorAll('.subtab-panel').forEach(function (p) { p.hidden = p.dataset.panel !== id; });
       if (id === 'perkembangan' && !sudahMuat.perkembangan) { sudahMuat.perkembangan = true; renderPerkembangan(root.querySelector('#biPanel_perkembangan'), s, bolehUbah); }
       if (id === 'catatan' && !sudahMuat.catatan) { sudahMuat.catatan = true; renderCatatan(root.querySelector('#biPanel_catatan'), s, bolehUbah); }
+      if (id === 'pelanggaran' && !sudahMuat.pelanggaran) { sudahMuat.pelanggaran = true; renderPelanggaranCP(root.querySelector('#biPanel_pelanggaran'), s); }
     }
     root.querySelectorAll('#biTabNav .subtab-btn').forEach(function (b) { b.addEventListener('click', function () { pilihTab(b.dataset.tab); }); });
+
+    // Ringkasan pelanggaran (CP) langsung tampil di kepala halaman & label tab, tanpa perlu membuka tab.
+    if (g.PelanggaranCP) {
+      g.PelanggaranCP.ambil([pelItem(s)]).then(function (m) {
+        var rows = m[s.id] || [];
+        var poin = g.PelanggaranCP.totalPoin(rows);
+        var btn = root.querySelector('#biTabNav [data-tab="pelanggaran"]');
+        if (btn && rows.length) btn.textContent = 'Pelanggaran (CP) · ' + rows.length;
+        var desc = root.querySelector('.panel-head__desc');
+        if (desc) desc.insertAdjacentHTML('beforeend', ' · <span class="chip ' + (rows.length ? 'chip--danger' : 'chip--aktif') + '" style="cursor:pointer;" id="biChipPel">' +
+          (rows.length ? 'Pelanggaran ' + rows.length + ' catatan · ' + poin + ' poin' : 'Tidak ada pelanggaran') + '</span>');
+        var chip = root.querySelector('#biChipPel');
+        if (chip) chip.addEventListener('click', function () { pilihTab('pelanggaran'); });
+      }).catch(function () { /* CP tidak terjangkau: tab tetap bisa dibuka & menampilkan pesan */ });
+    }
 
     root.querySelector('#biKembali').addEventListener('click', function () { if (opts.onKembali) opts.onKembali(); });
     root.querySelector('#biCetak').addEventListener('click', function () { BI.cetak([s], 'biodata'); });
@@ -1072,6 +1088,20 @@
     });
   }
 
+  // ================= Pelanggaran (dibaca dari aplikasi CP, hanya-baca) =================
+  function pelItem(s) { return { id: s.id, nis: s.nis, nama: s.nama, kelasNama: s.kelas ? s.kelas.nama : '' }; }
+  async function renderPelanggaranCP(el, s) {
+    if (!g.PelanggaranCP) { el.innerHTML = '<div class="panel-note">Modul pelanggaran-cp.js belum dimuat.</div>'; return; }
+    try {
+      var m = await g.PelanggaranCP.ambil([pelItem(s)], { segar: true });
+      var rows = m[s.id] || [];
+      el.innerHTML = '<div class="panel-note" style="margin-bottom:8px;">Data dibaca langsung dari aplikasi CP (hanya baca). Untuk menambah atau mengubah catatan, gunakan aplikasi CP.</div>' +
+        g.PelanggaranCP.tabelHtml(rows, { pelapor: true });
+    } catch (e) {
+      el.innerHTML = '<div class="panel-note">Gagal memuat data pelanggaran dari CP: ' + esc(e.message || e) + '</div>';
+    }
+  }
+
   // ================= Cetak Buku Induk =================
   // jenis: 'biodata' | 'nilai' | 'lengkap' (bawaan: lengkap)
   BI.cetak = async function (list, jenis) {
@@ -1085,6 +1115,8 @@
       var fotoMap = await muatFotoBanyak(ids);
       var rwRows = await inChunks(ids, function (p, a, b) { return sb().from('bi_riwayat_semester').select('*').in('siswa_id', p).order('id').range(a, b); });
       var ctRows = await inChunks(ids, function (p, a, b) { return sb().from('bi_catatan').select('*').in('siswa_id', p).order('id').range(a, b); });
+      var pelMap = null;
+      if (jenis !== 'nilai' && g.PelanggaranCP) { try { pelMap = await g.PelanggaranCP.ambil(list.map(pelItem)); } catch (e) { pelMap = null; } }
       var pr = await sb().from('profil_sekolah').select('*').maybeSingle();
       var profil = pr.data || {};
       var logo = new URL('assets/logo.png', g.location.href).href;
@@ -1092,7 +1124,7 @@
       var halaman = list.map(function (s) {
         var rw = rwRows.filter(function (r) { return r.siswa_id === s.id; }).sort(function (a, b) { return (a.semester_ke || 99) - (b.semester_ke || 99); });
         var ct = ctRows.filter(function (r) { return r.siswa_id === s.id; });
-        return halamanSiswa(s, fotoMap[s.id] || {}, rw, ct, profil, logo, jenis);
+        return halamanSiswa(s, fotoMap[s.id] || {}, rw, ct, profil, logo, jenis, pelMap ? (pelMap[s.id] || []) : null);
       }).join('');
 
       var css = cssCetak();
@@ -1208,7 +1240,7 @@
     return String(v);
   }
 
-  function halamanSiswa(s, foto, rw, ct, profil, logo, jenis) {
+  function halamanSiswa(s, foto, rw, ct, profil, logo, jenis, pel) {
     foto = foto || {};
     jenis = jenis || 'lengkap';
 
@@ -1255,6 +1287,10 @@
       ct.map(function (c) { return '<tr><td>' + esc(fmtTgl(c.tanggal)) + '</td><td>' + esc(c.kategori) + '</td><td>' + esc(c.tingkat || '') + '</td><td>' + esc(c.uraian) + '</td></tr>'; }).join('') +
       '</tbody></table>' : '<div class="kosongnote">Belum ada catatan.</div>') + '</div>';
 
+    var pelanggaran = (jenis === 'nilai' || !g.PelanggaranCP) ? '' :
+      '<div class="sec" style="page-break-inside:auto;"><h4>N. Catatan Pelanggaran</h4>' +
+      (pel === null ? '<div class="kosongnote">Data pelanggaran tidak dapat dimuat saat dicetak.</div>' : g.PelanggaranCP.tabelCetak(pel)) + '</div>';
+
     var tgl = new Date();
     var tglCetak = tgl.getDate() + ' ' + BULAN[tgl.getMonth()] + ' ' + tgl.getFullYear();
     var kota = profil.kota_ttd || 'Tambak';
@@ -1276,7 +1312,7 @@
       '</table></div>' + kotakFoto(foto.lulus, 'Saat Lulus', s.status === 'aktif' ? '' : s.tanggal_keluar) + '</div>';
 
     var judulDok = jenis === 'nilai' ? 'NILAI PESERTA DIDIK' : jenis === 'biodata' ? 'BIODATA PESERTA DIDIK' : 'BUKU INDUK PESERTA DIDIK';
-    var isi = jenis === 'nilai' ? (kartuNilai() + perkembangan + koku) : jenis === 'biodata' ? (kartu + bagianFlat.slice(0, BATAS_HAL1).join('') + '<div class="pb"></div>' + bagianFlat.slice(BATAS_HAL1).join('') + catatan) : (kartu + bagianHtml + perkembangan + koku + catatan);
+    var isi = jenis === 'nilai' ? (kartuNilai() + perkembangan + koku) : jenis === 'biodata' ? (kartu + bagianFlat.slice(0, BATAS_HAL1).join('') + '<div class="pb"></div>' + bagianFlat.slice(BATAS_HAL1).join('') + catatan + pelanggaran) : (kartu + bagianHtml + perkembangan + koku + catatan + pelanggaran);
     // Ringkasan identitas singkat (tanpa foto) untuk halaman Nilai
     function kartuNilai() {
       return '<div class=\"kartu\"><div class=\"ringkas\"><div class=\"nama\">' + esc(s.nama) + '</div><table>' +
