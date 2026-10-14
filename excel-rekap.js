@@ -683,7 +683,9 @@
 
       var p = opts.presMap[s.id] || {};
       bar('Ketidakhadiran');
-      [['Sakit', p.jumlah_sakit || 0], ['Izin', p.jumlah_izin || 0], ['Tanpa Keterangan', p.jumlah_alpha || 0]].forEach(function (x) {
+      // Format lembar rapor: angka ketidakhadiran > 3 dicetak sebagai 3 (data asli di database tidak diubah).
+      var capHadir = function (n) { n = Number(n) || 0; return n > 3 ? 3 : n; };
+      [['Sakit', capHadir(p.jumlah_sakit)], ['Izin', capHadir(p.jumlah_izin)], ['Tanpa Keterangan', capHadir(p.jumlah_alpha)]].forEach(function (x) {
         ws.mergeCells(r, 1, r, 2);
         ws.getCell(r, 1).value = x[0];
         ws.getCell(r, 3).value = x[1];

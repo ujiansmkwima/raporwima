@@ -6,7 +6,7 @@
 <title>Portal Siswa — PORTAL DATA DAN PENILAIAN SMK WIDYA MANDALA TAMBAK</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=15">
+<link rel="stylesheet" href="style.css?v=16">
 <script src="https://unpkg.com/lucide@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-client.js"></script>
@@ -127,6 +127,13 @@
   // =====================================================================
   // Helper umum
   // =====================================================================
+  // Batas tampilan kehadiran di CETAK RAPOR: angka asli > 3 dicetak sebagai 3.
+  // Hanya untuk tampilan cetak — rekap kehadiran siswa tetap menampilkan angka asli.
+  function hadirCetak(n) {
+    n = Number(n) || 0;
+    return n > 3 ? 3 : n;
+  }
+
   function escapeHtml(s) {
     return (s === null || s === undefined) ? '' : String(s).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
@@ -522,9 +529,9 @@
       '<div class="rapor-cetak__col rapor-cetak__col--kehadiran">' +
       '<div class="rapor-cetak__bar">Ketidakhadiran</div>' +
       '<table class="rapor-cetak__kehadiran"><tbody>' +
-      '<tr><td class="rc-label">Sakit</td><td class="rc-colon">:</td><td class="tc-center">' + tally.sakit + '</td><td>Hari</td></tr>' +
-      '<tr><td class="rc-label">Izin</td><td class="rc-colon">:</td><td class="tc-center">' + tally.izin + '</td><td>Hari</td></tr>' +
-      '<tr><td class="rc-label">Tanpa Keterangan</td><td class="rc-colon">:</td><td class="tc-center">' + tally.alpha + '</td><td>Hari</td></tr>' +
+      '<tr><td class="rc-label">Sakit</td><td class="rc-colon">:</td><td class="tc-center">' + hadirCetak(tally.sakit) + '</td><td>Hari</td></tr>' +
+      '<tr><td class="rc-label">Izin</td><td class="rc-colon">:</td><td class="tc-center">' + hadirCetak(tally.izin) + '</td><td>Hari</td></tr>' +
+      '<tr><td class="rc-label">Tanpa Keterangan</td><td class="rc-colon">:</td><td class="tc-center">' + hadirCetak(tally.alpha) + '</td><td>Hari</td></tr>' +
       '</tbody></table></div>' +
       '<div class="rapor-cetak__col rapor-cetak__col--catatan">' +
       '<div class="rapor-cetak__bar">Catatan Wali Kelas</div>' +
