@@ -29,6 +29,7 @@
   .app-card__icon { width: 48px; height: 48px; border-radius: 14px; display: flex; align-items: center; justify-content: center; background: var(--primary-tint-strong); color: var(--primary-dim); }
   .app-card__icon i, .app-card__icon svg { width: 24px; height: 24px; }
   .app-card--erapor .app-card__icon { background: var(--success-tint); color: var(--success); }
+  .app-card--pkl .app-card__icon { background: var(--accent-tint); color: var(--primary-dim); }
   .app-card--supervisi .app-card__icon { background: var(--accent-tint); color: var(--accent); }
   .app-card--pelanggaran .app-card__icon { background: var(--danger-tint); color: var(--danger); }
   .app-card__title { font-family: var(--font-display); font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
@@ -104,7 +105,10 @@
               : 'Lengkapi Buku Induk siswa di kelas yang kamu ampu sebagai wali kelas, lengkap dengan nilai dari E-Rapor.') +
       kartu(admin ? 'admin.html' : 'guru.html', 'app-card--erapor', 'file-text', 'E-Rapor',
         admin ? 'Kelola tahun ajaran, kelas, siswa, mapel, penugasan guru, nilai, leger dan rapor.'
-              : 'Input nilai, tujuan pembelajaran, presensi, ekskul, PKL dan cetak rapor.') +
+              : 'Input nilai, tujuan pembelajaran, presensi, ekskul dan cetak rapor.') +
+      kartu('pkl.html', 'app-card--pkl', 'briefcase-business', 'Pengolahan Nilai PKL',
+        admin ? 'Tunjuk guru pembimbing & penguji PKL, pantau dan unduh rekap nilai PKL seluruh siswa.'
+              : 'Input identitas DUDI, nilai DUDI / nilai penguji, catatan & presensi PKL, lalu cetak nilai PKL.') +
       kartu(admin ? 'supervisi-admin.html' : 'supervisi.html', 'app-card--supervisi', 'clipboard-check', 'Supervisi',
         admin ? 'Atur jadwal, form dan data supervisi akademik guru.'
               : 'Lihat jadwal dan isi form pra-supervisi / supervisi.') +
