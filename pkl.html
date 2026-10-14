@@ -85,7 +85,7 @@
   // jadi data lama tetap aman & sinkron ke Buku Induk seperti biasa.
   //   Admin : Penugasan & Rekap PKL (pembimbing, penguji, rekap nilai)
   //   Guru  : Input Pembimbing (identitas DUDI, nilai DUDI, catatan &
-  //           presensi, cetak) dan/atau Input Penguji (nilai penguji)
+  //           presensi), Cetak Nilai PKL (menu sendiri) dan/atau Input Penguji (nilai penguji)
   // ---------------------------------------------------------
   var content = document.getElementById('content');
   var topbarMeta = document.getElementById('topbarMeta');
@@ -909,15 +909,18 @@
     //      TERPISAH oleh guru Penguji PKL, di sini hanya baca saja.
     //   3. Catatan & Presensi — catatan PKL + rekap Sakit/Ijin/Tanpa
     //      Keterangan selama PKL (tampil di format cetak).
-    //   4. Cetak Nilai PKL — daftar semua siswa binaan (Nama + tombol Cetak
-    //      di sampingnya, konsepnya sama seperti menu "Cetak Rapor").
+    //   (Cetak Nilai PKL sekarang menu tersendiri — renderCetakPkl — berisi daftar
+    //   semua siswa binaan: Nama + tombol Cetak, sama seperti menu "Cetak Rapor".)
     // Tiap langkah punya tombol Unduh Template Excel & Import dari Excel
     // sendiri (isi kolomnya beda-beda sesuai field langkah itu), supaya bisa
     // diisi massal. Nilai Akhir tiap sumber = rata-rata TP1-4 sumber itu.
     // Nilai Akhir PKL keseluruhan = rata-rata Nilai Akhir DUDI & Penguji.
     // Nilai ini TIDAK ditulis ke tabel nilai / TIDAK muncul di Cetak Rapor
-    // biasa — dicetak lewat langkah 4 di menu ini.
-    async function renderNilaiPkl() {
+    // biasa — dicetak lewat menu "Cetak Nilai PKL".
+    // mode 'cetak' = menu tersendiri "Cetak Nilai PKL" (tanpa tab langkah);
+    // mode kosong = menu "Input Pembimbing" (langkah 1-3 saja).
+    async function renderNilaiPkl(mode) {
+      var modeCetak = (mode === 'cetak');
       content.innerHTML = renderPlaceholder('Memuat...', 'Mengambil daftar siswa binaan PKL.');
 
       var pembimbingRes = await supabaseClient
@@ -1052,8 +1055,7 @@
       var LANGKAH_PKL = [
         { key: 'identitas', label: '1. Input Identitas', icon: 'id-card' },
         { key: 'nilai-dudi', label: '2. Input Nilai DUDI', icon: 'star' },
-        { key: 'catatan-presensi', label: '3. Catatan & Presensi', icon: 'calendar-check' },
-        { key: 'cetak', label: '4. Cetak Nilai PKL', icon: 'printer' }
+        { key: 'catatan-presensi', label: '3. Catatan & Presensi', icon: 'calendar-check' }
       ];
 
       function renderKerangka(langkahAktif) {
@@ -1064,7 +1066,7 @@
 
         content.innerHTML =
           '<div class="panel-head"><div><div class="panel-head__title">Nilai PKL</div>' +
-          '<div class="panel-head__desc">Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + ' · ' + binaanList.length + ' siswa binaan Anda. Lengkapi berurutan langkah 1–3, lalu cetak hasilnya di langkah 4.</div></div></div>' +
+          '<div class="panel-head__desc">Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + ' · ' + binaanList.length + ' siswa binaan Anda. Lengkapi berurutan langkah 1–3, lalu cetak hasilnya lewat menu Cetak Nilai PKL.</div></div></div>' +
           '<div class="pkl-steps no-print">' + tabsHtml + '</div>' +
           '<div id="pklStepBody"></div>';
         lucide.createIcons();
@@ -1078,8 +1080,7 @@
         renderKerangka(key);
         if (key === 'identitas') renderLangkahIdentitas();
         else if (key === 'nilai-dudi') renderLangkahNilaiDudi();
-        else if (key === 'catatan-presensi') renderLangkahCatatanPresensi();
-        else renderLangkahCetak();
+        else renderLangkahCatatanPresensi();
       }
 
       // =========================================================
@@ -1583,7 +1584,7 @@
       }
 
       // =========================================================
-      // LANGKAH 4 — Cetak Nilai PKL (konsep sama seperti Cetak Rapor:
+      // MENU CETAK NILAI PKL (dulu langkah 4; konsep sama seperti Cetak Rapor:
       // daftar siswa, nama + tombol Cetak di sampingnya, plus Preview,
       // Cetak Terpilih & Cetak Semua). Data yang dicetak diambil dari
       // identitas/nilai/catatan yang SUDAH TERSIMPAN (langkah 1-3).
@@ -1605,7 +1606,7 @@
         }
 
         body.innerHTML =
-          '<div class="panel-note no-print" style="margin-top:0;margin-bottom:14px;">Nama siswa dan tombol Cetak di sampingnya — sama seperti menu Cetak Rapor. Pastikan data di langkah 1–3 sudah disimpan sebelum mencetak.</div>' +
+          '<div class="panel-note no-print" style="margin-top:0;margin-bottom:14px;">Nama siswa dan tombol Cetak di sampingnya — sama seperti menu Cetak Rapor. Pastikan data di menu Input Pembimbing (identitas, nilai DUDI, catatan &amp; presensi) sudah disimpan sebelum mencetak.</div>' +
           '<div class="no-print" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">' +
           '<button class="btn-small" id="btnPklCetakTerpilih"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak Terpilih</button>' +
           '<button class="btn-small btn-small--primary" id="btnPklCetakSemua"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak Semua</button>' +
@@ -1764,10 +1765,24 @@
         }
       }
 
+      // Menu tersendiri "Cetak Nilai PKL": header + daftar cetak saja.
+      if (modeCetak) {
+        content.innerHTML =
+          '<div class="panel-head no-print"><div><div class="panel-head__title">Cetak Nilai PKL</div>' +
+          '<div class="panel-head__desc">Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + ' · ' + binaanList.length + ' siswa binaan Anda. Cetak Daftar Nilai PKL per siswa, terpilih, atau semua.</div></div></div>' +
+          '<div id="pklStepBody"></div>';
+        lucide.createIcons();
+        renderLangkahCetak();
+        return;
+      }
+
       // Mulai dari langkah 1 (Input Identitas).
       renderKerangka('identitas');
       renderLangkahIdentitas();
     }
+
+    // Menu tersendiri: Cetak Nilai PKL (guru pembimbing).
+    function renderCetakPkl() { return renderNilaiPkl('cetak'); }
 
     // ================= PENGUJI PKL: Nilai PKL (Penguji) =================
     // Modul untuk guru yang ditunjuk Admin sebagai PENGUJI PKL — TERPISAH
@@ -2100,6 +2115,7 @@
         .eq('guru_id', user.id).eq('tahun_ajaran_id', tahunAktif.id).limit(1);
       if (pembRes.data && pembRes.data.length) {
         pertama = { el: tambahMenu('briefcase-business', 'Input Pembimbing', renderNilaiPkl), fn: renderNilaiPkl };
+        tambahMenu('printer', 'Cetak Nilai PKL', renderCetakPkl);
       }
       if (ujiRes.data && ujiRes.data.length) {
         var itemUji = tambahMenu('clipboard-check', 'Input Penguji', renderNilaiPklPenguji);
