@@ -3092,12 +3092,21 @@
       content.innerHTML =
         '<div class="panel-head"><div><div class="panel-head__title">Analisis Nilai — ' + escapeHtml(wk.kelas.nama) + '</div>' +
         '<div class="panel-head__desc">Analisis nilai rapor ' + siswaList.length + ' siswa kelas ini, per semester dan perkembangan antar semester. Hanya terlihat oleh wali kelas.</div></div></div>' +
-        '<div class="subtab-nav">' +
+        '<div class="toolbar no-print" style="align-items:flex-end;flex-wrap:wrap;gap:14px;">' +
+        '<div class="field" style="min-width:240px;"><label>Semester yang dicetak</label><select id="anwCetakSemester" class="an-select" aria-label="Semester yang dicetak">' +
+        periodeList.map(function (p) { return '<option value="' + escapeHtml(p.taId) + '"' + (p.taId === terpilihTaId ? ' selected' : '') + '>' + escapeHtml(labelPeriode(p)) + '</option>'; }).join('') + '</select></div>' +
+        '<label style="display:flex;gap:6px;align-items:center;font-size:13px;"><input type="checkbox" id="anwOptSem" checked> Ringkasan &amp; grafik</label>' +
+        '<label style="display:flex;gap:6px;align-items:center;font-size:13px;"><input type="checkbox" id="anwOptSiswa" checked> Peringkat siswa &amp; remedial</label>' +
+        '<label style="display:flex;gap:6px;align-items:center;font-size:13px;"><input type="checkbox" id="anwOptAntar" checked> Perkembangan antar semester</label>' +
+        '<button type="button" class="btn-small btn-small--primary" id="anwBtnCetak"><i data-lucide="printer"></i>Cetak Analisis</button>' +
+        '</div>' +
+        '<div class="subtab-nav no-print">' +
         '<button type="button" class="subtab-btn active" data-anw-tab="semester"><i data-lucide="bar-chart-3"></i>Per Semester</button>' +
         '<button type="button" class="subtab-btn" data-anw-tab="antar"><i data-lucide="line-chart"></i>Antar Semester</button>' +
         '</div>' +
-        '<div class="subtab-panel" id="anwPanelSemester"></div>' +
-        '<div class="subtab-panel" id="anwPanelAntar" hidden></div>';
+        '<div class="subtab-panel no-print" id="anwPanelSemester"></div>' +
+        '<div class="subtab-panel no-print" id="anwPanelAntar" hidden></div>' +
+        '<div id="cetakAnalisisArea"></div>';
 
       var panelSem = document.getElementById('anwPanelSemester');
       var panelAntar = document.getElementById('anwPanelAntar');
@@ -3365,6 +3374,310 @@
         });
         lucide.createIcons();
       }
+
+      // =====================================================================
+      // CETAK ANALISIS NILAI — laporan A4 (kop, ringkasan, grafik, tabel,
+      // rekomendasi, tanda tangan). Memakai ulang data yang sudah dimuat di
+      // atas; hanya Profil Sekolah yang diambil saat tombol Cetak ditekan.
+      // =====================================================================
+      function statSemester(taId) {
+        var entri = entriPerTA[taId] || [];
+        var pm = {}, ps = {};
+        entri.forEach(function (e) {
+          var m = pm[e.mapelId] = pm[e.mapelId] || { info: infoMapel[e.mapelId], nilai: [], bawah: [] };
+          m.nilai.push(e.nilai);
+          if (e.nilai < m.info.kkm) m.bawah.push(e.siswaId);
+          var s = ps[e.siswaId] = ps[e.siswaId] || { id: e.siswaId, nilai: [], bawah: [] };
+          s.nilai.push(e.nilai);
+          if (e.nilai < infoMapel[e.mapelId].kkm) s.bawah.push(infoMapel[e.mapelId]);
+        });
+        var listMapel = Object.keys(pm).map(function (k) {
+          var m = pm[k]; m.avg = rata(m.nilai); m.min = Math.min.apply(null, m.nilai); m.max = Math.max.apply(null, m.nilai); return m;
+        }).sort(function (a, b) { return b.avg - a.avg; });
+        var listSiswa = Object.keys(ps).map(function (k) { var s = ps[k]; s.avg = rata(s.nilai); return s; })
+          .sort(function (a, b) { return b.avg - a.avg || infoSiswa[a.id].nama.localeCompare(infoSiswa[b.id].nama); });
+        var semua = entri.map(function (e) { return e.nilai; });
+        var tuntas = entri.filter(function (e) { return e.nilai >= infoMapel[e.mapelId].kkm; }).length;
+        var bins = [
+          { l: '90 – 100', f: function (n) { return n >= 90; }, c: 0 },
+          { l: '80 – 89', f: function (n) { return n >= 80 && n < 90; }, c: 0 },
+          { l: '70 – 79', f: function (n) { return n >= 70 && n < 80; }, c: 0 },
+          { l: '60 – 69', f: function (n) { return n >= 60 && n < 70; }, c: 0 },
+          { l: '< 60', f: function (n) { return n < 60; }, c: 0 }
+        ];
+        semua.forEach(function (n) { for (var i = 0; i < bins.length; i++) { if (bins[i].f(n)) { bins[i].c++; break; } } });
+        return {
+          per: periodeMap[taId], entri: entri, listMapel: listMapel, listSiswa: listSiswa, semua: semua, bins: bins,
+          rataKelas: rata(semua), medKelas: median(semua), tuntas: tuntas, persenTuntas: entri.length ? tuntas / entri.length * 100 : 0,
+          siswaTuntasSemua: listSiswa.filter(function (s) { return s.bawah.length === 0; }).length,
+          belumDinilai: siswaList.length - listSiswa.length
+        };
+      }
+
+      function statAntar() {
+        return periodeList.map(function (p) {
+          var entri = entriPerTA[p.taId], mapel = {}, siswa = {};
+          entri.forEach(function (e) {
+            (mapel[e.mapelId] = mapel[e.mapelId] || []).push(e.nilai);
+            (siswa[e.siswaId] = siswa[e.siswaId] || []).push(e.nilai);
+          });
+          var mapelAvg = {}, siswaAvg = {};
+          Object.keys(mapel).forEach(function (k) { mapelAvg[k] = rata(mapel[k]); });
+          Object.keys(siswa).forEach(function (k) { siswaAvg[k] = rata(siswa[k]); });
+          var tuntas = entri.filter(function (e) { return e.nilai >= infoMapel[e.mapelId].kkm; }).length;
+          return { p: p, rata: rata(entri.map(function (e) { return e.nilai; })), persenTuntas: tuntas / entri.length * 100, mapelAvg: mapelAvg, siswaAvg: siswaAvg, n: Object.keys(siswa).length };
+        });
+      }
+
+      function bangunCetakAnalisis(opsi, profil) {
+        var esc = escapeHtml;
+        var NAMA_SEKOLAH = profil.nama_sekolah || 'SMK Widya Mandala Tambak';
+        var KOTA = profil.kota_ttd || 'Tambak';
+        var KEPSEK = profil.kepala_sekolah || '—';
+        var hariIni = new Date();
+        var isoHariIni = hariIni.getFullYear() + '-' + String(hariIni.getMonth() + 1).padStart(2, '0') + '-' + String(hariIni.getDate()).padStart(2, '0');
+        var tglCetak = formatTanggalIndonesia(isoHariIni);
+
+        var st = (opsi.sem || opsi.siswa) ? statSemester(opsi.taId) : null;
+        var dataAntar = (opsi.antar && periodeList.length >= 2) ? statAntar() : null;
+        var last = dataAntar ? dataAntar[dataAntar.length - 1] : null;
+        var prev = dataAntar ? dataAntar[dataAntar.length - 2] : null;
+
+        var kpi = function (l, v, s) {
+          return '<div class="anp-kpi__c"><div class="anp-kpi__l">' + l + '</div><div class="anp-kpi__v">' + v + '</div><div class="anp-kpi__s">' + s + '</div></div>';
+        };
+        var deltaTxt = function (d) {
+          if (d === null || d === undefined) return '—';
+          var r = Math.round(d * 10) / 10;
+          if (Math.abs(r) < 0.1) return '▬ 0';
+          return r > 0 ? '<span class="anp-up">▲ +' + fmt(r) + '</span>' : '<span class="anp-down">▼ ' + fmt(r) + '</span>';
+        };
+        var catList = function (arr, judul) {
+          return '<div class="anp-note"><div class="anp-note__t">' + judul + '</div><ul>' +
+            arr.map(function (c) { return '<li>' + c + '</li>'; }).join('') + '</ul></div>';
+        };
+
+        var h = [];
+        var adaIsi = false;
+        var judulUtama = 'LAPORAN ANALISIS NILAI KELAS ' + esc(String(wk.kelas.nama).toUpperCase());
+        var subJudul = st ? esc(labelPeriode(st.per)) : 'Perkembangan Nilai Antar Semester';
+
+        h.push('<div class="anp">');
+        h.push('<div class="anp-kop"><img class="anp-logo" src="assets/logo.png" alt=""><div><div class="anp-kop__sch">' + esc(NAMA_SEKOLAH.toUpperCase()) + '</div>' +
+          (profil.alamat_sekolah ? '<div class="anp-kop__addr">' + esc(profil.alamat_sekolah) + '</div>' : '') + '</div></div>');
+        h.push('<div class="anp-title">' + judulUtama + '</div><div class="anp-sub">' + subJudul + '</div>');
+        h.push('<table class="anp-meta"><tr><td>Kelas</td><td>' + esc(wk.kelas.nama) + '</td><td>Wali Kelas</td><td>' + esc(nama) + '</td></tr>' +
+          '<tr><td>Jumlah Siswa</td><td>' + siswaList.length + ' siswa</td><td>Tahun Ajaran Aktif</td><td>' + esc(tahunAktif.nama) + ' ' + esc(tahunAktif.semester || '') + '</td></tr>' +
+          '<tr><td>Dasar Analisis</td><td>Nilai rapor' + (st ? ' (' + st.listMapel.length + ' mapel)' : '') + '</td><td>Tanggal Cetak</td><td>' + esc(tglCetak) + '</td></tr></table>');
+
+        // ---------- A. Ringkasan + per mapel + sebaran ----------
+        if (st && opsi.sem) {
+          adaIsi = true;
+          var tinggi = st.listSiswa[0], rendah = st.listSiswa[st.listSiswa.length - 1];
+          h.push('<div class="anp-h2">A. RINGKASAN HASIL BELAJAR KELAS</div>');
+          h.push('<div class="anp-kpi">' +
+            kpi('Rata-rata Kelas', fmt(st.rataKelas), 'median ' + fmt(st.medKelas)) +
+            kpi('Ketuntasan KKM', fmt(st.persenTuntas) + '%', st.tuntas + ' dari ' + st.entri.length + ' nilai') +
+            kpi('Tuntas Semua Mapel', st.siswaTuntasSemua, 'dari ' + st.listSiswa.length + ' siswa') +
+            kpi('Rentang Rata-rata Siswa', fmt(rendah.avg) + '–' + fmt(tinggi.avg), 'terendah – tertinggi') + '</div>');
+          var cat = [];
+          cat.push('Rata-rata nilai kelas <strong>' + fmt(st.rataKelas) + '</strong> (median ' + fmt(st.medKelas) + '); <strong>' + fmt(st.persenTuntas) + '%</strong> nilai mencapai KKM.');
+          if (st.listMapel.length > 1) {
+            var mt = st.listMapel[0], mr = st.listMapel[st.listMapel.length - 1];
+            cat.push('Mapel dengan rata-rata tertinggi: <strong>' + esc(mt.info.nama) + '</strong> (' + fmt(mt.avg) + '); terendah: <strong>' + esc(mr.info.nama) + '</strong> (' + fmt(mr.avg) + ').');
+          }
+          var mapelBawah = st.listMapel.filter(function (m) { return m.avg < m.info.kkm; });
+          if (mapelBawah.length) cat.push('Rata-rata kelas masih di bawah KKM pada: ' + mapelBawah.map(function (m) { return '<strong>' + esc(m.info.nama) + '</strong>'; }).join(', ') + '.');
+          cat.push(st.siswaTuntasSemua + ' dari ' + st.listSiswa.length + ' siswa tuntas di semua mapel' + (st.listSiswa.length - st.siswaTuntasSemua ? '; ' + (st.listSiswa.length - st.siswaTuntasSemua) + ' siswa memiliki minimal satu mapel di bawah KKM.' : '.'));
+          if (st.belumDinilai > 0) cat.push(st.belumDinilai + ' siswa belum memiliki nilai rapor pada semester ini.');
+          h.push(catList(cat, 'Ringkasan'));
+
+          h.push('<div class="anp-h2">B. RATA-RATA NILAI PER MATA PELAJARAN</div>');
+          h.push('<div class="anp-leg"><span style="background:#2E7D32"></span>di atas KKM<span style="background:#D97706"></span>di bawah KKM<span style="background:#111;width:2px;height:11px;border-radius:0"></span>garis KKM</div>');
+          h.push('<div class="anp-bars">' + st.listMapel.map(function (m) {
+            var ok = m.avg >= m.info.kkm;
+            return '<div class="anp-br"><div class="anp-br__n">' + esc(m.info.nama) + '</div>' +
+              '<div class="anp-bar"><i style="width:' + Math.min(100, m.avg).toFixed(1) + '%;background:' + (ok ? '#2E7D32' : '#D97706') + '"></i><em style="left:' + Math.min(100, m.info.kkm) + '%"></em></div>' +
+              '<div class="anp-br__v"><b>' + fmt(m.avg) + '</b><br>' + fmt(m.min) + '–' + fmt(m.max) + ' · ' + m.bawah.length + ' &lt; KKM</div></div>';
+          }).join('') + '</div>');
+
+          var maxBin = Math.max.apply(null, st.bins.map(function (b) { return b.c; })) || 1;
+          h.push('<div class="anp-h2">C. SEBARAN NILAI</div><div class="anp-bars">' + st.bins.map(function (b) {
+            return '<div class="anp-br"><div class="anp-br__n">' + b.l + '</div>' +
+              '<div class="anp-bar"><i style="width:' + (b.c / maxBin * 100).toFixed(1) + '%;background:' + (b.l === '< 60' ? '#D97706' : '#1F4E79') + '"></i></div>' +
+              '<div class="anp-br__v"><b>' + b.c + '</b> nilai · ' + fmt(b.c / st.semua.length * 100) + '%</div></div>';
+          }).join('') + '</div>');
+        }
+
+        // ---------- D. Peringkat siswa + remedial ----------
+        if (st && opsi.siswa) {
+          h.push('<div class="anp-h2' + (adaIsi ? ' anp-pb' : '') + '">D. PERINGKAT SISWA' + (opsi.sem ? '' : ' — ' + esc(labelPeriode(st.per))) + '</div>');
+          adaIsi = true;
+          h.push('<table class="anp-tbl"><thead><tr><th style="width:6%">No</th><th>Nama Siswa</th><th style="width:11%">Rata-rata</th><th style="width:9%">Jml Mapel</th><th style="width:10%">&lt; KKM</th><th style="width:30%">Mapel di bawah KKM</th></tr></thead><tbody>' +
+            st.listSiswa.map(function (s, i) {
+              var ket = s.bawah.length ? s.bawah.map(function (m) { return '<span class="anp-chip">' + esc(m.kode) + '</span>'; }).join('') : '<span class="anp-ok">Tuntas semua</span>';
+              return '<tr><td class="anp-c">' + (i + 1) + '</td><td>' + esc(infoSiswa[s.id].nama) + '</td><td class="anp-c"><strong>' + fmt(s.avg) + '</strong></td><td class="anp-c">' + s.nilai.length + '</td><td class="anp-c' + (s.bawah.length ? ' anp-low' : '') + '">' + s.bawah.length + '</td><td>' + ket + '</td></tr>';
+            }).join('') + '</tbody></table>');
+          var remedial = st.listMapel.filter(function (m) { return m.bawah.length; }).sort(function (a, b) { return b.bawah.length - a.bawah.length; });
+          h.push('<div class="anp-h2">E. DAFTAR REMEDIAL PER MATA PELAJARAN</div>');
+          h.push('<table class="anp-tbl"><thead><tr><th>Mata Pelajaran</th><th style="width:8%">KKM</th><th style="width:10%">Jml Siswa</th><th style="width:50%">Nama Siswa</th></tr></thead><tbody>' +
+            (remedial.length ? remedial.map(function (m) {
+              var ns = m.bawah.map(function (id) { return infoSiswa[id].nama; }).sort(function (a, b) { return a.localeCompare(b); });
+              return '<tr><td>' + esc(m.info.nama) + '</td><td class="anp-c">' + m.info.kkm + '</td><td class="anp-c anp-low">' + m.bawah.length + '</td><td>' + esc(ns.join(', ')) + '</td></tr>';
+            }).join('') : '<tr><td colspan="4" class="anp-c">Tidak ada siswa di bawah KKM pada semester ini.</td></tr>') + '</tbody></table>');
+        }
+
+        // ---------- F. Perkembangan antar semester ----------
+        if (opsi.antar && !dataAntar) {
+          h.push('<div class="anp-h2' + (adaIsi ? ' anp-pb' : '') + '">F. PERKEMBANGAN ANTAR SEMESTER</div>');
+          adaIsi = true;
+          h.push('<div class="anp-note">Baru ada nilai rapor untuk 1 semester, sehingga perkembangan antar semester belum dapat dibandingkan.</div>');
+        }
+        if (dataAntar) {
+          var terbaik = dataAntar.slice().sort(function (a, b) { return b.rata - a.rata; })[0];
+          var naik = 0, turun = 0, tetap = 0;
+          siswaList.forEach(function (s) {
+            var a = prev.siswaAvg[s.id], b = last.siswaAvg[s.id];
+            if (a === undefined || b === undefined) return;
+            var d = b - a;
+            if (d >= 0.1) naik++; else if (d <= -0.1) turun++; else tetap++;
+          });
+          h.push('<div class="anp-h2' + (adaIsi ? ' anp-pb' : '') + '">F. PERKEMBANGAN ANTAR SEMESTER</div>');
+          adaIsi = true;
+          h.push('<div class="anp-kpi">' +
+            kpi('Perubahan Terakhir', deltaTxt(last.rata - prev.rata), 'Smt ' + prev.p.ke + ' → Smt ' + last.p.ke) +
+            kpi('Semester Terbaik', 'Smt ' + terbaik.p.ke, 'rata-rata ' + fmt(terbaik.rata)) +
+            kpi('Siswa Naik', naik, 'dari ' + (naik + turun + tetap) + ' siswa') +
+            kpi('Siswa Turun', turun, 'perlu pendampingan') + '</div>');
+
+          var listMapelAll = {};
+          dataAntar.forEach(function (d) { Object.keys(d.mapelAvg).forEach(function (k) { listMapelAll[k] = infoMapel[k]; }); });
+          var arrMapelAll = Object.keys(listMapelAll).map(function (k) { return listMapelAll[k]; }).sort(function (a, b) { return a.nama.localeCompare(b.nama); });
+          var mapelDelta = arrMapelAll.map(function (m) {
+            var a = prev.mapelAvg[m.id], b = last.mapelAvg[m.id];
+            return (a !== undefined && b !== undefined) ? { m: m, d: b - a } : null;
+          }).filter(Boolean).sort(function (x, y) { return x.d - y.d; });
+          var catA = [];
+          catA.push('Rata-rata kelas ' + (last.rata >= prev.rata ? 'naik' : 'turun') + ' dari <strong>' + fmt(prev.rata) + '</strong> (Smt ' + prev.p.ke + ') menjadi <strong>' + fmt(last.rata) + '</strong> (Smt ' + last.p.ke + ').');
+          catA.push('Semester dengan rata-rata tertinggi: <strong>Semester ' + terbaik.p.ke + '</strong> (' + fmt(terbaik.rata) + ').');
+          if (mapelDelta.length > 1) {
+            var tdn = mapelDelta[0], tup = mapelDelta[mapelDelta.length - 1];
+            if (tdn.d <= -0.1) catA.push('Mapel yang paling menurun: <strong>' + esc(tdn.m.nama) + '</strong> (' + fmt(tdn.d) + ').');
+            if (tup.d >= 0.1) catA.push('Mapel yang paling meningkat: <strong>' + esc(tup.m.nama) + '</strong> (+' + fmt(tup.d) + ').');
+          }
+          catA.push('Dibanding semester sebelumnya: <strong>' + naik + '</strong> siswa naik, <strong>' + turun + '</strong> turun, <strong>' + tetap + '</strong> tetap.');
+          h.push(catList(catA, 'Ringkasan perkembangan'));
+
+          // grafik garis (warna literal untuk cetak)
+          var W = 640, H = 220, PL = 40, PR = 52, PT = 26, PB = 42;
+          var vals = dataAntar.map(function (d) { return d.rata; });
+          var yMin = Math.max(0, Math.floor((Math.min.apply(null, vals) - 5) / 5) * 5);
+          var yMax = Math.min(100, Math.ceil((Math.max.apply(null, vals) + 5) / 5) * 5);
+          if (yMax - yMin < 10) yMax = Math.min(100, yMin + 10);
+          var xAt = function (i) { return PL + i * (W - PL - PR) / (dataAntar.length - 1); };
+          var yAt = function (v) { return PT + (yMax - v) / (yMax - yMin) * (H - PT - PB); };
+          var grid = '';
+          for (var g = yMin; g <= yMax; g += 5) {
+            grid += '<line x1="' + PL + '" x2="' + (W - PR) + '" y1="' + yAt(g).toFixed(1) + '" y2="' + yAt(g).toFixed(1) + '" stroke="#D1D5DB" stroke-width="1"/>' +
+              '<text x="' + (PL - 6) + '" y="' + (yAt(g) + 4).toFixed(1) + '" text-anchor="end" font-size="11" fill="#4B5563">' + g + '</text>';
+          }
+          var poly = dataAntar.map(function (d, i) { return xAt(i).toFixed(1) + ',' + yAt(d.rata).toFixed(1); }).join(' ');
+          var titik = dataAntar.map(function (d, i) {
+            return '<circle cx="' + xAt(i).toFixed(1) + '" cy="' + yAt(d.rata).toFixed(1) + '" r="5" fill="#fff" stroke="#1F4E79" stroke-width="2.5"/>' +
+              '<text x="' + xAt(i).toFixed(1) + '" y="' + (yAt(d.rata) - 11).toFixed(1) + '" text-anchor="middle" font-size="12" font-weight="700" fill="#111">' + fmt(d.rata) + '</text>' +
+              '<text x="' + xAt(i).toFixed(1) + '" y="' + (H - PB + 18) + '" text-anchor="middle" font-size="11" fill="#374151">Smt ' + d.p.ke + '</text>' +
+              '<text x="' + xAt(i).toFixed(1) + '" y="' + (H - PB + 32) + '" text-anchor="middle" font-size="9.5" fill="#6B7280">' + esc(d.p.taNama + ' ' + d.p.taSemester) + '</text>';
+          }).join('');
+          h.push('<svg class="anp-svg" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Grafik rata-rata nilai kelas per semester">' + grid +
+            '<polyline points="' + poly + '" fill="none" stroke="#1F4E79" stroke-width="2.5" stroke-linejoin="round"/>' + titik + '</svg>');
+
+          h.push('<table class="anp-tbl"><thead><tr><th>Semester</th><th>Tahun Ajaran</th><th style="width:12%">Siswa Dinilai</th><th style="width:12%">Rata-rata</th><th style="width:12%">Selisih</th><th style="width:12%">Tuntas KKM</th></tr></thead><tbody>' +
+            dataAntar.map(function (d, i) {
+              return '<tr><td>Semester ' + d.p.ke + '</td><td>' + esc(d.p.taNama + ' ' + d.p.taSemester) + '</td><td class="anp-c">' + d.n + '</td><td class="anp-c"><strong>' + fmt(d.rata) + '</strong></td><td class="anp-c">' + (i > 0 ? deltaTxt(d.rata - dataAntar[i - 1].rata) : '—') + '</td><td class="anp-c">' + fmt(d.persenTuntas) + '%</td></tr>';
+            }).join('') + '</tbody></table>');
+
+          var headSem = dataAntar.map(function (d) { return '<th style="width:9%">Smt ' + d.p.ke + '</th>'; }).join('');
+          h.push('<div class="anp-h2">G. RATA-RATA KELAS PER MAPEL ANTAR SEMESTER</div>');
+          h.push('<div class="anp-leg">Angka oranye tebal = rata-rata di bawah KKM. Selisih membandingkan dua semester terakhir.</div>');
+          h.push('<table class="anp-tbl"><thead><tr><th>Mata Pelajaran</th>' + headSem + '<th style="width:11%">Selisih</th></tr></thead><tbody>' +
+            arrMapelAll.map(function (m) {
+              var cells = dataAntar.map(function (d) {
+                var v = d.mapelAvg[m.id];
+                return '<td class="anp-c' + ((v !== undefined && v < m.kkm) ? ' anp-low' : '') + '">' + (v === undefined ? '–' : fmt(v)) + '</td>';
+              }).join('');
+              var a = prev.mapelAvg[m.id], b = last.mapelAvg[m.id];
+              return '<tr><td>' + esc(m.nama) + '</td>' + cells + '<td class="anp-c">' + deltaTxt((a !== undefined && b !== undefined) ? b - a : null) + '</td></tr>';
+            }).join('') + '</tbody></table>');
+
+          if (opsi.siswa) {
+            h.push('<div class="anp-h2">H. RATA-RATA NILAI TIAP SISWA ANTAR SEMESTER</div>');
+            h.push('<table class="anp-tbl"><thead><tr><th style="width:6%">No</th><th>Nama Siswa</th>' + headSem + '<th style="width:10%">Selisih</th><th style="width:10%">Tren</th></tr></thead><tbody>' +
+              siswaList.map(function (s, i) {
+                var cells = dataAntar.map(function (d) {
+                  var v = d.siswaAvg[s.id];
+                  return '<td class="anp-c">' + (v === undefined ? '–' : fmt(v)) + '</td>';
+                }).join('');
+                var a = prev.siswaAvg[s.id], b = last.siswaAvg[s.id];
+                var dl = (a !== undefined && b !== undefined) ? b - a : null;
+                var tren = dl === null ? '—' : (dl >= 0.1 ? '<span class="anp-up">Naik</span>' : (dl <= -0.1 ? '<span class="anp-down">Turun</span>' : 'Tetap'));
+                return '<tr><td class="anp-c">' + (i + 1) + '</td><td>' + esc(s.nama) + '</td>' + cells + '<td class="anp-c">' + deltaTxt(dl) + '</td><td class="anp-c">' + tren + '</td></tr>';
+              }).join('') + '</tbody></table>');
+          }
+        }
+
+        // ---------- Rekomendasi tindak lanjut (otomatis) ----------
+        var rek = [];
+        if (st) {
+          var remedialM = st.listMapel.filter(function (m) { return m.bawah.length; }).sort(function (a, b) { return b.bawah.length - a.bawah.length; }).slice(0, 3);
+          if (remedialM.length) rek.push('Prioritas remedial / penguatan materi: ' + remedialM.map(function (m) { return '<strong>' + esc(m.info.nama) + '</strong> (' + m.bawah.length + ' siswa di bawah KKM)'; }).join(', ') + '.');
+          else rek.push('Seluruh siswa mencapai KKM pada semua mata pelajaran — pertahankan strategi pembelajaran dan berikan pengayaan.');
+          var butuh = st.listSiswa.filter(function (s) { return s.bawah.length >= 3; });
+          if (butuh.length) rek.push('Siswa yang perlu pendampingan intensif (minimal 3 mapel di bawah KKM): ' + butuh.slice(0, 10).map(function (s) { return esc(infoSiswa[s.id].nama); }).join(', ') + (butuh.length > 10 ? ', dan ' + (butuh.length - 10) + ' siswa lainnya' : '') + '.');
+          var sedikit = st.listSiswa.filter(function (s) { return s.bawah.length > 0 && s.bawah.length < 3; }).length;
+          if (sedikit) rek.push(sedikit + ' siswa memiliki 1–2 mapel di bawah KKM dan dapat diarahkan mengikuti remedial pada mapel terkait.');
+          var top3 = st.listSiswa.slice(0, 3);
+          if (top3.length) rek.push('Siswa dengan capaian rata-rata tertinggi: ' + top3.map(function (s) { return esc(infoSiswa[s.id].nama) + ' (' + fmt(s.avg) + ')'; }).join(', ') + ' — dapat diberi apresiasi / peran tutor sebaya.');
+        }
+        if (dataAntar) {
+          var turunBesar = siswaList.filter(function (s) {
+            var a = prev.siswaAvg[s.id], b = last.siswaAvg[s.id];
+            return a !== undefined && b !== undefined && (b - a) <= -3;
+          }).map(function (s) { return esc(s.nama); });
+          if (turunBesar.length) rek.push('Siswa dengan penurunan rata-rata ≥ 3 poin dibanding semester sebelumnya: ' + turunBesar.slice(0, 10).join(', ') + (turunBesar.length > 10 ? ', dan ' + (turunBesar.length - 10) + ' siswa lainnya' : '') + ' — disarankan konseling / komunikasi dengan orang tua.');
+        }
+
+        h.push('<div class="anp-h2' + (adaIsi ? '' : '') + '">' + (dataAntar && opsi.siswa ? 'I' : (dataAntar ? 'H' : (st && opsi.siswa ? 'F' : (st ? 'D' : 'A')))) + '. REKOMENDASI TINDAK LANJUT &amp; CATATAN WALI KELAS</div>');
+        if (rek.length) h.push(catList(rek, 'Rekomendasi otomatis berdasarkan data nilai'));
+        h.push('<div class="anp-leg">Catatan Wali Kelas:</div><div class="anp-box">&nbsp;</div>');
+
+        var ttdKepsek = (profil.ttd_kepala_sekolah && profil.tampil_ttd_rapor !== false) ? '<img src="' + esc(profil.ttd_kepala_sekolah) + '" alt="">' : '';
+        h.push('<div class="anp-sign">' +
+          '<div class="anp-sign__c"><div>&nbsp;</div><div>Wali Kelas,</div><div class="anp-sign__sp"></div><div><strong><u>' + esc(nama) + '</u></strong></div></div>' +
+          '<div class="anp-sign__c"><div>' + esc(KOTA) + ', ' + esc(tglCetak) + '</div><div>Kepala Sekolah,</div><div class="anp-sign__sp">' + ttdKepsek + '</div><div><strong><u>' + esc(KEPSEK) + '</u></strong></div>' +
+          (profil.nip_kepala_sekolah ? '<div>NIP. ' + esc(profil.nip_kepala_sekolah) + '</div>' : '') + '</div></div>');
+        h.push('<div class="anp-foot">Dokumen ini dibuat otomatis dari data nilai rapor pada E-Rapor ' + esc(NAMA_SEKOLAH) + '. Hanya untuk keperluan wali kelas dan pimpinan sekolah.</div>');
+        h.push('</div>');
+        return h.join('');
+      }
+
+      if (periodeList.length < 2) {
+        var chkAntar = document.getElementById('anwOptAntar');
+        chkAntar.checked = false; chkAntar.disabled = true;
+        chkAntar.parentNode.title = 'Perlu minimal 2 semester yang memiliki nilai';
+      }
+      document.getElementById('anwBtnCetak').addEventListener('click', async function () {
+        var btn = this;
+        var opsi = {
+          taId: document.getElementById('anwCetakSemester').value,
+          sem: document.getElementById('anwOptSem').checked,
+          siswa: document.getElementById('anwOptSiswa').checked,
+          antar: document.getElementById('anwOptAntar').checked
+        };
+        if (!opsi.sem && !opsi.siswa && !opsi.antar) { alert('Pilih minimal satu bagian yang ingin dicetak.'); return; }
+        var profilRes = await supabaseClient.from('profil_sekolah').select('*').maybeSingle();
+        var html = bangunCetakAnalisis(opsi, profilRes.data || {});
+        await jalankanCetakHalaman('cetakAnalisisArea', [html], 'Analisis Nilai ' + wk.kelas.nama, btn);
+      });
 
       isiSemester(terpilihTaId);
       isiAntar();

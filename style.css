@@ -3219,3 +3219,66 @@ table.rapor-cetak__nilai tbody tr.rapor-cetak__section-row td {
 .anw-svg__line { fill: none; stroke: var(--primary); stroke-width: 2.5; stroke-linejoin: round; }
 .anw-svg__dot { fill: var(--surface); stroke: var(--primary); stroke-width: 2.5; }
 .anw-svg__val { fill: var(--ink); font-size: 12px; font-weight: 700; }
+
+/* ================= Cetak Analisis Nilai (Wali Kelas) =================
+   Dokumen laporan A4 portrait. Di layar disembunyikan (.cv-print-only);
+   saat print hanya #cetakAnalisisArea yang tampil (tampilan analisis di
+   layar diberi .no-print). Warna ditulis hex literal supaya tidak
+   bergantung variabel tema, dan dipaksa tercetak (print-color-adjust). */
+#cetakAnalisisArea { display: none; }
+.anp { font-family: "Segoe UI", Arial, sans-serif; color: #111; font-size: 10pt; line-height: 1.4; }
+.anp, .anp * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; box-sizing: border-box; }
+.anp-kop { display: flex; align-items: center; gap: 14px; padding-bottom: 8px; border-bottom: 3px double #1f2937; }
+.anp-logo { width: 58px; height: 58px; object-fit: contain; }
+.anp-kop__sch { font-size: 15pt; font-weight: 800; letter-spacing: .02em; }
+.anp-kop__addr { font-size: 9pt; color: #4b5563; }
+.anp-title { margin: 14px 0 2px; text-align: center; font-size: 14pt; font-weight: 800; letter-spacing: .04em; }
+.anp-sub { text-align: center; font-size: 10.5pt; color: #374151; margin-bottom: 10px; }
+.anp-meta { width: 100%; border-collapse: collapse; margin-bottom: 12px; font-size: 9.5pt; }
+.anp-meta td { padding: 2px 6px; vertical-align: top; }
+.anp-meta td:nth-child(odd) { width: 17%; color: #4b5563; }
+.anp-meta td:nth-child(even) { width: 33%; font-weight: 600; }
+.anp-h2 { margin: 14px 0 6px; padding: 4px 8px; font-size: 10.5pt; font-weight: 800; letter-spacing: .03em; background: #FFE08A; border-left: 4px solid #B45309; break-after: avoid; page-break-after: avoid; }
+.anp-kpi { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 8px; }
+.anp-kpi__c { border: 1px solid #9ca3af; border-radius: 6px; padding: 7px 9px; text-align: center; break-inside: avoid; }
+.anp-kpi__l { font-size: 8pt; color: #4b5563; text-transform: uppercase; letter-spacing: .04em; }
+.anp-kpi__v { font-size: 17pt; font-weight: 800; line-height: 1.15; }
+.anp-kpi__s { font-size: 8pt; color: #4b5563; }
+.anp-note { border: 1px solid #9ca3af; border-left: 4px solid #1f4e79; background: #F3F6FA; padding: 7px 10px; margin: 6px 0; break-inside: avoid; }
+.anp-note__t { font-weight: 800; font-size: 9.5pt; margin-bottom: 3px; }
+.anp-note ul { margin: 0; padding-left: 17px; }
+.anp-note li { margin: 1px 0; }
+.anp-tbl { width: 100%; border-collapse: collapse; font-size: 9pt; margin: 4px 0 8px; }
+.anp-tbl th { background: #FFE08A; border: 1px solid #1f2937; padding: 4px 5px; font-weight: 800; text-align: center; }
+.anp-tbl td { border: 1px solid #6b7280; padding: 3px 5px; vertical-align: top; }
+.anp-tbl tr { break-inside: avoid; page-break-inside: avoid; }
+.anp-tbl thead { display: table-header-group; }
+.anp-tbl tbody tr:nth-child(even) td { background: #F8F9FB; }
+.anp-c { text-align: center; }
+.anp-low { color: #B45309; font-weight: 800; }
+.anp-up { color: #166534; font-weight: 700; }
+.anp-down { color: #B91C1C; font-weight: 700; }
+.anp-chip { display: inline-block; padding: 0 6px; margin: 1px 2px 1px 0; border: 1px solid #B45309; border-radius: 9px; font-size: 8pt; color: #92400E; background: #FEF3C7; }
+.anp-ok { color: #166534; font-weight: 700; }
+.anp-bars { margin: 4px 0 8px; }
+.anp-br { display: grid; grid-template-columns: 34% 1fr 17%; gap: 8px; align-items: center; margin: 3px 0; break-inside: avoid; }
+.anp-br__n { font-size: 9pt; }
+.anp-br__v { font-size: 8.5pt; text-align: right; line-height: 1.15; }
+.anp-br__v b { font-size: 10pt; }
+.anp-bar { position: relative; height: 12px; background: #E5E7EB; border-radius: 6px; overflow: visible; }
+.anp-bar i { display: block; height: 100%; border-radius: 6px; min-width: 2px; }
+.anp-bar em { position: absolute; top: -3px; width: 2px; height: 18px; background: #111; }
+.anp-leg { font-size: 8pt; color: #4b5563; margin: 2px 0 4px; }
+.anp-leg span { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin: 0 3px 0 8px; vertical-align: -1px; }
+.anp-svg { width: 100%; height: auto; display: block; margin: 4px 0; break-inside: avoid; }
+.anp-pb { break-before: page; page-break-before: always; }
+.anp-sign { display: flex; justify-content: space-between; gap: 20px; margin-top: 18px; break-inside: avoid; page-break-inside: avoid; }
+.anp-sign__c { width: 46%; text-align: center; font-size: 10pt; }
+.anp-sign__sp { height: 62px; position: relative; }
+.anp-sign__sp img { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); max-height: 58px; max-width: 100%; }
+.anp-box { border: 1px solid #6b7280; border-radius: 4px; min-height: 64px; margin: 4px 0 10px; padding: 6px 8px; font-size: 9pt; color: #6b7280; break-inside: avoid; }
+.anp-foot { margin-top: 10px; font-size: 8pt; color: #6b7280; text-align: center; }
+
+@media print {
+  #cetakAnalisisArea { display: block !important; position: relative; z-index: 1; }
+}
