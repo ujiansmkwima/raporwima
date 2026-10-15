@@ -437,19 +437,6 @@
       });
       menuWali.appendChild(itemLeger);
 
-      // Analisis Nilai — analisis per semester & antar semester untuk
-      // kelas yang diampu (khusus wali kelas).
-      var itemAnalisis = document.createElement('a');
-      itemAnalisis.href = '#';
-      itemAnalisis.className = 'menu-item';
-      itemAnalisis.innerHTML = '<i data-lucide="line-chart" class="menu-icon"></i><span class="menu-item__title">Analisis Nilai</span><span class="menu-item__sub">' + waliKelas.kelas.nama + '</span>';
-      itemAnalisis.addEventListener('click', function (e) {
-        e.preventDefault();
-        setActiveMenuItem(itemAnalisis);
-        renderAnalisisWali(waliKelas);
-      });
-      menuWali.appendChild(itemAnalisis);
-
       // Catatan Wali Kelas — narasi bebas per siswa (tampil di kotak
       // "Catatan Wali Kelas" pada Cetak Rapor). Menu terpisah supaya
       // wali kelas bisa mengisi semua siswa sekaligus, tidak harus
@@ -476,6 +463,19 @@
         renderPelanggaranKelas(waliKelas);
       });
       menuWali.appendChild(itemPelanggaran);
+
+      // Analisis Nilai — analisis per semester & antar semester untuk
+      // kelas yang diampu (khusus wali kelas).
+      var itemAnalisis = document.createElement('a');
+      itemAnalisis.href = '#';
+      itemAnalisis.className = 'menu-item';
+      itemAnalisis.innerHTML = '<i data-lucide="line-chart" class="menu-icon"></i><span class="menu-item__title">Analisis Nilai</span><span class="menu-item__sub">' + waliKelas.kelas.nama + '</span>';
+      itemAnalisis.addEventListener('click', function (e) {
+        e.preventDefault();
+        setActiveMenuItem(itemAnalisis);
+        renderAnalisisWali(waliKelas);
+      });
+      menuWali.appendChild(itemAnalisis);
 
       // Cetak Identitas — cover/biodata peserta didik (data pribadi,
       // orang tua, wali, keterangan penerimaan), diambil dari data
