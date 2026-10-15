@@ -3282,3 +3282,8 @@ table.rapor-cetak__nilai tbody tr.rapor-cetak__section-row td {
 @media print {
   #cetakAnalisisArea { display: block !important; position: relative; z-index: 1; }
 }
+
+/* ---------- Tombol aplikasi di topbar (pengganti grup "Aplikasi" di sidebar) ---------- */
+.topbar__row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.topbar__app { display: inline-flex; align-items: center; gap: 5px; text-decoration: none; white-space: nowrap; }
+.topbar__app i, .topbar__app svg { flex-shrink: 0; }
