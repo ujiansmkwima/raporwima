@@ -6233,6 +6233,8 @@
 
         var judulAsli = document.title;
         try {
+          // Ambil data semua siswa sekaligus (batch), baru susun kartunya.
+          await siapkanDataIdentitas(idList);
           var htmlParts = [];
           for (var i = 0; i < idList.length; i++) {
             htmlParts.push(await buatKartuIdentitas(idList[i]));
@@ -6242,8 +6244,9 @@
 
           document.title = judulCetakIdentitas(idList);
 
-          // Beri jeda sesaat supaya browser sempat me-render sebelum
-          // jendela cetak muncul.
+          // Tunggu foto (dan logo/tanda tangan) selesai termuat supaya tidak
+          // kosong di jendela cetak, lalu beri jeda sesaat untuk render.
+          await tungguGambarCetak(area);
           await new Promise(function (resolve) { setTimeout(resolve, 150); });
           window.print();
         } catch (err) {
@@ -6261,34 +6264,106 @@
         return '<div class="idk-r' + (full ? ' idk-r--full' : '') + '"><span class="idk-l">' + escapeHtml(label) + '</span><span class="idk-c">:</span><span class="idk-v">' + escapeHtml(v) + '</span></div>';
       }
 
-      async function buatKartuIdentitas(siswaId) {
-        // Biodata lengkap siswa — kolom-kolom ini diisi Admin lewat
-        // menu Data Siswa (form Edit / import Excel).
-        var siswaRes = await supabaseClient
-          .from('siswa')
-          .select('nama, nis, nisn, tempat_lahir, tanggal_lahir, jenis_kelamin, agama, status_keluarga, anak_ke, alamat_siswa, no_telp_siswa, sekolah_asal, kelas_masuk, tanggal_masuk, nama_ayah, nama_ibu, alamat_ortu, no_telp_ortu, pekerjaan_ayah, pekerjaan_ibu, nama_wali, alamat_wali, no_telp_wali, pekerjaan_wali')
-          .eq('id', siswaId)
-          .single();
-        var siswa = siswaRes.data || {};
+      // ---- Pemuatan data CEPAT (batch) ----
+      // Dulu tiap siswa memakai 4 permintaan berurutan (siswa, detail, dekripsi
+      // NIK, URL foto). Sekarang semua siswa yang dibutuhkan diambil SEKALIGUS:
+      // 1 query siswa + 1 query detail + 1 rpc dekripsi + 1 permintaan URL foto
+      // untuk banyak file; lalu foto dipanaskan ke cache browser. Hasil disimpan
+      // di cacheIdent sehingga Preview / Cetak berikutnya langsung tampil.
+      var cacheIdent = {};      // siswaId -> { siswa, detail }
+      var sedangSiapkan = {};   // siswaId -> Promise (hindari ambil ganda)
+      var SIAP_SELECT_SISWA = 'id, nama, nis, nisn, tempat_lahir, tanggal_lahir, jenis_kelamin, agama, status_keluarga, anak_ke, alamat_siswa, no_telp_siswa, sekolah_asal, kelas_masuk, tanggal_masuk, nama_ayah, nama_ibu, alamat_ortu, no_telp_ortu, pekerjaan_ayah, pekerjaan_ibu, nama_wali, alamat_wali, no_telp_wali, pekerjaan_wali';
 
-        // Tambahan dari Buku Induk (NIK, foto, hubungan wali). Boleh gagal/kosong
-        // (mis. migrasi_buku_induk.sql belum dijalankan) — cetak tetap jalan.
-        var detail = {};
-        try {
-          var detRes = await supabaseClient.from('bi_siswa_detail').select('nik, foto, wali_hubungan, kelurahan, kecamatan, kab_kota, provinsi, kode_pos').eq('siswa_id', siswaId).maybeSingle();
-          if (!detRes.error && detRes.data) detail = detRes.data;
-          // NIK tersimpan terenkripsi di database -> dekripsi lewat fungsi rpc
-          if (detail.nik && String(detail.nik).indexOf('enc:') === 0) {
-            var dk = await supabaseClient.rpc('bi_dekripsi', { p_vals: [detail.nik] });
-            detail.nik = (!dk.error && dk.data && dk.data[0]) ? dk.data[0] : '';
-          }
-          // Foto kini berupa path di Supabase Storage -> ubah jadi URL bertanda tangan
-          // (nilai lama berupa data URL base64 tetap dipakai apa adanya).
-          if (detail.foto && String(detail.foto).indexOf('data:') !== 0) {
-            var sg = await supabaseClient.storage.from('buku-induk-foto').createSignedUrl(detail.foto, 3600);
-            detail.foto = (!sg.error && sg.data) ? sg.data.signedUrl : null;
-          }
-        } catch (e) { /* abaikan */ }
+      function panaskanFoto(url) {
+        if (!url) return Promise.resolve();
+        return new Promise(function (resolve) {
+          var im = new Image();
+          im.onload = im.onerror = function () { resolve(); };
+          im.src = url;
+          setTimeout(resolve, 8000);
+        });
+      }
+
+      async function siapkanDataIdentitas(idList) {
+        var perlu = idList.filter(function (id) { return !cacheIdent[id]; });
+        if (!perlu.length) return;
+        var menunggu = [];
+        var baru = [];
+        perlu.forEach(function (id) {
+          if (sedangSiapkan[id]) menunggu.push(sedangSiapkan[id]); else baru.push(id);
+        });
+
+        if (baru.length) {
+          var pekerjaan = (async function () {
+            var BATCH = 100;
+            var siswaMap = {}, detailMap = {};
+            for (var i = 0; i < baru.length; i += BATCH) {
+              var part = baru.slice(i, i + BATCH);
+              // siswa & detail diambil bersamaan (paralel)
+              var hasil = await Promise.all([
+                supabaseClient.from('siswa').select(SIAP_SELECT_SISWA).in('id', part),
+                supabaseClient.from('bi_siswa_detail').select('siswa_id, nik, foto, wali_hubungan, kelurahan, kecamatan, kab_kota, provinsi, kode_pos').in('siswa_id', part)
+              ]);
+              (hasil[0].data || []).forEach(function (r) { siswaMap[r.id] = r; });
+              // Detail Buku Induk boleh gagal/kosong — cetak tetap jalan.
+              if (!hasil[1].error) (hasil[1].data || []).forEach(function (r) { detailMap[r.siswa_id] = r; });
+            }
+
+            var daftarDetail = baru.map(function (id) { return detailMap[id] || {}; });
+
+            // NIK terenkripsi -> dekripsi SEKALI untuk semua siswa
+            try {
+              var indeksNik = [], nilaiNik = [];
+              daftarDetail.forEach(function (d, idx) {
+                if (d.nik && String(d.nik).indexOf('enc:') === 0) { indeksNik.push(idx); nilaiNik.push(d.nik); }
+              });
+              if (nilaiNik.length) {
+                var dk = await supabaseClient.rpc('bi_dekripsi', { p_vals: nilaiNik });
+                indeksNik.forEach(function (idx, k) {
+                  daftarDetail[idx].nik = (!dk.error && dk.data && dk.data[k]) ? dk.data[k] : '';
+                });
+              }
+            } catch (e) { /* abaikan */ }
+
+            // Foto: path Storage -> URL bertanda tangan, SEKALI untuk banyak file
+            // (nilai lama berupa data URL base64 dipakai apa adanya).
+            try {
+              var pathFoto = [];
+              daftarDetail.forEach(function (d) {
+                if (d.foto && String(d.foto).indexOf('data:') !== 0 && pathFoto.indexOf(d.foto) < 0) pathFoto.push(d.foto);
+              });
+              var urlByPath = {};
+              for (var j = 0; j < pathFoto.length; j += 100) {
+                var sg = await supabaseClient.storage.from('buku-induk-foto').createSignedUrls(pathFoto.slice(j, j + 100), 3600);
+                if (!sg.error && sg.data) sg.data.forEach(function (x) { if (x && x.path && x.signedUrl) urlByPath[x.path] = x.signedUrl; });
+              }
+              daftarDetail.forEach(function (d) {
+                if (d.foto && String(d.foto).indexOf('data:') !== 0) d.foto = urlByPath[d.foto] || null;
+              });
+            } catch (e) { daftarDetail.forEach(function (d) { if (d.foto && String(d.foto).indexOf('data:') !== 0) d.foto = null; }); }
+
+            baru.forEach(function (id, idx) { cacheIdent[id] = { siswa: siswaMap[id] || {}, detail: daftarDetail[idx] }; });
+            // Unduh semua foto bersamaan ke cache browser (paralel, bukan satu-satu)
+            await Promise.all(daftarDetail.map(function (d) { return panaskanFoto(d.foto); }));
+          })();
+          baru.forEach(function (id) {
+            sedangSiapkan[id] = pekerjaan;
+            pekerjaan.then(function () { delete sedangSiapkan[id]; }, function () { delete sedangSiapkan[id]; });
+          });
+          menunggu.push(pekerjaan);
+        }
+        await Promise.all(menunggu);
+      }
+
+      // Mulai memuat data seluruh kelas di latar belakang begitu halaman dibuka,
+      // supaya saat tombol Preview/Cetak ditekan datanya sudah siap.
+      siapkanDataIdentitas(siswaList.map(function (s) { return s.id; })).catch(function () { /* abaikan */ });
+
+      async function buatKartuIdentitas(siswaId) {
+        await siapkanDataIdentitas([siswaId]);
+        var cache = cacheIdent[siswaId] || { siswa: {}, detail: {} };
+        var siswa = cache.siswa;
+        var detail = cache.detail;
 
         var jenisKelaminTampil = siswa.jenis_kelamin === 'L' ? 'Laki-laki' : (siswa.jenis_kelamin === 'P' ? 'Perempuan' : '');
         var ttlTampil = [siswa.tempat_lahir, formatTanggalIndonesia(siswa.tanggal_lahir)].filter(Boolean).join(', ');
