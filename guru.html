@@ -1769,7 +1769,7 @@
 
         '<div class="toolbar">' +
         '<button class="btn-small" id="btnAmbilTpSemua">↺ Susun Ulang Capaian (Semua Siswa)</button>' +
-        '<button class="btn-small" id="btnKosongkanSemua">🗑 Kosongkan Semua Nilai &amp; Capaian</button>' +
+        '<button class="btn-small" id="btnKosongkanSemua">🗑 Reset Semua Nilai &amp; Capaian</button>' +
         '<button class="btn-small" id="btnExportNilai">⬇ Unduh Data (Excel)</button>' +
         '<button class="btn-small" id="btnTemplateNilai">⬇ Unduh Template Excel</button>' +
         '<button class="btn-small" id="btnImportNilai">⬆ Import dari Excel</button>' +
@@ -1915,7 +1915,7 @@
       // ---------- Kosongkan Semua ----------
       document.getElementById('btnKosongkanSemua').addEventListener('click', function () {
         var konfirmasi = confirm(
-          'Kosongkan SEMUA nilai TP, Tengah Semester, Akhir Semester, dan Capaian Pembelajaran untuk ' + siswaList.length + ' siswa di kelas ini?\n\n' +
+          'Reset SEMUA nilai TP, Tengah Semester, Akhir Semester, dan Capaian Pembelajaran untuk ' + siswaList.length + ' siswa di kelas ini?\n\n' +
           'Ini hanya mengosongkan tampilan di layar — data baru benar-benar terhapus setelah kamu klik "Simpan Semua Nilai".'
         );
         if (!konfirmasi) return;
@@ -2278,6 +2278,7 @@
         '<button class="btn-small" id="btnExportNts">⬇ Unduh Data (Excel)</button>' +
         '<button class="btn-small" id="btnTemplateNts">⬇ Unduh Template Excel</button>' +
         '<button class="btn-small" id="btnImportNts">⬆ Import dari Excel</button>' +
+        '<button class="btn-small" id="btnResetNts">🗑 Reset Nilai &amp; Catatan</button>' +
         '<input type="file" id="fileImportNts" accept=".xlsx,.xls" style="display:none;">' +
         '</div>' +
         '<div id="importSummaryNts"></div>' +
@@ -2531,6 +2532,22 @@
       // =======================================================
       //  Simpan
       // =======================================================
+      // ---------- Reset Nilai Tengah Semester (dengan konfirmasi) ----------
+      document.getElementById('btnResetNts').addEventListener('click', function () {
+        var ok = confirm(
+          'Reset SEMUA Nilai Tengah Semester dan Catatan Selama KBM untuk ' + siswaList.length + ' siswa di kelas ini?\n\n' +
+          'Ini hanya mengosongkan tampilan di layar — data baru benar-benar terhapus setelah kamu klik "Simpan Semua".'
+        );
+        if (!ok) return;
+        content.querySelectorAll('.nts-nilai, .nts-catatan').forEach(function (el) {
+          el.value = '';
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+        if (typeof perbaruiTabelKonversi === 'function') perbaruiTabelKonversi();
+        document.getElementById('ntsMsg').innerHTML =
+          '<div class="import-summary">Semua nilai dan catatan di layar sudah direset. Klik “Simpan Semua” untuk menyimpan perubahan ini.</div>';
+      });
+
       document.getElementById('btnSimpanNts').addEventListener('click', async function () {
         var btn = this;
         btn.disabled = true;
@@ -3964,6 +3981,7 @@
         '<button class="btn-small" id="btnExportPresensi">⬇ Unduh Data (Excel)</button>' +
         '<button class="btn-small" id="btnTemplatePresensi">⬇ Unduh Template Excel</button>' +
         '<button class="btn-small" id="btnImportPresensi">⬆ Import dari Excel</button>' +
+        '<button class="btn-small" id="btnResetPresensi">🗑 Reset Presensi</button>' +
         '<input type="file" id="fileImportPresensi" accept=".xlsx,.xls" style="display:none;">' +
         '</div>' +
         '<div id="importSummaryPresensi"></div>' +
@@ -4072,6 +4090,23 @@
           document.getElementById('fileImportPresensi').value = '';
         };
         reader.readAsArrayBuffer(file);
+      });
+
+      // ---------- Reset Presensi (dengan konfirmasi) ----------
+      // Hanya mengosongkan isian di layar (jadi 0); data baru berubah di
+      // database setelah klik "Simpan Presensi" — sama seperti tombol
+      // Reset di Input Nilai Mapel.
+      document.getElementById('btnResetPresensi').addEventListener('click', function () {
+        var ok = confirm(
+          'Reset SEMUA isian presensi (Sakit, Izin, Tanpa Keterangan) menjadi 0 untuk ' + siswaList.length + ' siswa di kelas ini?\n\n' +
+          'Ini hanya mengosongkan tampilan di layar — data baru benar-benar berubah setelah kamu klik "Simpan Presensi".'
+        );
+        if (!ok) return;
+        ['presensi-sakit', 'presensi-izin', 'presensi-alpha'].forEach(function (cls) {
+          content.querySelectorAll('.' + cls).forEach(function (inp) { inp.value = 0; inp.dispatchEvent(new Event('input', { bubbles: true })); });
+        });
+        document.getElementById('presensiMsg').innerHTML =
+          '<div class="import-summary">Semua isian presensi di layar sudah direset ke 0. Klik “Simpan Presensi” untuk menyimpan perubahan ini.</div>';
       });
 
       document.getElementById('btnSimpanPresensi').addEventListener('click', async function () {
@@ -5074,6 +5109,8 @@
 
         if (o.presensi) {
           var pr = r.presensi;
+          // Angka di teks catatan mengikuti angka di rapor (maks. 3 hari); logika pilihan kalimat tetap pakai angka asli.
+          var sakitC = hadirCetak(pr.sakit), izinC = hadirCetak(pr.izin), alphaC = hadirCetak(pr.alpha);
           var totalTidakHadir = pr.sakit + pr.izin + pr.alpha;
           if (totalTidakHadir === 0) {
             kalimat.push(pilihAcak([
@@ -5085,8 +5122,8 @@
             ]));
           } else if (pr.alpha === 0) {
             var rincian = [];
-            if (pr.sakit) rincian.push('sakit ' + pr.sakit + ' hari');
-            if (pr.izin) rincian.push('izin ' + pr.izin + ' hari');
+            if (pr.sakit) rincian.push('sakit ' + sakitC + ' hari');
+            if (pr.izin) rincian.push('izin ' + izinC + ' hari');
             var rincianTeks = daftarNaratif(rincian);
             kalimat.push(pilihAcak([
               'Kehadiran tetap terjaga baik, tercatat ' + rincianTeks + ' dan tidak ada ketidakhadiran tanpa keterangan.',
@@ -5097,19 +5134,19 @@
             ]));
           } else if (pr.alpha <= 3) {
             kalimat.push(pilihAcak([
-              'Tercatat ' + pr.alpha + ' hari tanpa keterangan, sehingga kedisiplinan kehadiran masih perlu ditingkatkan.',
-              'Ananda ' + panggil + ' tercatat ' + pr.alpha + ' hari tidak hadir tanpa keterangan, perlu ditingkatkan kedisiplinannya.',
-              'Ada ' + pr.alpha + ' hari tanpa keterangan yang tercatat, sehingga kehadiran Ananda ' + panggil + ' perlu lebih diperhatikan.',
-              'Kedisiplinan kehadiran Ananda ' + panggil + ' perlu ditingkatkan, dengan ' + pr.alpha + ' hari tercatat tanpa keterangan.',
-              'Tercatat ' + pr.alpha + ' hari absen tanpa keterangan, mohon menjadi perhatian bersama untuk semester berikutnya.'
+              'Tercatat ' + alphaC + ' hari tanpa keterangan, sehingga kedisiplinan kehadiran masih perlu ditingkatkan.',
+              'Ananda ' + panggil + ' tercatat ' + alphaC + ' hari tidak hadir tanpa keterangan, perlu ditingkatkan kedisiplinannya.',
+              'Ada ' + alphaC + ' hari tanpa keterangan yang tercatat, sehingga kehadiran Ananda ' + panggil + ' perlu lebih diperhatikan.',
+              'Kedisiplinan kehadiran Ananda ' + panggil + ' perlu ditingkatkan, dengan ' + alphaC + ' hari tercatat tanpa keterangan.',
+              'Tercatat ' + alphaC + ' hari absen tanpa keterangan, mohon menjadi perhatian bersama untuk semester berikutnya.'
             ]));
           } else {
             kalimat.push(pilihAcak([
-              'Tercatat ' + pr.alpha + ' hari tanpa keterangan. Kedisiplinan kehadiran perlu menjadi perhatian serius bersama orang tua/wali.',
-              'Ananda ' + panggil + ' tercatat ' + pr.alpha + ' hari tidak hadir tanpa keterangan, sehingga memerlukan perhatian serius dari orang tua/wali.',
-              'Ketidakhadiran tanpa keterangan sebanyak ' + pr.alpha + ' hari cukup tinggi dan perlu ditangani serius bersama orang tua/wali.',
-              'Dengan ' + pr.alpha + ' hari tanpa keterangan, kedisiplinan kehadiran Ananda ' + panggil + ' membutuhkan perhatian dan kerja sama orang tua/wali.',
-              'Tingkat ketidakhadiran tanpa keterangan Ananda ' + panggil + ' (' + pr.alpha + ' hari) cukup mengkhawatirkan dan perlu segera ditindaklanjuti bersama orang tua/wali.'
+              'Tercatat ' + alphaC + ' hari tanpa keterangan. Kedisiplinan kehadiran perlu menjadi perhatian serius bersama orang tua/wali.',
+              'Ananda ' + panggil + ' tercatat ' + alphaC + ' hari tidak hadir tanpa keterangan, sehingga memerlukan perhatian serius dari orang tua/wali.',
+              'Ketidakhadiran tanpa keterangan sebanyak ' + alphaC + ' hari cukup tinggi dan perlu ditangani serius bersama orang tua/wali.',
+              'Dengan ' + alphaC + ' hari tanpa keterangan, kedisiplinan kehadiran Ananda ' + panggil + ' membutuhkan perhatian dan kerja sama orang tua/wali.',
+              'Tingkat ketidakhadiran tanpa keterangan Ananda ' + panggil + ' (' + alphaC + ' hari) cukup mengkhawatirkan dan perlu segera ditindaklanjuti bersama orang tua/wali.'
             ]));
           }
         }
