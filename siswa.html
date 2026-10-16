@@ -11,7 +11,9 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-client.js"></script>
 <script src="bukuinduk-fields.js?v=1"></script>
+<script src="bukuinduk-core.js?v=12"></script>
 <script src="pelanggaran-cp.js?v=1"></script>
+<script src="kartu-pelajar.js?v=1"></script>
 <script src="mobile.js?v=1" defer></script>
 <style>
   /* ---- Kartu menu di Beranda (gaya sama dengan portal.html) ---- */
@@ -81,6 +83,7 @@
     <nav class="menu-list" id="menuSiswa">
       <a href="#beranda" class="menu-item" data-view="beranda"><i data-lucide="layout-dashboard" class="menu-icon"></i><span class="menu-item__title">Beranda</span></a>
       <a href="#biodata" class="menu-item" data-view="biodata"><i data-lucide="book-user" class="menu-icon"></i><span class="menu-item__title">Lihat Biodata Buku Induk</span></a>
+      <a href="#kartu" class="menu-item" data-view="kartu"><i data-lucide="id-card" class="menu-icon"></i><span class="menu-item__title">Kartu Pelajar Digital</span></a>
       <a href="#rapor" class="menu-item" data-view="rapor"><i data-lucide="file-text" class="menu-icon"></i><span class="menu-item__title">Lihat Rapor</span></a>
       <a href="#presensi" class="menu-item" data-view="presensi"><i data-lucide="calendar-check" class="menu-icon"></i><span class="menu-item__title">Lihat Presensi</span></a>
       <a href="#pelanggaran" class="menu-item" data-view="pelanggaran"><i data-lucide="shield-alert" class="menu-icon"></i><span class="menu-item__title">Lihat Catatan Pelanggaran</span></a>
@@ -317,6 +320,7 @@
       (kelas ? ' · Kelas ' + escapeHtml(kelas) : '') + '</div></div></div>' +
       '<div class="sw-cards">' +
       kartu('biodata', 'app-card--kuning', 'book-user', 'Lihat Biodata Buku Induk', 'Data diri, orang tua, dan riwayat pendidikan yang tercatat di Buku Induk sekolah.') +
+      kartu('kartu', 'app-card--hijau', 'id-card', 'Kartu Pelajar Digital', 'Kartu pelajar depan-belakang lengkap dengan foto. Bisa dicetak atau diunduh sebagai gambar.') +
       kartu('rapor', '', 'file-text', 'Lihat Rapor', 'Nilai, capaian kompetensi, ekstrakurikuler, dan ketidakhadiran. Tersedia setelah rapor diterbitkan sekolah.') +
       kartu('presensi', 'app-card--hijau', 'calendar-check', 'Lihat Presensi', 'Rekap sakit, izin, dan tanpa keterangan per tahun ajaran dan semester.') +
       kartu('pelanggaran', 'app-card--merah', 'shield-alert', 'Lihat Catatan Pelanggaran', 'Catatan pelanggaran dan pembinaan kedisiplinan dari sekolah, lengkap dengan poinnya.') +
@@ -615,27 +619,51 @@
   var BI_DISEMBUNYIKAN = { catatan_khusus: true };
   var bukuIndukCache = null;
 
+  // Biodata tampil sebagai pop-up layar penuh (komponen yang sama dengan "Detail" di Buku Induk wali kelas),
+  // dan Cetak Biodata memakai format cetak Buku Induk wali kelas (BI.cetak).
+  var tokenBio = 0;
+  var biOpsiCetak = { sembunyi: BI_DISEMBUNYIKAN, tanpaCatatan: true };
+
+  function kelasTerbaruSiswa() {
+    if (S.tahunAktif && S.kelasPerTA[S.tahunAktif.id]) return S.kelasPerTA[S.tahunAktif.id];
+    for (var i = 0; i < S.periodeList.length; i++) if (S.kelasPerTA[S.periodeList[i].id]) return S.kelasPerTA[S.periodeList[i].id];
+    return null;
+  }
+
+  // Data siswa + isian Buku Induk, bentuk datar seperti yang dipakai BI.muatSiswa.
+  async function bangunSiswaBI() {
+    var segar = await supabaseClient.from('siswa').select('*').eq('id', S.siswa.id).maybeSingle();
+    if (segar.data) S.siswa = segar.data;
+    var det = cekError(await supabaseClient.from('bi_siswa_detail').select('*').eq('siswa_id', S.siswa.id).maybeSingle(), 'buku induk').data || {};
+    try { await BI.dekripsiBaris([det]); }
+    catch (e) { ['nik', 'no_kk'].forEach(function (k) { if (typeof det[k] === 'string' && det[k].indexOf('enc:') === 0) det[k] = null; }); }
+    var o = Object.assign({}, S.siswa);
+    BI_FIELDS.SEMUA.forEach(function (f) { if (f.t === 'detail') o[f.k] = det[f.k] === undefined ? null : det[f.k]; });
+    o.kelas = kelasTerbaruSiswa();
+    return o;
+  }
+
   async function renderBiodata() {
-    content.innerHTML = headHtml('Biodata Buku Induk', 'Data dirimu yang tercatat di Buku Induk sekolah. Bagian yang masih kosong perlu dilengkapi lewat wali kelas.') +
-      '<div class="panel-note">Memuat biodata...</div>';
+    var judul = 'Biodata Buku Induk';
+    var desk = 'Data dirimu yang tercatat di Buku Induk sekolah. Bagian yang masih kosong perlu dilengkapi lewat wali kelas.';
+    var token = ++tokenBio;
+    content.innerHTML = headHtml(judul, desk) + '<div class="panel-note">Memuat biodata...</div>';
     try {
-      bukuIndukCache = await muatBukuInduk();   // selalu segar: isian bisa berubah setelah pengajuan disetujui
-      var d = bukuIndukCache;
-      content.innerHTML =
-        headHtml('Biodata Buku Induk', 'Data dirimu yang tercatat di Buku Induk sekolah. Bagian yang masih kosong perlu dilengkapi lewat wali kelas.') +
-        '<div class="no-print" style="display:flex;gap:8px;margin:0 0 14px;flex-wrap:wrap;">' +
-        '<button class="btn-small btn-small--primary" id="btnCetakBio"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak Biodata</button></div>' +
-        '<div class="print-only">BIODATA PESERTA DIDIK — SMK WIDYA MANDALA TAMBAK</div>' +
-        fotoHtml(d) + sectionsHtml(d);
+      if (!window.BI) throw new Error('Komponen Buku Induk belum termuat. Muat ulang halaman.');
+      var s = await bangunSiswaBI();
+      if (token !== tokenBio) return;
+      function buka() {
+        BI.detailSiswa(s, { bolehUbah: false, tanpaNilai: true, sembunyi: BI_DISEMBUNYIKAN, opsiCetak: biOpsiCetak });
+      }
+      content.innerHTML = headHtml(judul, desk) +
+        '<div class="panel-note">Biodata dibuka di jendela layar penuh. Dari sana kamu bisa mencetaknya dalam format Buku Induk sekolah.</div>' +
+        '<div style="margin-top:14px;"><button class="btn-small btn-small--primary" id="btnBukaBio"><i data-lucide="book-user" style="width:14px;height:14px;"></i> Buka Biodata</button></div>';
       lucide.createIcons();
-      document.getElementById('btnCetakBio').addEventListener('click', function () {
-        var asli = document.title;
-        document.title = 'Biodata - ' + S.siswa.nama;
-        window.print();
-        document.title = asli;
-      });
+      document.getElementById('btnBukaBio').addEventListener('click', buka);
+      buka();
     } catch (err) {
-      content.innerHTML = headHtml('Biodata Buku Induk', '') +
+      if (token !== tokenBio) return;
+      content.innerHTML = headHtml(judul, desk) +
         '<div class="panel-note">Gagal memuat biodata: ' + escapeHtml(err.message || err) + '</div>';
     }
   }
@@ -948,6 +976,7 @@
     rapor: renderRapor,
     presensi: renderPresensi,
     biodata: renderBiodata,
+    kartu: renderKartuPelajar,
     pengajuan: renderPengajuan,
     pelanggaran: renderPelanggaran,
     sandi: renderSandi

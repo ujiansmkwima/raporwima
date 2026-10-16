@@ -591,15 +591,16 @@
   // ================= Detail siswa (popup baca-saja) =================
   // Menampilkan data Buku Induk yang SUDAH TERSIMPAN dalam popup. opts: { bolehUbah, onBuka }
   var CSS_DETAIL =
-    '.bi-dt-overlay{align-items:center;padding:24px 16px;animation:biDtFade .18s ease-out;}' +
+    '.bi-dt-overlay{align-items:stretch;padding:0 !important;overflow:hidden;animation:biDtFade .18s ease-out;}' +
     '@keyframes biDtFade{from{opacity:0}to{opacity:1}}@keyframes biDtUp{from{opacity:0;transform:translateY(14px) scale(.985)}to{opacity:1;transform:none}}' +
-    '.bi-dt{max-width:880px;padding:0;overflow:hidden;display:flex;flex-direction:column;max-height:calc(100vh - 48px);animation:biDtUp .22s ease-out;}' +
-    '.bi-dt__hero{position:relative;display:flex;gap:18px;align-items:center;padding:26px 30px 22px;color:#fff;background:linear-gradient(135deg,#1e3a8a 0%,#2563eb 55%,#7c3aed 120%);}' +
+    '.bi-dt{max-width:none !important;width:100%;height:100vh;height:100dvh;padding:0 !important;border-radius:0 !important;overflow:hidden;display:flex;flex-direction:column;animation:biDtUp .22s ease-out;}' +
+    '.bi-dt__hero{position:relative;display:flex;gap:18px;align-items:center;padding:26px max(30px,calc((100% - 1100px) / 2 + 30px)) 22px;flex-shrink:0;color:#fff;background:linear-gradient(135deg,#1e3a8a 0%,#2563eb 55%,#7c3aed 120%);}' +
     '.bi-dt__hero::after{content:"";position:absolute;right:-60px;top:-70px;width:220px;height:220px;border-radius:50%;background:rgba(255,255,255,.08);pointer-events:none;}' +
     '.bi-dt__x{position:absolute;right:14px;top:12px;border:none;background:rgba(255,255,255,.16);color:#fff;width:32px;height:32px;border-radius:50%;font-size:20px;line-height:1;cursor:pointer;z-index:2;}' +
     '.bi-dt__x:hover{background:rgba(255,255,255,.3);}' +
     '.bi-dt__fotos{display:flex;gap:10px;flex-shrink:0;}' +
     '.bi-dt__foto{width:84px;height:112px;border-radius:12px;overflow:hidden;background:rgba(255,255,255,.14);border:2px solid rgba(255,255,255,.55);display:flex;align-items:center;justify-content:center;text-align:center;font-size:11px;color:rgba(255,255,255,.8);position:relative;box-shadow:0 8px 18px -6px rgba(0,0,0,.4);}' +
+    '.bi-dt__foto[hidden]{display:none;}' +
     '.bi-dt__foto img{width:100%;height:100%;object-fit:cover;display:block;}' +
     '.bi-dt__foto small{position:absolute;left:0;right:0;bottom:0;background:rgba(15,23,42,.62);font-size:9.5px;padding:2px 0;letter-spacing:.3px;}' +
     '.bi-dt__who{min-width:0;position:relative;z-index:1;}' +
@@ -610,13 +611,14 @@
     '.bi-dt__prog-top{display:flex;justify-content:space-between;font-size:11.5px;font-weight:600;margin-bottom:5px;opacity:.95;}' +
     '.bi-dt__bar{height:7px;background:rgba(255,255,255,.22);border-radius:99px;overflow:hidden;}' +
     '.bi-dt__bar>i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#6ee7b7,#34d399);}' +
-    '.bi-dt__tabs{display:flex;gap:6px;padding:12px 24px 0;border-bottom:1px solid var(--border);overflow-x:auto;background:var(--surface-tint);flex-shrink:0;}' +
+    '.bi-dt__tabs{display:flex;gap:6px;padding:12px max(24px,calc((100% - 1100px) / 2 + 30px)) 0;border-bottom:1px solid var(--border);overflow-x:auto;background:var(--surface-tint);flex-shrink:0;}' +
     '.bi-dt__tab{border:none;background:none;font-family:var(--font-body);font-size:13px;font-weight:600;color:var(--ink-soft);padding:9px 14px 11px;cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap;display:flex;gap:7px;align-items:center;}' +
     '.bi-dt__tab:hover{color:var(--ink);}' +
     '.bi-dt__tab.on{color:var(--primary-dim);border-bottom-color:var(--primary);}' +
     '.bi-dt__cnt{font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:99px;background:var(--surface-tint-strong);color:var(--ink-soft);}' +
     '.bi-dt__tab.on .bi-dt__cnt{background:var(--primary-tint-strong);color:var(--primary-dim);}' +
-    '.bi-dt__body{padding:8px 30px 24px;overflow-y:auto;flex:1;}' +
+    '.bi-dt__scroll{flex:1;min-height:0;overflow-y:auto;}' +
+    '.bi-dt__body{padding:8px 30px 24px;width:100%;max-width:1100px;margin:0 auto;}' +
     '.bi-dt__sec{margin-top:20px;}' +
     '.bi-dt__sec-t{font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--primary-dim);display:flex;align-items:center;gap:8px;margin-bottom:10px;}' +
     '.bi-dt__sec-t::after{content:"";flex:1;height:1px;background:var(--border);}' +
@@ -626,9 +628,10 @@
     '.bi-dt__l{font-size:10.5px;font-weight:700;letter-spacing:.3px;color:var(--ink-faint);text-transform:uppercase;margin-bottom:3px;}' +
     '.bi-dt__v{font-size:13.5px;font-weight:600;color:var(--ink);word-break:break-word;white-space:pre-wrap;}' +
     '.bi-dt__v--kosong{font-weight:500;font-style:italic;color:var(--ink-faint);font-size:12.5px;}' +
-    '.bi-dt__foot{display:flex;justify-content:flex-end;gap:10px;padding:14px 24px;border-top:1px solid var(--border);background:var(--surface);flex-shrink:0;}' +
-    '@media(max-width:640px){.bi-dt__hero{flex-direction:column;align-items:flex-start;padding:22px 18px 18px;}.bi-dt__nama{font-size:18px;padding-right:30px;}' +
-    '.bi-dt__body{padding:4px 16px 20px;}.bi-dt__tabs{padding:10px 10px 0;}.bi-dt__grid{grid-template-columns:1fr;}.bi-dt__foot{padding:12px 14px;flex-wrap:wrap;}.bi-dt__foot .btn-small{flex:1 1 auto;}}';
+    '.bi-dt__foot{display:flex;justify-content:flex-end;gap:10px;padding:14px max(24px,calc((100% - 1100px) / 2 + 30px));border-top:1px solid var(--border);background:var(--surface);flex-shrink:0;}' +
+    '@media(min-width:900px){.bi-dt__grid{grid-template-columns:1fr 1fr 1fr;}.bi-dt__it--full{grid-column:1/-1;}}' +
+    '@media(max-width:640px){.bi-dt__hero{flex-direction:column;align-items:flex-start;padding:22px 18px 18px !important;}.bi-dt__nama{font-size:18px;padding-right:30px;}' +
+    '.bi-dt__body{padding:4px 16px 20px;}.bi-dt__tabs{padding:10px 10px 0 !important;}.bi-dt__grid{grid-template-columns:1fr;}.bi-dt__foot{padding:12px 14px !important;flex-wrap:wrap;}.bi-dt__foot .btn-small{flex:1 1 auto;}}';
 
   function pasangCssDetail() {
     if (document.getElementById('biDtCss')) return;
@@ -657,10 +660,12 @@
     o.className = 'modal-overlay bi-dt-overlay';
     var tabs = F.TAB;
 
+    var sembunyi = opts.sembunyi || {};
+    function fieldTampil(bg) { return bg.fields.filter(function (f) { return !sembunyi[f.k]; }); }
     function panelHtml(tb) {
-      return tb.bagian.map(function (bg) {
+      return tb.bagian.filter(function (bg) { return fieldTampil(bg).length; }).map(function (bg) {
         return '<div class="bi-dt__sec"><div class="bi-dt__sec-t">' + esc(bg.judul) + '</div><div class="bi-dt__grid">' +
-          bg.fields.map(function (f) {
+          fieldTampil(bg).map(function (f) {
             var v = nilaiTampil(f, s[f.k]);
             var penuh = f.full || f.tipe === 'textarea';
             return '<div class="bi-dt__it' + (penuh ? ' bi-dt__it--full' : '') + '"><div class="bi-dt__l">' + esc(f.l) + '</div>' +
@@ -670,7 +675,7 @@
     }
     function hitungTab(tb) {
       var n = 0, t = 0;
-      tb.bagian.forEach(function (bg) { bg.fields.forEach(function (f) { t++; if (!kosong(s[f.k])) n++; }); });
+      tb.bagian.forEach(function (bg) { fieldTampil(bg).forEach(function (f) { t++; if (!kosong(s[f.k])) n++; }); });
       return n + '/' + t;
     }
     var warna = kel.persen >= 90 ? '' : (kel.persen >= 60 ? 'background:linear-gradient(90deg,#fde68a,#fbbf24)' : 'background:linear-gradient(90deg,#fecaca,#f87171)');
@@ -688,30 +693,30 @@
       '<div class="bi-dt__tabs" role="tablist">' + tabs.map(function (tb, i) {
         return '<button type="button" role="tab" class="bi-dt__tab' + (i === 0 ? ' on' : '') + '" data-t="' + tb.id + '">' + esc(tb.judul) + '<span class="bi-dt__cnt">' + hitungTab(tb) + '</span></button>';
       }).join('') + '</div>' +
-      '<div class="bi-dt__body">' + tabs.map(function (tb, i) {
+      '<div class="bi-dt__scroll"><div class="bi-dt__body">' + tabs.map(function (tb, i) {
         return '<div data-p="' + tb.id + '"' + (i === 0 ? '' : ' hidden') + '>' + panelHtml(tb) + '</div>';
-      }).join('') + '</div>' +
-      '<div class="bi-dt__foot"><button type="button" class="btn-small" id="biDtCetak">🖨 Cetak Biodata</button> <button type="button" class="btn-small" id="biDtCetakNilai">🖨 Cetak Nilai</button>' +
+      }).join('') + '</div></div>' +
+      '<div class="bi-dt__foot"><button type="button" class="btn-small" id="biDtCetak">🖨 Cetak Biodata</button> ' + (opts.tanpaNilai ? '' : '<button type="button" class="btn-small" id="biDtCetakNilai">🖨 Cetak Nilai</button>') + '' +
       (opts.bolehUbah ? '<button type="button" class="btn-small btn-small--primary" id="biDtBuka">✏️ Buka & Ubah Data</button>' : '') +
       '<button type="button" class="btn-small" data-x>Tutup</button></div></div>';
 
     document.body.appendChild(o);
     var overflowLama = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    function tutup() { document.body.style.overflow = overflowLama; document.removeEventListener('keydown', onKey); o.remove(); }
+    function tutup() { document.body.style.overflow = overflowLama; document.removeEventListener('keydown', onKey); o.remove(); if (opts.onTutup) opts.onTutup(); }
     function onKey(e) { if (e.key === 'Escape') tutup(); }
     document.addEventListener('keydown', onKey);
-    o.addEventListener('mousedown', function (e) { if (e.target === o) tutup(); });
     o.querySelectorAll('[data-x]').forEach(function (b) { b.addEventListener('click', tutup); });
     o.querySelectorAll('.bi-dt__tab').forEach(function (b) {
       b.addEventListener('click', function () {
         o.querySelectorAll('.bi-dt__tab').forEach(function (x) { x.classList.toggle('on', x === b); });
         o.querySelectorAll('[data-p]').forEach(function (p) { p.hidden = p.dataset.p !== b.dataset.t; });
-        o.querySelector('.bi-dt__body').scrollTop = 0;
+        o.querySelector('.bi-dt__scroll').scrollTop = 0;
       });
     });
-    o.querySelector('#biDtCetak').addEventListener('click', function () { BI.cetak([s], 'biodata'); });
-    o.querySelector('#biDtCetakNilai').addEventListener('click', function () { BI.cetak([s], 'nilai'); });
+    o.querySelector('#biDtCetak').addEventListener('click', function () { BI.cetak([s], 'biodata', opts.opsiCetak); });
+    var bNilai = o.querySelector('#biDtCetakNilai');
+    if (bNilai) bNilai.addEventListener('click', function () { BI.cetak([s], 'nilai', opts.opsiCetak); });
     var bBuka = o.querySelector('#biDtBuka');
     if (bBuka) bBuka.addEventListener('click', function () { tutup(); if (opts.onBuka) opts.onBuka(); });
 
@@ -1104,8 +1109,12 @@
 
   // ================= Cetak Buku Induk =================
   // jenis: 'biodata' | 'nilai' | 'lengkap' (bawaan: lengkap)
-  BI.cetak = async function (list, jenis) {
+  // opsi (opsional): { sembunyi: {kolom:true}, tanpaCatatan: true }
+  //   dipakai Portal Siswa: isian internal & catatan wali kelas tidak ikut tercetak.
+  var opsiCetak = {};
+  BI.cetak = async function (list, jenis, opsi) {
     jenis = jenis || 'lengkap';
+    opsiCetak = opsi || {};
     if (!list.length) { alert('Tidak ada siswa untuk dicetak.'); return; }
     var w = window.open('', '_blank');
     if (!w) { alert('Pop-up diblokir browser. Izinkan pop-up untuk situs ini lalu coba lagi.'); return; }
@@ -1257,8 +1266,11 @@
     var bagianHtml = bagianTab.join('');
     // Biodata 2 halaman: bagian A-E (sampai Ibu Kandung) di halaman 1, sisanya di halaman 2
     var bagianFlat = [];
+    var sembunyiCetak = opsiCetak.sembunyi || {};
     F.TAB.forEach(function (tab) { tab.bagian.forEach(function (bg) {
-      bagianFlat.push('<div class="sec"><h4>' + esc(bg.judul) + '</h4><div class="kv">' + bg.fields.map(function (f) {
+      var fieldCetak = bg.fields.filter(function (f) { return !sembunyiCetak[f.k]; });
+      if (!fieldCetak.length) return;
+      bagianFlat.push('<div class="sec"><h4>' + esc(bg.judul) + '</h4><div class="kv">' + fieldCetak.map(function (f) {
         var v = nilaiCetak(f, s);
         var full = f.full || f.tipe === 'textarea';
         return '<div class="r' + (full ? ' full' : '') + '"><span class="l">' + esc(f.l) + '</span><span class="v' + (v === '' ? ' kosong' : '') + '">' + (v === '' ? '—' : esc(v)) + '</span></div>';
@@ -1282,7 +1294,7 @@
       kd.map(function (k) { return '<tr><td style="text-align:center;">' + esc(k.ta) + '</td><td style="text-align:center;">' + esc(k.sem) + '</td><td>' + esc(k.nama) + '</td><td style="white-space:pre-wrap;">' + esc(k.deskripsi) + '</td></tr>'; }).join('') +
       '</tbody></table>' : '<div class="kosongnote">Belum ada data kokurikuler.</div>') + '</div>';
 
-    var catatan = '<div class="sec" style="page-break-inside:auto;"><h4>M. Prestasi, Beasiswa &amp; Catatan</h4>' + (ct.length ?
+    var catatan = opsiCetak.tanpaCatatan ? '' : '<div class="sec" style="page-break-inside:auto;"><h4>M. Prestasi, Beasiswa &amp; Catatan</h4>' + (ct.length ?
       '<table class="g"><thead><tr><th style="width:17%;">Tanggal</th><th style="width:20%;">Kategori</th><th style="width:15%;">Tingkat</th><th>Uraian</th></tr></thead><tbody>' +
       ct.map(function (c) { return '<tr><td>' + esc(fmtTgl(c.tanggal)) + '</td><td>' + esc(c.kategori) + '</td><td>' + esc(c.tingkat || '') + '</td><td>' + esc(c.uraian) + '</td></tr>'; }).join('') +
       '</tbody></table>' : '<div class="kosongnote">Belum ada catatan.</div>') + '</div>';

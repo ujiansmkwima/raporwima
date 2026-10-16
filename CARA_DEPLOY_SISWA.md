@@ -70,3 +70,29 @@ Catatan:
 - Wali kelas hanya melihat pengajuan siswa kelasnya (tahun ajaran aktif). Admin melihat semua.
 - Siswa tidak punya akses tulis langsung ke tabel mana pun; semua lewat fungsi
   ajukan_pembetulan_data / batalkan_pengajuan_data. Terima/tolak lewat proses_pengajuan_data (hanya wali kelas siswa itu / admin).
+
+## Kartu Pelajar Digital (BARU)
+Menu **Kartu Pelajar Digital** di Portal Siswa: kartu depan + belakang, bisa dicetak (85,6 mm) / simpan PDF,
+atau diunduh sebagai PNG. Tidak perlu migrasi SQL.
+
+File: BARU `kartu-pelajar.js` · UBAH `siswa.html`
+
+Sumber data (semua dari Buku Induk):
+- Foto = foto "Saat Masuk" · Nomor Induk = NIS · Nama, Jenis Kelamin, TTL
+- Alamat = Alamat + Desa/Kelurahan + Kecamatan + Kab/Kota
+- Komp. Keahlian = "Program / Konsentrasi Keahlian" (cadangan: konsentrasi/program keahlian kelas)
+- **Tanggal kartu = Tanggal Diterima** (`tanggal_masuk`)
+- Nama Kepala Sekolah, kota, dan gambar tanda tangan = menu Admin -> Profil Sekolah
+
+Teks tetap (alamat sekolah, visi, misi, nama logo) ada di bagian `KP` pada awal `kartu-pelajar.js`.
+Langkah: upload `kartu-pelajar.js` dan `siswa.html`.
+
+## Detail Siswa Pop-up Layar Penuh + Cetak Biodata Siswa (BARU)
+- **Guru/Admin** (tombol "Detail" di Buku Induk): popup sekarang memenuhi seluruh layar.
+- **Siswa** (menu Lihat Biodata Buku Induk): biodata tampil di popup layar penuh yang sama dengan milik wali kelas.
+- **Cetak Biodata siswa** memakai format cetak Buku Induk wali kelas (kop, kartu foto, bagian A-J, pelanggaran).
+  Tidak ikut tercetak untuk siswa: "Catatan Khusus" dan tabel "Prestasi, Beasiswa & Catatan" (catatan internal wali kelas).
+  Tombol "Cetak Nilai" tidak ditampilkan di sisi siswa.
+
+File: UBAH `bukuinduk-core.js`, `siswa.html`, `bukuinduk-guru.html`, `bukuinduk-admin.html`
+Tidak perlu migrasi SQL. Upload keempat file lalu muat ulang (Ctrl+F5).
