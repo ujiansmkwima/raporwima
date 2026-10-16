@@ -1832,6 +1832,20 @@ a { color: inherit; text-decoration: none; }
   min-width: 0;
 }
 
+/* Kolom Kepala Sekolah & Wali Kelas dikunci selebar isinya (nama tidak
+   boleh menyusut/meluber ke kolom sebelahnya); kolom Orangtua/ Wali
+   mengambil sisa ruang. Margin kanan kolom Kepala Sekolah = jarak
+   ekstra ke kolom Wali Kelas. */
+.rapor-cetak__footer-col:nth-child(2),
+.rapor-cetak__footer-col:nth-child(3) {
+  flex: 0 0 auto;
+  min-width: max-content;
+}
+
+.rapor-cetak__footer-col:nth-child(2) {
+  margin-right: 18px;
+}
+
 .rapor-cetak__footer-col div:last-child {
   white-space: nowrap;
   font-size: 11pt;
