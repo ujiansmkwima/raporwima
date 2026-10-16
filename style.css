@@ -1824,11 +1824,11 @@ a { color: inherit; text-decoration: none; }
   justify-content: space-between;
   align-items: flex-start;
   text-align: left;
-  gap: 10px;
+  gap: 28px;
 }
 
 .rapor-cetak__footer-col {
-  flex: 1 1 0;
+  flex: 1 1 auto;
   min-width: 0;
 }
 
