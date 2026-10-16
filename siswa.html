@@ -57,6 +57,40 @@
   .sw-pesan--ok { color: var(--success); }
   .sw-pesan--err { color: var(--danger); }
 
+  /* ---- Merek di topbar (sidebar dihapus) ---- */
+  .sw-brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .sw-brand__logo { width: 38px; height: 38px; object-fit: contain; flex-shrink: 0; }
+
+  /* ---- Menu bawah (4 tombol; tombol ke-4 = Lainnya) ---- */
+  body.sw-has-nav { padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px)); }
+  .sw-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; background: rgba(255,255,255,.97);
+    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); border-top: 1px solid var(--border);
+    box-shadow: 0 -6px 20px -8px rgba(15,23,42,.18); padding: 0 6px env(safe-area-inset-bottom, 0px); }
+  .sw-nav__in { display: flex; max-width: 640px; margin: 0 auto; }
+  .sw-nav__item { position: relative; flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 3px; padding: 9px 2px 8px; border: 0; background: none; font: inherit; font-size: 11px; font-weight: 600; line-height: 1.15;
+    color: var(--ink-soft); cursor: pointer; text-align: center; -webkit-tap-highlight-color: transparent; }
+  .sw-nav__item svg, .sw-nav__item i { width: 22px; height: 22px; }
+  .sw-nav__item span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sw-nav__item.is-active { color: var(--primary); font-weight: 800; }
+  .sw-nav__item.is-active::before { content: ""; position: absolute; top: -1px; left: 26%; right: 26%; height: 2.5px; background: var(--primary); border-radius: 0 0 3px 3px; }
+  .sw-sheet-bg { position: fixed; inset: 0; z-index: 70; background: rgba(15,23,42,.45); opacity: 0; pointer-events: none; transition: opacity .18s; }
+  .sw-sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 80; background: var(--surface); border-radius: 18px 18px 0 0;
+    box-shadow: 0 -10px 30px -8px rgba(15,23,42,.3); padding: 10px 16px calc(18px + env(safe-area-inset-bottom, 0px));
+    transform: translateY(105%); transition: transform .22s ease-out; max-width: 640px; margin: 0 auto; }
+  body.sw-more-open .sw-sheet-bg { opacity: 1; pointer-events: auto; }
+  body.sw-more-open .sw-sheet { transform: none; }
+  .sw-sheet__grip { width: 40px; height: 4px; border-radius: 4px; background: var(--border); margin: 2px auto 12px; }
+  .sw-sheet__t { font-size: 12px; font-weight: 700; color: var(--ink-soft); margin: 0 4px 8px; }
+  .sw-sheet__list { display: flex; flex-direction: column; gap: 4px; }
+  .sw-sheet__item { display: flex; align-items: center; gap: 14px; width: 100%; padding: 12px 10px; border: 0; background: none; border-radius: 12px;
+    font: inherit; font-size: 14.5px; font-weight: 600; color: var(--ink); cursor: pointer; text-align: left; }
+  .sw-sheet__item:hover { background: var(--surface-tint-strong); }
+  .sw-sheet__item.is-active { background: var(--primary-tint); color: var(--primary-dim); }
+  .sw-sheet__item i, .sw-sheet__item svg { width: 20px; height: 20px; flex-shrink: 0; }
+  .sw-sheet__item--keluar { color: var(--danger); }
+  @media print { .sw-nav, .sw-sheet, .sw-sheet-bg { display: none !important; } body.sw-has-nav { padding-bottom: 0; } }
+
   /* Judul yang hanya muncul di kertas cetak */
   .print-only { display: none; }
   @media print {
@@ -69,43 +103,14 @@
 
 <div class="app">
 
-  <aside class="sidebar">
-    <div class="sidebar__brand">
-      <img class="sidebar__brand-logo" src="assets/logo.png" alt="Logo SMK Widya Mandala Tambak">
-      <div class="sidebar__brand-text">
-        <span class="sidebar__brand-mark">Portal Siswa</span>
-        <span class="sidebar__brand-school">SMK Widya Mandala Tambak</span>
-      </div>
-    </div>
-    <div class="sidebar__role"><i data-lucide="graduation-cap" style="width:13px;height:13px;"></i> Siswa</div>
-
-    <div class="sidebar__section-label">Menu Siswa</div>
-    <nav class="menu-list" id="menuSiswa">
-      <a href="#beranda" class="menu-item" data-view="beranda"><i data-lucide="layout-dashboard" class="menu-icon"></i><span class="menu-item__title">Beranda</span></a>
-      <a href="#biodata" class="menu-item" data-view="biodata"><i data-lucide="book-user" class="menu-icon"></i><span class="menu-item__title">Lihat Biodata Buku Induk</span></a>
-      <a href="#kartu" class="menu-item" data-view="kartu"><i data-lucide="id-card" class="menu-icon"></i><span class="menu-item__title">Kartu Pelajar Digital</span></a>
-      <a href="#rapor" class="menu-item" data-view="rapor"><i data-lucide="file-text" class="menu-icon"></i><span class="menu-item__title">Lihat Rapor</span></a>
-      <a href="#presensi" class="menu-item" data-view="presensi"><i data-lucide="calendar-check" class="menu-icon"></i><span class="menu-item__title">Lihat Presensi</span></a>
-      <a href="#pelanggaran" class="menu-item" data-view="pelanggaran"><i data-lucide="shield-alert" class="menu-icon"></i><span class="menu-item__title">Lihat Catatan Pelanggaran</span></a>
-      <a href="#pengajuan" class="menu-item" data-view="pengajuan"><i data-lucide="pencil-line" class="menu-icon"></i><span class="menu-item__title">Pengajuan Pembetulan Data</span></a>
-    </nav>
-
-    <div class="sidebar__section-label">Akun</div>
-    <nav class="menu-list">
-      <a href="#sandi" class="menu-item" data-view="sandi"><i data-lucide="key-round" class="menu-icon"></i><span class="menu-item__title">Ganti Kata Sandi</span></a>
-    </nav>
-
-    <div class="sidebar__footer">
-      <div style="margin-bottom:8px; opacity:0.8;">SMK Widya Mandala Tambak · Banyumas</div>
-      <div style="margin-top:8px;font-size:10px;opacity:0.45;">developed by Hanif Shohibul A.</div>
-    </div>
-  </aside>
-
   <div class="main">
     <div class="topbar">
-      <div>
-        <div class="topbar__title">Portal Siswa</div>
-        <div class="topbar__meta" id="topbarMeta">Memuat data...</div>
+      <div class="sw-brand">
+        <img class="sw-brand__logo" src="assets/logo.png" alt="Logo SMK Widya Mandala Tambak">
+        <div>
+          <div class="topbar__title">Portal Siswa</div>
+          <div class="topbar__meta" id="topbarMeta">Memuat data...</div>
+        </div>
       </div>
       <div class="user-chip">
         <div class="user-chip__text">
@@ -326,7 +331,7 @@
       kartu('pelanggaran', 'app-card--merah', 'shield-alert', 'Lihat Catatan Pelanggaran', 'Catatan pelanggaran dan pembinaan kedisiplinan dari sekolah, lengkap dengan poinnya.') +
       kartu('pengajuan', '', 'pencil-line', 'Pengajuan Pembetulan Data', 'Ada data dirimu yang keliru? Betulkan lalu ajukan ke wali kelas untuk disetujui.') +
       '</div>' +
-      '<div class="panel-note" style="margin-top:18px;">Kata sandi awal semua siswa sama. Demi keamanan, segera ganti lewat menu <b>Ganti Kata Sandi</b>. ' +
+      '<div class="panel-note" style="margin-top:18px;">Kata sandi awal semua siswa sama. Demi keamanan, segera ganti lewat menu <b>Lainnya → Ganti Kata Sandi</b>. ' +
       'Kalau ada data yang keliru, sampaikan ke wali kelas.</div>';
     lucide.createIcons();
     content.querySelectorAll('[data-go]').forEach(function (a) {
@@ -982,20 +987,77 @@
     sandi: renderSandi
   };
 
+  // Daftar menu (urutan = prioritas). Kalau lebih dari 4, 3 pertama tampil di
+  // bar bawah dan sisanya masuk tombol ke-4 "Lainnya".
+  var MENU = [
+    { v: 'beranda',     t: 'Beranda',              k: 'Beranda',  i: 'layout-dashboard' },
+    { v: 'rapor',       t: 'Lihat Rapor',          k: 'Rapor',    i: 'file-text' },
+    { v: 'kartu',       t: 'Kartu Pelajar Digital', k: 'Kartu',   i: 'id-card' },
+    { v: 'biodata',     t: 'Lihat Biodata Buku Induk', k: 'Biodata', i: 'book-user' },
+    { v: 'presensi',    t: 'Lihat Presensi',       k: 'Presensi', i: 'calendar-check' },
+    { v: 'pelanggaran', t: 'Lihat Catatan Pelanggaran', k: 'Pelanggaran', i: 'shield-alert' },
+    { v: 'pengajuan',   t: 'Pengajuan Pembetulan Data', k: 'Pembetulan', i: 'pencil-line' },
+    { v: 'sandi',       t: 'Ganti Kata Sandi',     k: 'Sandi',    i: 'key-round' }
+  ];
+  var BATAS_NAV = 4;
+  var menuUtama = MENU.length > BATAS_NAV ? MENU.slice(0, BATAS_NAV - 1) : MENU;
+  var menuLainnya = MENU.length > BATAS_NAV ? MENU.slice(BATAS_NAV - 1) : [];
+
+  function tutupMore() { document.body.classList.remove('sw-more-open'); }
+
+  function pasangNavBawah() {
+    var nav = document.createElement('nav');
+    nav.className = 'sw-nav';
+    nav.setAttribute('aria-label', 'Menu siswa');
+    nav.innerHTML = '<div class="sw-nav__in">' + menuUtama.map(function (m) {
+      return '<button type="button" class="sw-nav__item" data-nav="' + m.v + '"><i data-lucide="' + m.i + '"></i><span>' + escapeHtml(m.k) + '</span></button>';
+    }).join('') + (menuLainnya.length ? '<button type="button" class="sw-nav__item" id="swMoreBtn" aria-haspopup="true"><i data-lucide="ellipsis"></i><span>Lainnya</span></button>' : '') + '</div>';
+    document.body.appendChild(nav);
+    document.body.classList.add('sw-has-nav');
+
+    if (menuLainnya.length) {
+      var bg = document.createElement('div');
+      bg.className = 'sw-sheet-bg';
+      var sheet = document.createElement('div');
+      sheet.className = 'sw-sheet';
+      sheet.setAttribute('role', 'dialog');
+      sheet.setAttribute('aria-label', 'Menu lainnya');
+      sheet.innerHTML = '<div class="sw-sheet__grip"></div><div class="sw-sheet__t">Menu lainnya</div><div class="sw-sheet__list">' +
+        menuLainnya.map(function (m) {
+          return '<button type="button" class="sw-sheet__item" data-nav="' + m.v + '"><i data-lucide="' + m.i + '"></i><span>' + escapeHtml(m.t) + '</span></button>';
+        }).join('') +
+        '<button type="button" class="sw-sheet__item sw-sheet__item--keluar" id="swKeluar"><i data-lucide="log-out"></i><span>Keluar</span></button></div>';
+      document.body.appendChild(bg);
+      document.body.appendChild(sheet);
+      document.getElementById('swMoreBtn').addEventListener('click', function () { document.body.classList.toggle('sw-more-open'); });
+      bg.addEventListener('click', tutupMore);
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') tutupMore(); });
+      document.getElementById('swKeluar').addEventListener('click', function () { document.getElementById('logoutBtn').click(); });
+    }
+    document.querySelectorAll('[data-nav]').forEach(function (b) {
+      b.addEventListener('click', function () { tutupMore(); tampilkan(b.getAttribute('data-nav')); });
+    });
+    if (window.lucide) lucide.createIcons();
+  }
+
+  function tandaiNavAktif(view) {
+    var diLainnya = menuLainnya.some(function (m) { return m.v === view; });
+    document.querySelectorAll('.sw-nav__item[data-nav]').forEach(function (b) { b.classList.toggle('is-active', b.getAttribute('data-nav') === view); });
+    var more = document.getElementById('swMoreBtn');
+    if (more) more.classList.toggle('is-active', diLainnya);
+    document.querySelectorAll('.sw-sheet__item[data-nav]').forEach(function (b) { b.classList.toggle('is-active', b.getAttribute('data-nav') === view); });
+  }
+
   function tampilkan(view) {
     if (!VIEWS[view]) view = 'beranda';
-    document.querySelectorAll('.menu-item[data-view]').forEach(function (m) {
-      m.classList.toggle('menu-item--active', m.getAttribute('data-view') === view);
-    });
+    tandaiNavAktif(view);
     if (location.hash !== '#' + view) { try { history.replaceState(null, '', '#' + view); } catch (e) { /* abaikan */ } }
     window.scrollTo(0, 0);
     VIEWS[view]();
     if (window.lucide) lucide.createIcons();
   }
 
-  document.querySelectorAll('.menu-item[data-view]').forEach(function (a) {
-    a.addEventListener('click', function (e) { e.preventDefault(); tampilkan(a.getAttribute('data-view')); });
-  });
+  pasangNavBawah();
 
   document.getElementById('logoutBtn').addEventListener('click', async function (e) {
     e.preventDefault();

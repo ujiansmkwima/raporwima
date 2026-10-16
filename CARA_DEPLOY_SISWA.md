@@ -96,3 +96,9 @@ Langkah: upload `kartu-pelajar.js` dan `siswa.html`.
 
 File: UBAH `bukuinduk-core.js`, `siswa.html`, `bukuinduk-guru.html`, `bukuinduk-admin.html`
 Tidak perlu migrasi SQL. Upload keempat file lalu muat ulang (Ctrl+F5).
+
+## Menu Bawah Portal Siswa (BARU)
+Sidebar Portal Siswa dihapus. Menu pindah ke bar bawah dengan 4 tombol: **Beranda, Rapor, Kartu, Lainnya**.
+Tombol **Lainnya** membuka daftar sisa menu (Biodata, Presensi, Pelanggaran, Pembetulan Data, Ganti Kata Sandi, Keluar).
+Aturannya otomatis: jika menu <= 4 semuanya tampil di bar; jika > 4, 3 pertama tampil dan sisanya masuk "Lainnya".
+Urutan/menu diatur di array `MENU` di `siswa.html`. File: UBAH `siswa.html`.
