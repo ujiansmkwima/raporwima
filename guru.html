@@ -406,7 +406,6 @@
         setActiveMenuItem(itemRekap);
         renderRekapNilai(waliKelas);
       });
-      menuWali.appendChild(itemRekap);
 
       var itemPresensi = document.createElement('a');
       itemPresensi.href = '#';
@@ -417,7 +416,6 @@
         setActiveMenuItem(itemPresensi);
         renderPresensi(waliKelas);
       });
-      menuWali.appendChild(itemPresensi);
 
       var itemLeger = document.createElement('a');
       itemLeger.href = '#';
@@ -428,7 +426,6 @@
         setActiveMenuItem(itemLeger);
         renderLegerWaliKelas(waliKelas);
       });
-      menuWali.appendChild(itemLeger);
 
       // Catatan Wali Kelas — narasi bebas per siswa (tampil di kotak
       // "Catatan Wali Kelas" pada Cetak Rapor). Menu terpisah supaya
@@ -443,7 +440,6 @@
         setActiveMenuItem(itemCatatanWali);
         renderCatatanWaliKelas(waliKelas);
       });
-      menuWali.appendChild(itemCatatanWali);
 
       // Pelanggaran Kelas — dibaca dari aplikasi CP (hanya baca)
       var itemPelanggaran = document.createElement('a');
@@ -455,7 +451,6 @@
         setActiveMenuItem(itemPelanggaran);
         renderPelanggaranKelas(waliKelas);
       });
-      menuWali.appendChild(itemPelanggaran);
 
       // Analisis Nilai — analisis per semester & antar semester untuk
       // kelas yang diampu (khusus wali kelas).
@@ -468,7 +463,11 @@
         setActiveMenuItem(itemAnalisis);
         renderAnalisisWali(waliKelas);
       });
-      menuWali.appendChild(itemAnalisis);
+      // Urutan menu Wali Kelas: Presensi → Catatan Wali Kelas → Rekap Nilai
+      // → Rekap Leger → Pelanggaran → Analisis Nilai.
+      [itemPresensi, itemCatatanWali, itemRekap, itemLeger, itemPelanggaran, itemAnalisis].forEach(function (el) {
+        menuWali.appendChild(el);
+      });
 
       // Cetak Identitas — cover/biodata peserta didik (data pribadi,
       // orang tua, wali, keterangan penerimaan), diambil dari data
@@ -1298,7 +1297,7 @@
       if (btnDashPresensi) {
         btnDashPresensi.addEventListener('click', function () {
           var itemsWali = document.getElementById('menuWaliKelas').querySelectorAll('.menu-item');
-          if (itemsWali[1]) { setActiveMenuItem(itemsWali[1]); }
+          if (itemsWali[0]) { setActiveMenuItem(itemsWali[0]); }
           renderPresensi(waliKelas);
         });
       }
