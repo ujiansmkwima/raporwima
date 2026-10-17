@@ -8,7 +8,7 @@
  *   Jenis Kelamin    -> siswa.jenis_kelamin
  *   TTL              -> siswa.tempat_lahir + siswa.tanggal_lahir
  *   Alamat           -> siswa.alamat_siswa + bi_siswa_detail.kelurahan/kecamatan/kab_kota
- *   Komp. Keahlian   -> bi_siswa_detail.program_keahlian_masuk
+ *   Prog. Keahlian   -> bi_siswa_detail.program_keahlian_masuk
  *                       (cadangan: konsentrasi / program keahlian kelas)
  *   Foto             -> bi_siswa_detail.foto  (foto "Saat Masuk")
  *   Tanggal kartu    -> siswa.tanggal_masuk   (= Tanggal Diterima)
@@ -41,12 +41,14 @@
     ],
     kepsekCadangan: 'Agung Pambudi, S.E., S. Kom., M.M.',
     kotaCadangan: 'Tambak',
-    logoPemerintah: 'assets/logo-kemdikdasmen.png',
+    logoPemerintah: 'assets/logo-tutwuri.png',
+    stempel: 'assets/stempel-wima.png',
     logoSekolah: 'assets/logo.png'
   };
 
   var LEBAR = 1005, TINGGI = 652;   // koordinat desain (px)
-  var FONT = "Verdana, 'DejaVu Sans', 'Plus Jakarta Sans', Arial, sans-serif";
+  var FONT = "'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif";
+  var RADIUS = 37;                  // sudut kartu (px desain) = 3,18 mm, ukuran kartu ID standar
 
   var CDN_H2C = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
   var CDN_QR = 'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js';
@@ -62,7 +64,7 @@
       '.kp-wrap{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:18px;max-width:1160px;margin-top:6px;}' +
       '.kp-item__t{font-size:12.5px;font-weight:700;color:var(--ink-soft);margin:0 0 6px;}' +
       '.kp-card{position:relative;width:100%;aspect-ratio:' + LEBAR + '/' + TINGGI + ';overflow:hidden;background:#fff;' +
-      'border-radius:calc(14 * var(--u,1px));box-shadow:0 6px 18px -6px rgba(15,23,42,.35);font-family:' + FONT + ';color:#1b1b1b;' +
+      'border-radius:calc(' + RADIUS + ' * var(--u,1px));box-shadow:0 6px 18px -6px rgba(15,23,42,.35);font-family:' + FONT + ';color:#1b1b1b;' +
       '-webkit-print-color-adjust:exact;print-color-adjust:exact;--u:0.5px;}' +
       '.kp-card *{box-sizing:border-box;}' +
       '.kp-card svg.kp-bg{position:absolute;left:0;top:0;width:100%;height:100%;display:block;}' +
@@ -75,7 +77,7 @@
       '.kp-item{break-inside:avoid;margin:0 0 6mm;}' +
       '.kp-item__t{display:none;}' +
       '.kp-card{width:85.6mm !important;height:' + (85.6 * TINGGI / LEBAR).toFixed(2) + 'mm !important;' +
-      '--u:calc(85.6mm / ' + LEBAR + ') !important;box-shadow:none !important;border:0.2mm solid #999;border-radius:2.5mm;}' +
+      '--u:calc(85.6mm / ' + LEBAR + ') !important;box-shadow:none !important;border:0.2mm solid #bbb;border-radius:3.18mm;}' +
       '.kp-note,.kp-warn{display:none !important;}' +
       '}';
     document.head.appendChild(st);
@@ -193,6 +195,7 @@
       keDataUrl(fotoUrl),
       keDataUrl(KP.logoPemerintah),
       keDataUrl(KP.logoSekolah),
+      keDataUrl(KP.stempel),
       keDataUrl(profil.ttd_kepala_sekolah || null),
       muatSkrip(CDN_QR).catch(function () { return null; })
     ]);
@@ -205,7 +208,7 @@
     return {
       nis: sw.nis || '', nama: besar(sw.nama), jk: jk, ttl: ttl,
       alamat: susunAlamat(sw, det), keahlian: besar(keahlian),
-      foto: imgs[0], logoPem: imgs[1], logoSek: imgs[2], ttd: imgs[3],
+      foto: imgs[0], logoPem: imgs[1], logoSek: imgs[2], stempel: imgs[3], ttd: imgs[4],
       tanggal: tgl,
       kota: profil.kota_ttd || KP.kotaCadangan,
       kepsek: profil.kepala_sekolah || KP.kepsekCadangan,
@@ -216,103 +219,125 @@
   }
 
   // ---------------------------------------------------------------
-  // Desain kartu
+  // Desain kartu (modern: hijau tua, aksen emas, sudut membulat)
   // ---------------------------------------------------------------
+  var WARNA = { tua: '#0b3d24', sedang: '#17803f', emas: '#f5b82e', emasMuda: '#ffd24d', teks: '#0f2a1b', label: '#4b5d52', latar: '#f4f8f5', lingkaran: '#e3f0e8' };
+
   function bgDepan() {
     return '<svg class="kp-bg" viewBox="0 0 ' + LEBAR + ' ' + TINGGI + '" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">' +
-      '<rect width="' + LEBAR + '" height="' + TINGGI + '" fill="#ffffff"/>' +
-      '<polygon points="1005,205 1005,250 955,205" fill="#fdfbd2"/>' +
-      '<polygon points="1005,362 1005,652 585,652" fill="#fdfbd2"/>' +
-      '<polygon points="0,282 14,282 0,420" fill="#cfcfc0"/>' +
-      '<polygon points="0,540 255,540 345,652 0,652" fill="#d3d3ca"/>' +
-      '<rect width="' + LEBAR + '" height="172" fill="#5e5e50"/>' +
-      '<rect y="172" width="' + LEBAR + '" height="33" fill="#7bc043"/>' +
-      '<rect x="1" y="1" width="' + (LEBAR - 2) + '" height="' + (TINGGI - 2) + '" fill="none" stroke="#6b6b6b" stroke-width="2"/>' +
+      '<defs><linearGradient id="kpGd" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="' + WARNA.tua + '"/><stop offset="1" stop-color="' + WARNA.sedang + '"/></linearGradient></defs>' +
+      '<rect width="' + LEBAR + '" height="' + TINGGI + '" fill="' + WARNA.latar + '"/>' +
+      '<circle cx="1005" cy="652" r="270" fill="' + WARNA.lingkaran + '"/>' +
+      '<circle cx="1005" cy="652" r="175" fill="#d3e9db"/>' +
+      '<circle cx="0" cy="652" r="130" fill="' + WARNA.lingkaran + '"/>' +
+      '<path d="M0,171 Q502.5,211 1005,171" fill="none" stroke="' + WARNA.emas + '" stroke-width="10"/>' +
+      '<path d="M0,0 H1005 V166 Q502.5,206 0,166 Z" fill="url(#kpGd)"/>' +
       '</svg>';
   }
 
   function bgBelakang() {
     return '<svg class="kp-bg" viewBox="0 0 ' + LEBAR + ' ' + TINGGI + '" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">' +
-      '<rect width="' + LEBAR + '" height="' + TINGGI + '" fill="#ffffff"/>' +
-      '<polygon points="0,0 225,0 0,222" fill="#5e5e50"/>' +
-      '<polygon points="228,15 228,100 142,100" fill="#fdf79a"/>' +
-      '<polygon points="117,115 245,115 117,242" fill="#7bc043"/>' +
-      '<polygon points="25,220 110,138 110,220" fill="#fdf79a"/>' +
-      '<polygon points="1005,432 1005,652 835,652" fill="#5e5e50"/>' +
-      '<polygon points="855,432 755,535 855,535" fill="#7bc043"/>' +
-      '<polygon points="905,432 985,432 905,512" fill="#fdf79a"/>' +
-      '<rect x="1.5" y="1.5" width="' + (LEBAR - 3) + '" height="' + (TINGGI - 3) + '" fill="none" stroke="#555" stroke-width="3"/>' +
+      '<defs><linearGradient id="kpGb" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="' + WARNA.tua + '"/><stop offset="1" stop-color="' + WARNA.sedang + '"/></linearGradient></defs>' +
+      '<rect width="' + LEBAR + '" height="' + TINGGI + '" fill="' + WARNA.latar + '"/>' +
+      '<circle cx="0" cy="652" r="230" fill="' + WARNA.lingkaran + '"/>' +
+      '<circle cx="1005" cy="330" r="150" fill="' + WARNA.lingkaran + '"/>' +
+      '<path d="M0,123 Q502.5,173 1005,123" fill="none" stroke="' + WARNA.emas + '" stroke-width="10"/>' +
+      '<path d="M0,0 H1005 V118 Q502.5,168 0,118 Z" fill="url(#kpGb)"/>' +
+      '<rect y="612" width="' + LEBAR + '" height="40" fill="url(#kpGb)"/>' +
+      '<rect y="608" width="' + LEBAR + '" height="5" fill="' + WARNA.emas + '"/>' +
       '</svg>';
   }
 
-  function barisData(label, nilai, y, lh) {
-    return '<div class="kp-abs" style="' + box(273, y, 235, null, fs(25, lh || 30) + 'font-weight:600;') + '">' + esc(label) + '</div>' +
-      '<div class="kp-abs" style="' + box(503, y, 20, null, fs(25, lh || 30) + 'font-weight:600;') + '">:</div>' +
-      nilai;
+  // Lingkaran putih berisi logo (dengan cincin emas)
+  function lencana(x, y, s, src) {
+    var dalam = Math.round(s * 0.76);
+    return '<div class="kp-abs" style="' + box(x, y, s, s, 'background:#fff;border-radius:50%;border:' + U(4) + ' solid ' + WARNA.emasMuda + ';' +
+      'box-shadow:0 ' + U(3) + ' ' + U(8) + ' rgba(0,0,0,.28);display:flex;align-items:center;justify-content:center;') + '">' +
+      '<img alt="" src="' + esc(src) + '" style="width:' + U(dalam) + ';height:' + U(dalam) + ';object-fit:contain;display:block;"></div>';
+  }
+
+  function chip(teks, x, y, w) {
+    return '<div class="kp-abs" style="' + box(x, y, w, 32, 'background:' + WARNA.tua + ';color:#fff;border-radius:' + U(16) + ';display:flex;align-items:center;justify-content:center;' +
+      'font-weight:800;letter-spacing:' + U(4) + ';' + fs(17, 20)) + '">' + esc(teks) + '</div>';
+  }
+
+  function barisData(label, nilai, uk) {
+    return '<div style="' + fs(22, 29) + 'font-weight:500;color:' + WARNA.label + ';">' + esc(label) + '</div>' +
+      '<div style="' + fs(22, 29) + 'font-weight:600;color:' + WARNA.label + ';text-align:center;">:</div>' +
+      '<div style="' + fs(uk || 24, 29) + 'font-weight:700;color:' + WARNA.teks + ';overflow-wrap:anywhere;">' + esc(nilai) + '</div>';
   }
 
   function depanHtml(d) {
     var h = bgDepan();
 
     // Header
-    h += '<img class="kp-abs" alt="" src="' + esc(d.logoPem) + '" style="' + box(40, 15, 106, 110, 'object-fit:contain;') + '">';
-    h += '<img class="kp-abs" alt="" src="' + esc(d.logoSek) + '" style="' + box(860, 20, 104, 105, 'object-fit:contain;') + '">';
-    h += '<div class="kp-abs" style="' + box(150, 18, 705, null, 'text-align:center;color:#fff;font-weight:700;letter-spacing:' + U(1) + ';' + fs(30, 36)) + '">' +
+    h += lencana(34, 18, 100, d.logoPem);
+    h += lencana(871, 18, 100, d.logoSek);
+    h += '<div class="kp-abs" style="' + box(150, 16, 705, null, 'text-align:center;color:#d8efe0;font-weight:600;letter-spacing:' + U(2.5) + ';' + fs(21, 28)) + '">' +
       esc(KP.instansi1) + '<br>' + esc(KP.instansi2) + '</div>';
-    h += '<div class="kp-abs" style="' + box(150, 90, 705, null, 'text-align:center;color:#fff;font-weight:700;letter-spacing:' + U(1.5) + ';' + fs(38, 40)) + '">' + esc(KP.sekolah) + '</div>';
-    h += '<div class="kp-abs" style="' + box(60, 128, 885, null, 'text-align:center;color:#fff;font-weight:700;white-space:nowrap;' + fs(14, 20)) + '">' + esc(KP.alamat) + '</div>';
+    h += '<div class="kp-abs" style="' + box(150, 72, 705, null, 'text-align:center;color:' + WARNA.emasMuda + ';font-weight:800;letter-spacing:' + U(1) + ';white-space:nowrap;' + fs(40, 48)) + '">' + esc(KP.sekolah) + '</div>';
+    h += '<div class="kp-abs" style="' + box(60, 130, 885, null, 'text-align:center;color:#fff;font-weight:500;white-space:nowrap;' + fs(14, 20)) + '">' + esc(KP.alamat) + '</div>';
 
-    // Foto
-    h += '<div class="kp-abs" style="' + box(15, 236, 240, 324, 'background:#d71414;overflow:hidden;') + '">' +
+    // Foto (bingkai putih membulat + blok aksen emas)
+    h += '<div class="kp-abs" style="' + box(40, 238, 240, 324, 'background:' + WARNA.emas + ';border-radius:' + U(26) + ';') + '"></div>';
+    h += '<div class="kp-abs" style="' + box(28, 226, 240, 324, 'background:#e2ece6;border-radius:' + U(26) + ';overflow:hidden;border:' + U(5) + ' solid #fff;box-shadow:0 ' + U(4) + ' ' + U(12) + ' rgba(0,0,0,.25);') + '">' +
       (d.foto
         ? '<img alt="Foto" src="' + esc(d.foto) + '" style="width:100%;height:100%;object-fit:cover;object-position:center top;display:block;">'
-        : '<div style="height:100%;display:flex;align-items:center;justify-content:center;text-align:center;color:#fff;font-weight:700;' + fs(22, 28) + '">FOTO<br>BELUM<br>ADA</div>') +
+        : '<div style="height:100%;display:flex;align-items:center;justify-content:center;text-align:center;color:#2f5d43;font-weight:700;' + fs(22, 28) + '">FOTO<br>BELUM<br>ADA</div>') +
       '</div>';
 
-    // Data
-    var ukAlamat = (d.alamat || '').length > 78 ? 21 : 25;
-    var nilaiStyle = function (ukuran) { return fs(ukuran, 30) + 'font-weight:700;overflow-wrap:anywhere;'; };
-    var y = 236;
-    h += barisData('Nomor Induk', '<div class="kp-abs" style="' + box(532, y, 455, null, nilaiStyle(25)) + '">' + esc(d.nis) + '</div>', y);
-    y += 30;
-    h += barisData('Nama', '<div class="kp-abs" style="' + box(532, y, 455, null, nilaiStyle(25)) + '">' + esc(d.nama) + '</div>', y);
-    y += 30;
-    h += barisData('Jenis Kelamin', '<div class="kp-abs" style="' + box(532, y, 455, null, nilaiStyle(25)) + '">' + esc(d.jk) + '</div>', y);
-    y += 30;
-    h += barisData('TTL', '<div class="kp-abs" style="' + box(532, y, 455, null, nilaiStyle(25)) + '">' + esc(d.ttl) + '</div>', y);
-    y += 30;
-    var barisAlamat = Math.max(1, Math.ceil(((d.alamat || '').length || 1) / (ukAlamat === 25 ? 33 : 40)));
-    h += barisData('Alamat', '<div class="kp-abs" style="' + box(532, y, 460, null, nilaiStyle(ukAlamat)) + '">' + esc(d.alamat) + '</div>', y);
-    y += 30 * Math.min(barisAlamat, 3);
-    h += barisData('Komp. Keahlian', '<div class="kp-abs" style="' + box(532, y, 455, null, nilaiStyle(25)) + '">' + esc(d.keahlian) + '</div>', y);
+    // Data (grid: baris menyesuaikan tinggi otomatis bila teks panjang)
+    var ukAlamat = (d.alamat || '').length > 80 ? 18 : ((d.alamat || '').length > 50 ? 20 : 24);
+    var ukNama = (d.nama || '').length > 30 ? 18 : ((d.nama || '').length > 22 ? 21 : 24);
+    h += '<div class="kp-abs" style="' + box(300, 226, 693, null, 'display:grid;grid-template-columns:' + U(210) + ' ' + U(22) + ' 1fr;row-gap:' + U(3) + ';align-items:start;') + '">' +
+      barisData('Nomor Induk', d.nis) +
+      barisData('Nama', d.nama, ukNama) +
+      barisData('Jenis Kelamin', d.jk) +
+      barisData('TTL', d.ttl) +
+      barisData('Alamat', d.alamat, ukAlamat) +
+      barisData('Prog. Keahlian', d.keahlian) +
+      '</div>';
 
-    // Tanda tangan kepala sekolah
-    var ttdTop = 528;
-    h += '<div class="kp-abs" style="' + box(588, 482, 400, null, fs(21, 26)) + '">' + esc(d.kota) + ', ' + esc(d.tanggal) + '</div>';
-    h += '<div class="kp-abs" style="' + box(588, 507, 400, null, fs(21, 26)) + '">Kepala Sekolah</div>';
-    if (d.ttd) {
-      h += '<img class="kp-abs" alt="" src="' + esc(d.ttd) + '" style="' + box(600, ttdTop, 180, 62, 'object-fit:contain;object-position:left center;') + '">';
+    // Tanda tangan + stempel Kepala Sekolah
+    var tk = 'color:' + WARNA.teks + ';';
+    h += '<div class="kp-abs" style="' + box(588, 498, 400, null, tk + 'font-weight:500;' + fs(20, 26)) + '">' + esc(d.kota) + ', ' + esc(d.tanggal) + '</div>';
+    h += '<div class="kp-abs" style="' + box(588, 522, 400, null, tk + 'font-weight:600;' + fs(20, 26)) + '">Kepala Sekolah</div>';
+    if (d.stempel) {
+      h += '<img class="kp-abs" alt="" src="' + esc(d.stempel) + '" style="' + box(548, 492, 124, 124, 'object-fit:contain;opacity:.85;') + '">';
     }
-    h += '<div class="kp-abs" style="' + box(588, 592, 410, null, fs(21, 26)) + '">' + esc(d.kepsek) + '</div>';
+    if (d.ttd) {
+      h += '<img class="kp-abs" alt="" src="' + esc(d.ttd) + '" style="' + box(590, 506, 270, 104, 'object-fit:contain;object-position:left center;') + '">';
+    }
+    h += '<div class="kp-abs" style="' + box(588, 608, 410, null, tk + 'font-weight:700;' + fs(20, 26)) + '">' + esc(d.kepsek) + '</div>';
 
     // Masa berlaku
-    h += '<div class="kp-abs" style="' + box(32, 598, 446, 38, 'background:#fff;border-radius:' + U(19) + ';box-shadow:' + U(3) + ' ' + U(2) + ' 0 #c9c9bd;display:flex;align-items:center;padding-left:' + U(34) + ';font-style:italic;font-weight:700;white-space:nowrap;' + fs(18, 22)) + '">' +
+    h += '<div class="kp-abs" style="' + box(28, 598, 450, 38, 'background:linear-gradient(90deg,' + WARNA.tua + ',' + WARNA.sedang + ');border-radius:' + U(19) + ';box-shadow:0 ' + U(3) + ' ' + U(6) + ' rgba(0,0,0,.22);display:flex;align-items:center;padding-left:' + U(24) + ';color:#fff;font-weight:600;white-space:nowrap;' + fs(17, 22)) + '">' +
+      '<span style="display:inline-block;width:' + U(10) + ';height:' + U(10) + ';border-radius:50%;background:' + WARNA.emasMuda + ';margin-right:' + U(12) + ';"></span>' +
       esc(KP.masaBerlaku) + '</div>';
     return h;
   }
 
   function belakangHtml(d) {
     var h = bgBelakang();
-    h += '<img class="kp-abs" alt="" src="' + esc(d.logoSek) + '" style="' + box(455, 40, 92, 92, 'object-fit:contain;') + '">';
-    h += '<div class="kp-abs" style="' + box(100, 158, 805, null, 'text-align:center;font-weight:700;' + fs(29, 38)) + '">VISI<br>' + esc(KP.visi) + '<br><span style="display:block;margin-top:' + U(6) + ';">MISI</span></div>';
+    h += '<div class="kp-abs" style="' + box(100, 16, 805, null, 'text-align:center;color:' + WARNA.emasMuda + ';font-weight:800;letter-spacing:' + U(2) + ';white-space:nowrap;' + fs(27, 34)) + '">' + esc(KP.sekolah) + '</div>';
+    h += lencana(440, 56, 125, d.logoSek);
+
+    h += chip('VISI', 442, 196, 120);
+    h += '<div class="kp-abs" style="' + box(60, 236, 885, null, 'text-align:center;font-weight:800;color:' + WARNA.tua + ';' + fs(28, 36)) + '">' + esc(KP.visi) + '</div>';
+    h += chip('MISI', 442, 290, 120);
+
     var li = KP.misi.map(function (m, i) {
-      return '<div style="' + fs(24, 50) + 'font-weight:700;white-space:nowrap;">' + (i + 1) + '. ' + esc(m) + '</div>';
+      return '<div style="display:flex;align-items:center;height:' + U(42) + ';">' +
+        '<div style="flex:none;width:' + U(30) + ';height:' + U(30) + ';border-radius:50%;background:' + WARNA.emas + ';color:#14321f;display:flex;align-items:center;justify-content:center;font-weight:800;' + fs(16, 18) + '">' + (i + 1) + '</div>' +
+        '<div style="margin-left:' + U(14) + ';font-weight:600;color:' + WARNA.teks + ';white-space:nowrap;' + fs(21, 26) + '">' + esc(m) + '</div></div>';
     }).join('');
-    h += '<div class="kp-abs" style="' + box(62, 295, 930, null, '') + '">' + li + '</div>';
+    h += '<div class="kp-abs" style="' + box(110, 336, 740, null, '') + '">' + li + '</div>';
 
     var teksQr = 'SMK WIDYA MANDALA TAMBAK | NIS: ' + d.nis + ' | ' + d.nama;
     var qr = qrSvg(teksQr);
-    h += '<div class="kp-abs" style="' + box(815, 486, 140, 140, 'background:#fff;padding:' + U(6) + ';border-radius:' + U(4) + ';') + '">' + qr + '</div>';
+    h += '<div class="kp-abs" style="' + box(850, 462, 126, 126, 'background:#fff;padding:' + U(6) + ';border-radius:' + U(10) + ';box-shadow:0 ' + U(3) + ' ' + U(8) + ' rgba(0,0,0,.2);') + '">' + qr + '</div>';
+
+    h += '<div class="kp-abs" style="' + box(40, 620, 800, null, 'color:#fff;font-weight:500;white-space:nowrap;' + fs(14, 22)) + '">Apabila kartu ini ditemukan, harap dikembalikan ke ' + esc(KP.sekolah) + '.</div>';
     return h;
   }
 
@@ -341,16 +366,17 @@
   // ---------------------------------------------------------------
   async function unduhPng(sisi, nama) {
     await muatSkrip(CDN_H2C);
+    if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
     var asal = document.querySelector('.kp-card[data-sisi="' + sisi + '"]');
     if (!asal) throw new Error('Kartu tidak ditemukan');
     var wadah = document.createElement('div');
     wadah.style.cssText = 'position:fixed;left:-99999px;top:0;width:' + LEBAR + 'px;height:' + TINGGI + 'px;';
     var salin = asal.cloneNode(true);
-    salin.style.cssText = 'width:' + LEBAR + 'px;height:' + TINGGI + 'px;--u:1px;box-shadow:none;border-radius:0;aspect-ratio:auto;';
+    salin.style.cssText = 'width:' + LEBAR + 'px;height:' + TINGGI + 'px;--u:1px;box-shadow:none;border-radius:' + RADIUS + 'px;aspect-ratio:auto;';
     wadah.appendChild(salin);
     document.body.appendChild(wadah);
     try {
-      var canvas = await window.html2canvas(salin, { scale: 2, useCORS: true, backgroundColor: '#ffffff', width: LEBAR, height: TINGGI, logging: false });
+      var canvas = await window.html2canvas(salin, { scale: 2, useCORS: true, backgroundColor: null, width: LEBAR, height: TINGGI, logging: false });
       var blob = await new Promise(function (res) { canvas.toBlob(res, 'image/png'); });
       if (!blob) throw new Error('Gagal membuat gambar');
       var a = document.createElement('a');
@@ -389,7 +415,7 @@
     var peringatan = [];
     if (d.kosong.foto) peringatan.push('Foto Buku Induk belum ada, minta wali kelas mengunggahnya.');
     if (d.kosong.tanggal) peringatan.push('Tanggal Diterima belum diisi di Buku Induk, sehingga tanggal pada kartu masih kosong.');
-    if (d.kosong.keahlian) peringatan.push('Program / Konsentrasi Keahlian belum diisi di Buku Induk.');
+    if (d.kosong.keahlian) peringatan.push('Program Keahlian belum diisi di Buku Induk.');
     if (d.kosong.alamat) peringatan.push('Alamat belum diisi di Buku Induk.');
 
     content.innerHTML =
