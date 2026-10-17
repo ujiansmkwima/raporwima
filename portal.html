@@ -121,6 +121,7 @@
 
   document.getElementById('logoutBtn').addEventListener('click', async function (e) {
     e.preventDefault();
+    await catatAktivitas('logout', 'Akun', 'Keluar dari aplikasi');
     await supabaseClient.auth.signOut();
     window.location.href = 'index.html';
   });

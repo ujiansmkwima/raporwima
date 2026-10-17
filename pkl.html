@@ -1748,6 +1748,7 @@
             var judulSiswa = siswaIds.length === 1 ? (cariBinaan(siswaIds[0]).siswa.nama + ' - ' + cariBinaan(siswaIds[0]).kelas.nama) : (siswaIds.length + ' siswa');
             document.title = 'PKL - ' + judulSiswa;
             await new Promise(function (resolve) { setTimeout(resolve, 150); });
+            catatAktivitas('cetak', 'Cetak PKL', document.title);
             window.print();
           } catch (err) {
             alert('Gagal menyiapkan cetak: ' + (err && err.message ? err.message : err));
@@ -2131,6 +2132,7 @@
 
   document.getElementById('logoutBtn').addEventListener('click', async function (e) {
     e.preventDefault();
+    await catatAktivitas('logout', 'Akun', 'Keluar dari aplikasi');
     await supabaseClient.auth.signOut();
     window.location.href = 'index.html';
   });

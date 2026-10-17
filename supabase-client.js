@@ -27,3 +27,30 @@ function emailDariInputLogin(teks) {
   if (t.indexOf("@") !== -1) return t;
   return t.toLowerCase() + "@" + SISWA_EMAIL_DOMAIN;
 }
+
+// ---------------------------------------------------------
+// LOG AKTIVITAS
+// Mencatat login / logout / cetak / unduh ke tabel log_aktivitas lewat
+// fungsi database catat_aktivitas() (lihat migrasi_log_aktivitas.sql).
+// Perubahan data (tambah/ubah/hapus) TIDAK perlu dicatat di sini: sudah
+// otomatis oleh trigger database.
+//
+// Dibuat aman: tidak pernah melempar error dan tidak menahan lebih dari
+// batas waktu (default 1,5 detik), jadi login/logout tidak akan macet
+// walaupun migrasi log belum dijalankan atau koneksi lambat.
+//   aksi: 'login' | 'logout' | 'cetak' | 'unduh' | 'lainnya'
+// ---------------------------------------------------------
+function catatAktivitas(aksi, modul, ringkasan, detail, batasMs) {
+  try {
+    var panggil = supabaseClient.rpc("catat_aktivitas", {
+      p_aksi: aksi,
+      p_modul: modul,
+      p_ringkasan: ringkasan || null,
+      p_detail: detail || null
+    }).then(function () {}, function () {});
+    var tunggu = new Promise(function (resolve) { setTimeout(resolve, batasMs || 1500); });
+    return Promise.race([panggil, tunggu]);
+  } catch (e) {
+    return Promise.resolve();
+  }
+}

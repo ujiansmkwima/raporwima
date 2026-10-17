@@ -268,6 +268,7 @@
         }
       }
       pdf.save(bersihkanNamaFile(namaFile) + '.pdf');
+      if (typeof catatAktivitas === 'function') catatAktivitas('unduh', 'Unduh PDF', bersihkanNamaFile(namaFile) + '.pdf');
     } finally {
       if (iframe && iframe.parentNode) iframe.parentNode.removeChild(iframe);
     }

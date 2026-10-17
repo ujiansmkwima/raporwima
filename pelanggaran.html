@@ -199,6 +199,7 @@
     document.getElementById('linkErapor').href = admin ? 'admin.html' : 'guru.html';
     document.getElementById('logoutBtn').addEventListener('click', async function (e) {
       e.preventDefault();
+      await catatAktivitas('logout', 'Akun', 'Keluar dari aplikasi');
       await supabaseClient.auth.signOut();
       window.location.href = 'index.html';
     });

@@ -5610,6 +5610,7 @@
           // tiap halaman selalu pas ruangnya, tidak ketiban isi rapor.
           await new Promise(function (resolve) { setTimeout(resolve, 150); });
           terapkanTinggiIdentitasCetak(area);
+          catatAktivitas('cetak', 'Cetak Rapor', document.title);
           window.print();
         } catch (err) {
           alert('Gagal menyiapkan cetak: ' + (err && err.message ? err.message : err));
@@ -6005,6 +6006,7 @@
           document.title = judulCetakNts(idList);
 
           await new Promise(function (resolve) { setTimeout(resolve, 150); });
+          catatAktivitas('cetak', 'Cetak Nilai Tengah Semester', document.title);
           window.print();
         } catch (err) {
           alert('Gagal menyiapkan cetak: ' + (err && err.message ? err.message : err));
@@ -6248,6 +6250,7 @@
           // kosong di jendela cetak, lalu beri jeda sesaat untuk render.
           await tungguGambarCetak(area);
           await new Promise(function (resolve) { setTimeout(resolve, 150); });
+          catatAktivitas('cetak', 'Cetak Identitas', document.title);
           window.print();
         } catch (err) {
           alert('Gagal menyiapkan cetak: ' + (err && err.message ? err.message : err));
@@ -6483,6 +6486,7 @@
           window.removeEventListener('afterprint', bersihkan);
         };
         window.addEventListener('afterprint', bersihkan);
+        catatAktivitas('cetak', ({ cetakAnalisisArea: 'Cetak Analisis Nilai', cetakCoverPrint: 'Cetak Cover', cetakDataSekolahPrint: 'Cetak Data Sekolah' })[areaId] || 'Cetak', judul);
         window.print();
       } catch (err) {
         alert('Gagal menyiapkan cetak: ' + (err && err.message ? err.message : err));
@@ -6701,6 +6705,7 @@
 
   document.getElementById('logoutBtn').addEventListener('click', async function (e) {
     e.preventDefault();
+    await catatAktivitas('logout', 'Akun', 'Keluar dari aplikasi');
     await supabaseClient.auth.signOut();
     window.location.href = 'index.html';
   });

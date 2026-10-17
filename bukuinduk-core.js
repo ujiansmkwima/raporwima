@@ -2062,7 +2062,7 @@
   // Tombol bantu: logout seragam
   BI.pasangLogout = function (id) {
     var el = document.getElementById(id || 'logoutBtn');
-    if (el) el.addEventListener('click', async function (e) { e.preventDefault(); await sb().auth.signOut(); g.location.href = 'index.html'; });
+    if (el) el.addEventListener('click', async function (e) { e.preventDefault(); if (typeof g.catatAktivitas === 'function') await g.catatAktivitas('logout', 'Akun', 'Keluar dari aplikasi'); await sb().auth.signOut(); g.location.href = 'index.html'; });
   };
 
   // Cek sesi, ambil profil + tahun ajaran aktif. Mengembalikan konteks atau mengalihkan ke login.

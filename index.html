@@ -337,6 +337,7 @@
         .eq('auth_user_id', userId)
         .maybeSingle();
       if (siswaResult.data) {
+        await catatAktivitas('login', 'Akun', 'Masuk sebagai siswa');
         window.location.href = 'siswa.html';
         return;
       }
@@ -355,6 +356,7 @@
     if (role !== 'admin') {
       try { sessionStorage.setItem('erapor_sambutan_baru_login', '1'); } catch (e) { /* abaikan */ }
     }
+    await catatAktivitas('login', 'Akun', 'Masuk sebagai ' + (role === 'admin' ? 'admin' : 'guru'));
     // Setelah login, semua pengguna masuk ke Menu Utama (Buku Induk / E-Rapor / Supervisi).
     window.location.href = 'portal.html';
   });
