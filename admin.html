@@ -22,6 +22,7 @@
 <script src="sticky-nama.js?v=1"></script>
 <script src="mobile.js?v=1" defer></script>
 <script src="bottomnav.js?v=1" defer></script>
+<script src="foto-profil.js?v=3" defer></script>
 </head>
 <body>
 
@@ -5082,7 +5083,9 @@
   }
 
   async function renderGuru() {
-    var guruRes = await supabaseClient.from('profiles').select('id, nama, email, role').eq('role', 'guru').order('nama');
+    var guruRes = await supabaseClient.from('profiles').select('id, nama, email, role, foto_path').eq('role', 'guru').order('nama');
+    // Migrasi foto belum dijalankan -> kolom foto_path belum ada: ulangi tanpa kolom itu.
+    if (guruRes.error) guruRes = await supabaseClient.from('profiles').select('id, nama, email, role').eq('role', 'guru').order('nama');
     var guruList = guruRes.data || [];
 
     content.innerHTML =
@@ -5293,15 +5296,42 @@
         : '<span style="color:var(--ink-soft);">—</span>';
 
       return '<tr><td><input type="checkbox" class="gRowChk" value="' + g.id + '"></td>' +
+        '<td><span class="fp-av" style="width:36px;height:36px;font-size:13px;" data-fp-id="' + g.id + '" data-fp-nama="' + escapeHtml(g.nama) + '"' + (g.foto_path ? ' data-fp-path="' + escapeHtml(g.foto_path) + '"' : '') + '></span></td>' +
         '<td>' + escapeHtml(g.nama) + '</td><td>' + statusChip + '</td><td>' + tugasHtml + '</td>' +
-        '<td><button class="btn-small" data-edit-id="' + g.id + '">Edit</button> ' +
+        '<td><button class="btn-small" data-foto-id="' + g.id + '">Foto</button> <button class="btn-small" data-edit-id="' + g.id + '">Edit</button> ' +
         '<button class="btn-small btn-small--danger" data-del-id="' + g.id + '">Hapus</button></td></tr>';
     }).join('');
 
     guruBody.innerHTML =
-      '<div class="table-wrap"><table class="data-table"><thead><tr><th style="width:32px;"><input type="checkbox" id="gSelectAll"></th><th>Nama Guru</th><th>Status</th><th>Mengajar (Mapel — Kelas)</th><th></th></tr></thead>' +
+      '<div class="table-wrap"><table class="data-table"><thead><tr><th style="width:32px;"><input type="checkbox" id="gSelectAll"></th><th style="width:52px;">Foto</th><th>Nama Guru</th><th>Status</th><th>Mengajar (Mapel — Kelas)</th><th></th></tr></thead>' +
       '<tbody>' + rowsHtml + '</tbody></table></div>' +
       '<div class="panel-note">"Wali Kelas" berarti guru tersebut, selain mengajar mapel, juga ditugaskan mengelola rekap nilai & presensi kelas yang bersangkutan. Satu guru hanya bisa menjadi wali 1 kelas per tahun ajaran. Menghapus akun guru juga akan ikut menghapus penugasan mengajar, status wali kelas, dan riwayat lain yang terhubung ke akun tersebut.</div>';
+
+    // ---------- Foto profil guru (disimpan di Storage bucket "foto-guru") ----------
+    if (window.FotoProfil) FotoProfil.isiAvatar(guruBody);
+    function bukaFotoGuru(id) {
+      var g = guruList.find(function (x) { return x.id === id; });
+      if (!g || !window.FotoProfil) return;
+      FotoProfil.bukaModal({
+        userId: g.id, nama: g.nama, path: g.foto_path || null, diriSendiri: false,
+        onSaved: function (pathBaru) {
+          g.foto_path = pathBaru;
+          var av = guruBody.querySelector('.fp-av[data-fp-id="' + g.id + '"]');
+          if (av) {
+            av.classList.remove('has-foto'); av.style.backgroundImage = ''; av.textContent = '';
+            if (pathBaru) av.dataset.fpPath = pathBaru; else delete av.dataset.fpPath;
+            FotoProfil.isiAvatar(guruBody);
+          }
+        }
+      });
+    }
+    guruBody.querySelectorAll('button[data-foto-id]').forEach(function (btn) {
+      btn.addEventListener('click', function () { bukaFotoGuru(btn.dataset.fotoId); });
+    });
+    guruBody.querySelectorAll('.fp-av[data-fp-id]').forEach(function (el) {
+      el.classList.add('fp-klik'); el.title = 'Ubah foto';
+      el.addEventListener('click', function () { bukaFotoGuru(el.dataset.fpId); });
+    });
 
     guruBody.querySelectorAll('button[data-edit-id]').forEach(function (btn) {
       btn.addEventListener('click', function () {
@@ -5317,6 +5347,7 @@
         btn.disabled = true;
         btn.textContent = 'Menghapus...';
         var hasil = await hapusAkunGuru(btn.dataset.delId);
+        if (hasil.ok && g && g.foto_path) { try { await supabaseClient.storage.from('foto-guru').remove([g.foto_path]); } catch (x) { /* abaikan */ } }
         if (!hasil.ok) {
           alert('Gagal menghapus: ' + (hasil.error || (hasil.failed && hasil.failed[0] && hasil.failed[0].error) || 'Terjadi kesalahan.'));
           btn.disabled = false;

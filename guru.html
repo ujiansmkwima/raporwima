@@ -6,7 +6,7 @@
 <title>Dashboard Guru E-Rapor — PORTAL DATA DAN PENILAIAN SMK WIDYA MANDALA TAMBAK</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=16">
+<link rel="stylesheet" href="style.css?v=18">
 <script src="https://unpkg.com/lucide@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -22,6 +22,7 @@
 <script src="sambutan-guru.js?v=1"></script>
 <script src="mobile.js?v=1" defer></script>
 <script src="bottomnav.js?v=1" defer></script>
+<script src="foto-profil.js?v=3" defer></script>
 </head>
 <body>
 
@@ -1192,7 +1193,9 @@
       if (!penugasan.length) peran.shift();
 
       var ringkasanPeranHtml =
-        '<section class="dx-hero">' + dxRingG(pctGab) +
+        '<section class="dx-hero">' +
+        '<div class="fp-av dx-hero__foto" id="dxFoto" data-fp-nama="' + escapeHtml(nama) + '" aria-label="Foto profil"></div>' +
+        dxRingG(pctGab) +
         '<div class="dx-hero__main"><h2 class="dx-hero__title">' + escapeHtml(judulHero) + '</h2>' +
         '<p class="dx-hero__sub">' + escapeHtml(subHero) + '</p>' +
         '<div class="dx-roles">' + peran.join('') + '</div></div>' +
@@ -1235,6 +1238,36 @@
         '<div class="panel-note">Analisis nilai semester dihitung dari nilai rapor akhir seluruh mapel yang sudah tersimpan. Progres ekstrakurikuler & kokurikuler dihitung dari peserta/siswa yang jadi tanggung jawabmu. Progres presensi dihitung dari siswa yang datanya sudah pernah disimpan.</div>';
 
       lucide.createIcons();
+
+      // Foto profil di kartu hero (klik untuk ganti). Diam saja kalau fitur foto belum aktif.
+      (async function () {
+        try {
+          var fEl = document.getElementById('dxFoto');
+          if (!fEl || !window.FotoProfil) { if (fEl) fEl.style.display = 'none'; return; }
+          var fr = await supabaseClient.from('profiles').select('foto_path').eq('id', user.id).maybeSingle();
+          if (!document.getElementById('dxFoto')) return; // sudah pindah halaman
+          if (fr.error || !fr.data) { fEl.style.display = 'none'; return; }
+          var fPath = fr.data.foto_path || null;
+          FotoProfil.setFoto(fEl, fPath, nama);
+          fEl.classList.add('fp-klik');
+          fEl.setAttribute('role', 'button'); fEl.setAttribute('tabindex', '0'); fEl.setAttribute('title', 'Ubah foto profil');
+          var bukaFoto = function () {
+            FotoProfil.bukaModal({ userId: user.id, nama: nama, path: fPath, diriSendiri: true,
+              onSaved: function (pBaru) { fPath = pBaru; } });
+          };
+          fEl.addEventListener('click', bukaFoto);
+          fEl.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); bukaFoto(); } });
+          // ikut berubah kalau foto diganti lewat avatar pojok kanan atas
+          if (window._dxFotoHandler) document.removeEventListener('fotoprofil:berubah', window._dxFotoHandler);
+          window._dxFotoHandler = function (e) {
+            var el = document.getElementById('dxFoto');
+            if (!el || !e.detail || e.detail.userId !== user.id) return;
+            fPath = e.detail.path;
+            FotoProfil.setFoto(el, fPath, nama);
+          };
+          document.addEventListener('fotoprofil:berubah', window._dxFotoHandler);
+        } catch (x) { /* foto bersifat tambahan; abaikan galat */ }
+      })();
 
       if (dataAnalisis) {
         var anRankEl = document.getElementById('anRank');

@@ -2968,6 +2968,11 @@ table.rapor-cetak__nilai tbody tr.rapor-cetak__section-row td {
 @keyframes dxRing { from { stroke-dashoffset: var(--dx-circ); } }
 
 .dx-hero__main { min-width: 0; }
+.dx-hero:has(.dx-hero__foto) { grid-template-columns: auto auto 1fr; }
+/* Foto penuh mengisi lingkaran: tanpa border (border semi-transparan membuat foto
+   tampak punya garis persegi di tepinya). Cincin dibuat dengan box-shadow di luar foto. */
+.dx-hero__foto { width: 104px; height: 104px; font-size: 40px; border: 0; background-origin: border-box; background-clip: border-box; background-size: cover; background-position: center; background-repeat: no-repeat; box-shadow: 0 0 0 3px rgba(255,255,255,0.16), 0 6px 18px rgba(0,0,0,0.35); }
+.dx-hero__foto.fp-klik:hover { box-shadow: 0 0 0 3px rgba(96,165,250,0.55), 0 6px 18px rgba(0,0,0,0.35); }
 .dx-hero__top { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
 .dx-hero__title {
   font-family: var(--font-display);
@@ -3107,6 +3112,8 @@ table.rapor-cetak__nilai tbody tr.rapor-cetak__section-row td {
 }
 @media (max-width: 760px) {
   .dx-hero { grid-template-columns: 1fr; justify-items: center; text-align: center; padding: 22px 18px 0; }
+  .dx-hero:has(.dx-hero__foto) { grid-template-columns: 1fr; }
+  .dx-hero__foto { order: -1; width: 88px; height: 88px; font-size: 34px; }
   .dx-hero__top { flex-direction: column; align-items: center; }
   .dx-hero__sub { margin-left: auto; margin-right: auto; }
   .dx-legend { justify-content: center; }
