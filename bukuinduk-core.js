@@ -580,7 +580,7 @@
         Object.assign(s, v.siswa, v.detail);
         fotoBaru = {};
         alert('Tersimpan. Biodata dasar juga langsung berlaku di E-Rapor.');
-        BI.bukaSiswa(s, opts);
+        if (opts.onSimpan) opts.onSimpan(s); else BI.bukaSiswa(s, opts);
       } catch (err) {
         alert('Gagal menyimpan: ' + pesanError(err));
         btnSimpan.disabled = false; btnSimpan.textContent = teks;
@@ -730,6 +730,348 @@
       isiFoto('#biDtFotoMasuk', foto.masuk, 'SAAT MASUK');
       isiFoto('#biDtFotoLulus', foto.lulus, 'SAAT LULUS');
     } catch (e) { /* foto tidak wajib */ }
+  };
+
+  // ================= Dashboard siswa (satu per satu, navigasi + cari + edit + cetak) =================
+  var CSS_DASH =
+    '.bi-ds-nav{position:sticky;top:0;z-index:20;display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 12px;margin:-4px 0 14px;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 6px 18px -12px rgba(15,23,42,.35);}' +
+    '.bi-ds-navbtn{border:1px solid var(--border-strong);background:var(--surface);color:var(--ink);font-family:var(--font-body);font-size:13px;font-weight:700;padding:9px 14px;border-radius:var(--radius-sm);cursor:pointer;white-space:nowrap;transition:all .15s;}' +
+    '.bi-ds-navbtn:hover:not(:disabled){background:var(--primary);border-color:var(--primary);color:#fff;}' +
+    '.bi-ds-navbtn:disabled{opacity:.4;cursor:not-allowed;}' +
+    '.bi-ds-search{position:relative;flex:1 1 240px;min-width:200px;}' +
+    '.bi-ds-search input{width:100%;padding:10px 12px 10px 36px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);font-family:var(--font-body);font-size:13.5px;background:var(--surface-tint);}' +
+    '.bi-ds-search input:focus{outline:none;border-color:var(--primary);background:#fff;box-shadow:0 0 0 3px var(--primary-tint-strong);}' +
+    '.bi-ds-search::before{content:"\\1F50D";position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:13px;opacity:.6;pointer-events:none;}' +
+    '.bi-ds-sug{position:absolute;left:0;right:0;top:calc(100% + 6px);max-height:340px;overflow-y:auto;background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 18px 40px -12px rgba(15,23,42,.35);z-index:30;padding:6px;}' +
+    '.bi-ds-sug[hidden]{display:none;}' +
+    '.bi-ds-sug button{display:flex;width:100%;justify-content:space-between;align-items:center;gap:10px;text-align:left;border:none;background:none;font-family:var(--font-body);font-size:13px;padding:8px 10px;border-radius:8px;cursor:pointer;color:var(--ink);}' +
+    '.bi-ds-sug button:hover,.bi-ds-sug button.on{background:var(--primary-tint);}' +
+    '.bi-ds-sug button b{font-weight:700;}' +
+    '.bi-ds-sug button small{color:var(--ink-faint);font-size:11.5px;white-space:nowrap;}' +
+    '.bi-ds-sug .bi-ds-none{padding:12px;font-size:12.5px;color:var(--ink-soft);}' +
+    '.bi-ds-pos{font-size:12.5px;font-weight:700;color:var(--ink-soft);white-space:nowrap;min-width:56px;text-align:center;}' +
+    '.bi-ds-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:0 10px 30px -18px rgba(15,23,42,.35);animation:biDsIn .22s ease-out;}' +
+    '@keyframes biDsIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}' +
+    '.bi-ds-hero{position:relative;display:flex;gap:22px;align-items:center;padding:24px 28px;color:#fff;background:radial-gradient(circle at 1px 1px,rgba(147,197,253,.13) 1.2px,transparent 1.6px) 0 0/20px 20px,linear-gradient(135deg,#071633 0%,#0d2557 52%,#17397f 125%);overflow:hidden;}' +
+    '.bi-ds-hero::before{content:"";position:absolute;right:-70px;top:-90px;width:280px;height:280px;border-radius:50%;background:rgba(96,165,250,.10);border:1px solid rgba(147,197,253,.14);}' +
+    '.bi-ds-hero::after{content:"";position:absolute;right:120px;bottom:-110px;width:200px;height:200px;border-radius:50%;background:rgba(96,165,250,.07);border:1px solid rgba(147,197,253,.10);}' +
+    '.bi-ds-fotos{display:flex;gap:10px;flex-shrink:0;position:relative;z-index:1;}' +
+    '.bi-ds-foto{width:92px;height:123px;border-radius:14px;overflow:hidden;background:rgba(255,255,255,.14);border:2px solid rgba(255,255,255,.6);display:flex;align-items:center;justify-content:center;text-align:center;font-size:11px;color:rgba(255,255,255,.85);position:relative;box-shadow:0 10px 22px -8px rgba(0,0,0,.45);}' +
+    '.bi-ds-foto[hidden]{display:none;}' +
+    '.bi-ds-foto img{width:100%;height:100%;object-fit:cover;display:block;}' +
+    '.bi-ds-foto small{position:absolute;left:0;right:0;bottom:0;background:rgba(15,23,42,.62);font-size:9.5px;padding:2px 0;letter-spacing:.3px;}' +
+    '.bi-ds-who{min-width:0;flex:1;position:relative;z-index:1;}' +
+    '.bi-ds-nama{font-size:24px;font-weight:800;letter-spacing:-.015em;line-height:1.2;margin:0 0 8px;word-break:break-word;}' +
+    '.bi-ds-meta{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;}' +
+    '.bi-ds-pill{background:rgba(255,255,255,.17);border:1px solid rgba(255,255,255,.28);padding:3px 11px;border-radius:999px;font-size:11.5px;font-weight:600;white-space:nowrap;}' +
+    '.bi-ds-pill--warn{background:rgba(254,202,202,.28);border-color:rgba(254,202,202,.6);cursor:pointer;}' +
+    '.bi-ds-prog{max-width:340px;margin-bottom:14px;}' +
+    '.bi-ds-prog-top{display:flex;justify-content:space-between;font-size:11.5px;font-weight:600;margin-bottom:5px;}' +
+    '.bi-ds-bar{height:7px;background:rgba(255,255,255,.22);border-radius:99px;overflow:hidden;}' +
+    '.bi-ds-bar>i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#6ee7b7,#34d399);}' +
+    '.bi-ds-act{display:flex;gap:8px;flex-wrap:wrap;}' +
+    '.bi-ds-act button{border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.16);color:#fff;font-family:var(--font-body);font-size:12.5px;font-weight:700;padding:8px 14px;border-radius:var(--radius-sm);cursor:pointer;transition:all .15s;}' +
+    '.bi-ds-act button:hover{background:rgba(255,255,255,.3);}' +
+    '.bi-ds-act button.utama{background:#fff;color:var(--primary-dim);border-color:#fff;}' +
+    '.bi-ds-act button.utama:hover{background:#eff6ff;}' +
+    '.bi-ds-rata{position:relative;z-index:1;flex:0 0 auto;margin-left:auto;align-self:center;display:flex;flex-direction:column;justify-content:center;background:rgba(255,255,255,.07);border:1px solid rgba(147,197,253,.25);border-radius:16px;padding:12px 14px;}' +
+    '.bi-ds-rata-t{font-size:10.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:rgba(191,219,254,.85);margin-bottom:10px;}' +
+    '.bi-ds-rata-g{display:flex;flex-direction:row;gap:8px;}' +
+    '.bi-ds-rt{width:70px;aspect-ratio:1/1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;background:rgba(255,255,255,.08);border:1px solid rgba(147,197,253,.2);border-radius:14px;padding:6px 4px;min-width:0;text-align:center;}' +
+    '.bi-ds-rt--ada{background:rgba(255,255,255,.14);border-color:rgba(147,197,253,.45);}' +
+    '.bi-ds-rt-s{font-size:10px;font-weight:700;letter-spacing:.5px;color:rgba(191,219,254,.95);}' +
+    '.bi-ds-rt-n{font-size:20px;font-weight:800;line-height:1.1;}' +
+    '.bi-ds-rt-k{max-width:100%;font-size:9.5px;color:rgba(191,219,254,.7);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:1.2em;}' +
+    '.bi-ds-rt--kosong .bi-ds-rt-n{font-weight:600;color:rgba(255,255,255,.4);}' +
+    '.bi-ds-tabs{display:flex;gap:4px;padding:10px 18px 0;border-bottom:1px solid var(--border);overflow-x:auto;background:var(--surface-tint);}' +
+    '.bi-ds-tab{border:none;background:none;font-family:var(--font-body);font-size:13px;font-weight:600;color:var(--ink-soft);padding:9px 14px 11px;cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap;display:flex;gap:7px;align-items:center;}' +
+    '.bi-ds-tab:hover{color:var(--ink);}' +
+    '.bi-ds-tab.on{color:var(--primary-dim);border-bottom-color:var(--primary);}' +
+    '.bi-ds-cnt{font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:99px;background:var(--surface-tint-strong);color:var(--ink-soft);}' +
+    '.bi-ds-tab.on .bi-ds-cnt{background:var(--primary-tint-strong);color:var(--primary-dim);}' +
+    '.bi-ds-body{padding:6px 26px 26px;}' +
+    '.bi-ds-sec{margin-top:20px;}' +
+    '.bi-ds-sec-t{font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--primary-dim);display:flex;align-items:center;gap:8px;margin-bottom:10px;}' +
+    '.bi-ds-sec-t::after{content:"";flex:1;height:1px;background:var(--border);}' +
+    '.bi-ds-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}' +
+    '.bi-ds-it{background:var(--surface-tint);border:1px solid var(--border);border-radius:10px;padding:10px 13px;min-width:0;}' +
+    '.bi-ds-it--full{grid-column:1/-1;}' +
+    '.bi-ds-l{font-size:10.5px;font-weight:700;letter-spacing:.3px;color:var(--ink-faint);text-transform:uppercase;margin-bottom:3px;}' +
+    '.bi-ds-v{font-size:13.5px;font-weight:600;color:var(--ink);word-break:break-word;white-space:pre-wrap;}' +
+    '.bi-ds-v--kosong{font-weight:500;font-style:italic;color:var(--ink-faint);font-size:12.5px;}' +
+    '@media(min-width:1000px){.bi-ds-grid{grid-template-columns:1fr 1fr 1fr;}}' +
+    '@media(max-width:700px){.bi-ds-hero{flex-direction:column;align-items:flex-start;padding:20px 16px;}.bi-ds-who{width:100%;flex:none;}.bi-ds-rata{flex:none;width:100%;margin-left:0;align-self:auto;padding:8px 10px;border-radius:12px;}.bi-ds-rata-t{font-size:9.5px;margin-bottom:6px;}.bi-ds-rata-g{gap:5px;}.bi-ds-rt{flex:1;width:auto;border-radius:11px;padding:4px 2px;}.bi-ds-rt-s{font-size:9px;}.bi-ds-rt-n{font-size:15px;}.bi-ds-rt-k{display:none;}.bi-ds-nama{font-size:19px;}.bi-ds-body{padding:4px 14px 20px;}.bi-ds-grid{grid-template-columns:1fr;}.bi-ds-tabs{padding:8px 8px 0;}' +
+    '.bi-ds-nav{gap:8px;}.bi-ds-search{order:-1;flex-basis:100%;}.bi-ds-navbtn{flex:1;}.bi-ds-act button{flex:1 1 auto;}}' +
+    '@media print{.bi-ds-nav{display:none;}}';
+
+  function pasangCssDash() {
+    if (document.getElementById('biDsCss')) return;
+    var st = document.createElement('style');
+    st.id = 'biDsCss'; st.textContent = CSS_DASH;
+    document.head.appendChild(st);
+  }
+
+  // Pilihan cetak (Biodata / Nilai) untuk satu siswa.
+  BI.pilihCetak = function (s, opsi) {
+    var o = document.createElement('div');
+    o.className = 'modal-overlay';
+    o.innerHTML = '<div class="modal-box" style="max-width:380px;"><div class="modal-box__head"><div class="modal-box__title">Cetak — ' + esc(s.nama) + '</div>' +
+      '<button class="modal-box__close" type="button" data-x>×</button></div>' +
+      '<div class="modal-box__desc">Pilih dokumen yang akan dicetak.</div>' +
+      '<div style="display:flex;flex-direction:column;gap:8px;margin-top:6px;">' +
+      '<button type="button" class="btn-small btn-small--primary" data-j="biodata" style="padding:11px;">🖨 Cetak Biodata</button>' +
+      '<button type="button" class="btn-small" data-j="nilai" style="padding:11px;">🖨 Cetak Nilai</button>' +
+      '<button type="button" class="btn-small" data-x style="padding:11px;">Batal</button></div></div>';
+    document.body.appendChild(o);
+    function tutup() { document.removeEventListener('keydown', onKey); o.remove(); }
+    function onKey(e) { if (e.key === 'Escape') tutup(); }
+    document.addEventListener('keydown', onKey);
+    o.addEventListener('click', function (e) { if (e.target === o) tutup(); });
+    o.querySelectorAll('[data-x]').forEach(function (b) { b.addEventListener('click', tutup); });
+    o.querySelectorAll('[data-j]').forEach(function (b) {
+      b.addEventListener('click', function () { var j = b.dataset.j; tutup(); BI.cetak([s], j, opsi); });
+    });
+  };
+
+  // opts: { root, kelasId, bolehUbah, siswaId (awal), tabAwal, daftar (opsional: daftar siswa yang sudah dimuat) }
+  BI.dashboardSiswa = async function (opts) {
+    var root = opts.root;
+    var bolehUbah = opts.bolehUbah !== false;
+    pasangCssDash();
+    root.innerHTML = '<div class="panel-note">Memuat data siswa...</div>';
+    var list = opts.daftar;
+    if (!list) {
+      try { list = await BI.muatSiswa({ kelasId: opts.kelasId || null }); }
+      catch (e) { root.innerHTML = '<div class="panel-note">' + esc(pesanError(e)) + '</div>'; return; }
+    }
+    if (!list.length) {
+      root.innerHTML = '<div class="empty-state"><div class="empty-state__mark">！</div><div class="empty-state__title">Belum ada siswa</div><div class="empty-state__desc">Belum ada siswa terdaftar di kelas ini pada tahun ajaran aktif.</div></div>';
+      return;
+    }
+
+    var idx = 0;
+    if (opts.siswaId) { var f0 = list.findIndex(function (x) { return x.id === opts.siswaId; }); if (f0 >= 0) idx = f0; }
+    var tabAktif = opts.tabAwal || 'identitas';
+    var token = 0;
+    var tabs = F.TAB.map(function (t) { return { id: t.id, judul: t.judul, tab: t }; })
+      .concat([{ id: 'perkembangan', judul: 'Perkembangan Belajar' }, { id: 'catatan', judul: 'Prestasi & Catatan' }, { id: 'pelanggaran', judul: 'Pelanggaran (CP)' }]);
+    if (!tabs.some(function (t) { return t.id === tabAktif; })) tabAktif = 'identitas';
+
+    root.innerHTML =
+      '<div class="bi-ds-nav">' +
+      '<button type="button" class="bi-ds-navbtn" id="biDsPrev">‹ Sebelumnya</button>' +
+      '<div class="bi-ds-search"><input type="text" id="biDsQ" placeholder="Cari nama / NIS / NISN siswa..." autocomplete="off"><div class="bi-ds-sug" id="biDsSug" hidden></div></div>' +
+      '<span class="bi-ds-pos" id="biDsPos"></span>' +
+      '<button type="button" class="bi-ds-navbtn" id="biDsNext">Berikutnya ›</button></div>' +
+      '<div id="biDsKartu"></div>';
+
+    var elKartu = root.querySelector('#biDsKartu');
+    var elQ = root.querySelector('#biDsQ');
+    var elSug = root.querySelector('#biDsSug');
+    var btnPrev = root.querySelector('#biDsPrev');
+    var btnNext = root.querySelector('#biDsNext');
+
+    function nilaiPanel(tb, s) {
+      return tb.bagian.map(function (bg) {
+        return '<div class="bi-ds-sec"><div class="bi-ds-sec-t">' + esc(bg.judul) + '</div><div class="bi-ds-grid">' +
+          bg.fields.map(function (f) {
+            var v = nilaiTampil(f, s[f.k]);
+            var penuh = f.full || f.tipe === 'textarea';
+            return '<div class="bi-ds-it' + (penuh ? ' bi-ds-it--full' : '') + '"><div class="bi-ds-l">' + esc(f.l) + '</div>' +
+              (v === '' ? '<div class="bi-ds-v bi-ds-v--kosong">Belum diisi</div>' : '<div class="bi-ds-v">' + esc(v) + '</div>') + '</div>';
+          }).join('') + '</div></div>';
+      }).join('');
+    }
+    function hitungTab(tb, s) {
+      var n = 0, t = 0;
+      tb.bagian.forEach(function (bg) { bg.fields.forEach(function (f) { t++; if (!kosong(s[f.k])) n++; }); });
+      return n + '/' + t;
+    }
+
+    function muatLazy(id, s, el) {
+      if (id === 'perkembangan') renderPerkembangan(el, s, bolehUbah);
+      else if (id === 'catatan') renderCatatan(el, s, bolehUbah);
+      else if (id === 'pelanggaran') renderPelanggaranCP(el, s);
+    }
+
+    // ----- Rata-rata nilai per semester (semester 1-5), dari arsip E-Rapor di Buku Induk -----
+    var rataCache = {};
+    function hitungRata(rows) {
+      var out = {};
+      (rows || []).forEach(function (r) {
+        if (r.semester_ke >= 1 && r.semester_ke <= 5) {
+          var x = rataNilai(nilaiEfektif(r));
+          if (x !== null) out[r.semester_ke] = { nilai: x, kelas: r.kelas_nama || '' };
+        }
+      });
+      return out;
+    }
+    function htmlRata(data) {
+      var h = '';
+      for (var k = 1; k <= 5; k++) {
+        var d = data && data[k];
+        h += '<div class="bi-ds-rt ' + (d ? 'bi-ds-rt--ada' : 'bi-ds-rt--kosong') + '"><div class="bi-ds-rt-s">SMT ' + k + '</div>' +
+          '<div class="bi-ds-rt-n">' + (d ? d.nilai.toFixed(1) : (data ? '—' : '…')) + '</div>' +
+          '<div class="bi-ds-rt-k">' + (d ? esc(d.kelas) : '') + '</div></div>';
+      }
+      return h;
+    }
+
+    function tampilSiswa() {
+      var s = list[idx];
+      var my = ++token;
+      var kel = BI.kelengkapan(s);
+      var warna = kel.persen >= 90 ? '' : (kel.persen >= 60 ? 'background:linear-gradient(90deg,#fde68a,#fbbf24)' : 'background:linear-gradient(90deg,#fecaca,#f87171)');
+      root.querySelector('#biDsPos').textContent = (idx + 1) + ' / ' + list.length;
+      btnPrev.disabled = idx === 0;
+      btnNext.disabled = idx === list.length - 1;
+
+      elKartu.innerHTML =
+        '<div class="bi-ds-card">' +
+        '<div class="bi-ds-hero">' +
+        '<div class="bi-ds-fotos"><div class="bi-ds-foto" id="biDsFotoMasuk">Foto<br>3 × 4</div><div class="bi-ds-foto" id="biDsFotoLulus" hidden></div></div>' +
+        '<div class="bi-ds-who"><h2 class="bi-ds-nama">' + esc(s.nama) + '</h2><div class="bi-ds-meta">' +
+        (s.kelas ? '<span class="bi-ds-pill">' + esc(s.kelas.nama) + '</span>' : '') +
+        (s.no_absen ? '<span class="bi-ds-pill">Absen ' + esc(s.no_absen) + '</span>' : '') +
+        '<span class="bi-ds-pill">NIS ' + esc(s.nis || '—') + '</span><span class="bi-ds-pill">NISN ' + esc(s.nisn || '—') + '</span>' +
+        '<span class="bi-ds-pill">Status: ' + esc(LABEL_OPSI[s.status] || s.status || '—') + '</span><span id="biDsPel"></span></div>' +
+        '<div class="bi-ds-prog"><div class="bi-ds-prog-top"><span>Kelengkapan data</span><span>' + kel.persen + '%</span></div>' +
+        '<div class="bi-ds-bar"><i style="width:' + kel.persen + '%;' + warna + '"></i></div></div>' +
+        '<div class="bi-ds-act">' +
+        (bolehUbah ? '<button type="button" class="utama" id="biDsEdit">✏️ Edit Data</button>' : '') +
+        '<button type="button" id="biDsCetak">🖨 Cetak Biodata</button><button type="button" id="biDsCetakNilai">🖨 Cetak Nilai</button>' +
+        '</div></div>' +
+        '<div class="bi-ds-rata"><div class="bi-ds-rata-t">Rata-rata nilai per semester</div><div class="bi-ds-rata-g" id="biDsRata">' + htmlRata(rataCache[s.id]) + '</div></div>' +
+        '</div>' +
+        '<div class="bi-ds-tabs" role="tablist">' + tabs.map(function (tb) {
+          return '<button type="button" role="tab" class="bi-ds-tab' + (tb.id === tabAktif ? ' on' : '') + '" data-t="' + tb.id + '">' + esc(tb.judul) +
+            (tb.tab ? '<span class="bi-ds-cnt">' + hitungTab(tb.tab, s) + '</span>' : '') + '</button>';
+        }).join('') + '</div>' +
+        '<div class="bi-ds-body">' + tabs.map(function (tb) {
+          return '<div data-p="' + tb.id + '"' + (tb.id === tabAktif ? '' : ' hidden') + '>' + (tb.tab ? nilaiPanel(tb.tab, s) : '<div class="panel-note">Memuat...</div>') + '</div>';
+        }).join('') + '</div></div>';
+
+      var dimuat = {};
+      function pilihTab(id) {
+        tabAktif = id;
+        elKartu.querySelectorAll('.bi-ds-tab').forEach(function (b) { b.classList.toggle('on', b.dataset.t === id); });
+        elKartu.querySelectorAll('[data-p]').forEach(function (p) { p.hidden = p.dataset.p !== id; });
+        var tb = tabs.find(function (x) { return x.id === id; });
+        if (tb && !tb.tab && !dimuat[id]) { dimuat[id] = true; muatLazy(id, s, elKartu.querySelector('[data-p="' + id + '"]')); }
+      }
+      elKartu.querySelectorAll('.bi-ds-tab').forEach(function (b) { b.addEventListener('click', function () { pilihTab(b.dataset.t); }); });
+      pilihTab(tabAktif);
+
+      var bEdit = elKartu.querySelector('#biDsEdit');
+      if (bEdit) bEdit.addEventListener('click', function () { bukaEdit(s); });
+      elKartu.querySelector('#biDsCetak').addEventListener('click', function () { BI.cetak([s], 'biodata'); });
+      elKartu.querySelector('#biDsCetakNilai').addEventListener('click', function () { BI.cetak([s], 'nilai'); });
+
+      // Rata-rata semester dimuat belakangan (di-cache per siswa).
+      (function () {
+        var sid = s.id;
+        function isiRata() { var el = elKartu.querySelector('#biDsRata'); if (el && my === token) el.innerHTML = htmlRata(rataCache[sid]); }
+        if (rataCache[sid]) { isiRata(); return; }
+        BI.muatRiwayat(sid).then(function (rows) { rataCache[sid] = hitungRata(rows); isiRata(); })
+          .catch(function () { rataCache[sid] = {}; isiRata(); });
+      })();
+      // Foto & ringkasan pelanggaran dimuat belakangan supaya kartu langsung muncul.
+      BI.muatFotoSemua(s.id).then(function (foto) {
+        if (my !== token) return;
+        function isi(id, src, ket) {
+          var el = elKartu.querySelector(id); if (!el || !src) return;
+          el.hidden = false; el.innerHTML = '<img src="' + src + '" alt="' + ket + '"><small>' + ket + '</small>';
+        }
+        isi('#biDsFotoMasuk', foto.masuk, 'SAAT MASUK');
+        isi('#biDsFotoLulus', foto.lulus, 'SAAT LULUS');
+      }).catch(function () { /* foto tidak wajib */ });
+      if (g.PelanggaranCP) {
+        g.PelanggaranCP.ambil([pelItem(s)]).then(function (m) {
+          if (my !== token) return;
+          var rows = m[s.id] || [];
+          var el = elKartu.querySelector('#biDsPel'); if (!el) return;
+          if (rows.length) {
+            el.innerHTML = '<span class="bi-ds-pill bi-ds-pill--warn" id="biDsPelChip">Pelanggaran ' + rows.length + ' catatan · ' + g.PelanggaranCP.totalPoin(rows) + ' poin</span>';
+            var chip = elKartu.querySelector('#biDsPelChip');
+            if (chip) chip.addEventListener('click', function () { pilihTab('pelanggaran'); });
+            var tbtn = elKartu.querySelector('.bi-ds-tab[data-t="pelanggaran"]');
+            if (tbtn) tbtn.innerHTML = 'Pelanggaran (CP)<span class="bi-ds-cnt">' + rows.length + '</span>';
+          }
+        }).catch(function () { /* CP tidak terjangkau */ });
+      }
+    }
+
+    function bukaEdit(s) {
+      detach();
+      BI.bukaSiswa(s, {
+        root: root, bolehUbah: true, labelKembali: 'Kembali ke Dashboard',
+        onKembali: function () { BI.dashboardSiswa(Object.assign({}, opts, { daftar: list, siswaId: s.id, tabAwal: tabAktif })); },
+        onSimpan: function () { BI.dashboardSiswa(Object.assign({}, opts, { daftar: list, siswaId: s.id, tabAwal: tabAktif })); }
+      });
+    }
+
+    function ke(i) {
+      if (i < 0 || i >= list.length) return;
+      idx = i;
+      tampilSiswa();
+      var top = root.querySelector('.bi-ds-nav');
+      if (top && top.getBoundingClientRect().top < 0) top.scrollIntoView({ block: 'start' });
+    }
+    btnPrev.addEventListener('click', function () { ke(idx - 1); });
+    btnNext.addEventListener('click', function () { ke(idx + 1); });
+
+    // ----- Pencarian -----
+    var sugIdx = -1, sugList = [];
+    function cocok() {
+      var q = elQ.value.trim().toLowerCase();
+      var hasil = [];
+      list.forEach(function (s, i) {
+        if (!q || (s.nama || '').toLowerCase().indexOf(q) !== -1 || String(s.nis || '').toLowerCase().indexOf(q) !== -1 || String(s.nisn || '').toLowerCase().indexOf(q) !== -1) hasil.push(i);
+      });
+      return hasil;
+    }
+    function tampilSug() {
+      sugList = cocok(); sugIdx = sugList.length ? 0 : -1;
+      elSug.innerHTML = sugList.length ? sugList.map(function (i, n) {
+        var s = list[i];
+        return '<button type="button" data-i="' + i + '" class="' + (n === 0 ? 'on' : '') + '"><b>' + (i + 1) + '. ' + esc(s.nama) + '</b><small>NIS ' + esc(s.nis || '—') + '</small></button>';
+      }).join('') : '<div class="bi-ds-none">Tidak ada siswa yang cocok.</div>';
+      elSug.hidden = false;
+      elSug.querySelectorAll('button').forEach(function (b) {
+        b.addEventListener('mousedown', function (e) { e.preventDefault(); pilih(Number(b.dataset.i)); });
+      });
+    }
+    function pilih(i) { elSug.hidden = true; elQ.value = ''; elQ.blur(); ke(i); }
+    function geserSug(d) {
+      if (!sugList.length) return;
+      sugIdx = (sugIdx + d + sugList.length) % sugList.length;
+      var bs = elSug.querySelectorAll('button');
+      bs.forEach(function (b, n) { b.classList.toggle('on', n === sugIdx); });
+      if (bs[sugIdx]) bs[sugIdx].scrollIntoView({ block: 'nearest' });
+    }
+    elQ.addEventListener('focus', tampilSug);
+    elQ.addEventListener('input', tampilSug);
+    elQ.addEventListener('blur', function () { setTimeout(function () { elSug.hidden = true; }, 120); });
+    elQ.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); geserSug(1); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); geserSug(-1); }
+      else if (e.key === 'Enter') { e.preventDefault(); if (sugIdx >= 0) pilih(sugList[sugIdx]); }
+      else if (e.key === 'Escape') { elSug.hidden = true; elQ.blur(); }
+    });
+
+    // Panah kiri/kanan di keyboard = siswa sebelumnya/berikutnya (kecuali sedang mengetik).
+    function onKey(e) {
+      if (!document.body.contains(elKartu)) { detach(); return; }
+      var tg = (e.target && e.target.tagName || '').toLowerCase();
+      if (tg === 'input' || tg === 'textarea' || tg === 'select' || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (document.querySelector('.modal-overlay')) return;
+      if (e.key === 'ArrowLeft') { ke(idx - 1); }
+      else if (e.key === 'ArrowRight') { ke(idx + 1); }
+    }
+    function detach() { document.removeEventListener('keydown', onKey); }
+    document.addEventListener('keydown', onKey);
+
+    tampilSiswa();
   };
 
   // ================= Perkembangan belajar (ditarik dari E-Rapor) =================
@@ -1259,7 +1601,7 @@
         return '<div class="sec"><h4>' + esc(bg.judul) + '</h4><div class="kv">' + bg.fields.map(function (f) {
           var v = nilaiCetak(f, s);
           var full = f.full || f.tipe === 'textarea';
-          return '<div class="r' + (full ? ' full' : '') + '"><span class="l">' + esc(f.l) + '</span><span class="v' + (v === '' ? ' kosong' : '') + '">' + (v === '' ? '—' : esc(v)) + '</span></div>';
+          return '<div class="r' + (full ? ' full' + (String(f.l).length <= 20 ? ' sj' : '') : '') + '"><span class="l">' + esc(f.l) + '</span><span class="v' + (v === '' ? ' kosong' : '') + '">' + (v === '' ? '—' : esc(v)) + '</span></div>';
         }).join('') + '</div></div>';
       }).join('');
     });
@@ -1273,7 +1615,7 @@
       bagianFlat.push('<div class="sec"><h4>' + esc(bg.judul) + '</h4><div class="kv">' + fieldCetak.map(function (f) {
         var v = nilaiCetak(f, s);
         var full = f.full || f.tipe === 'textarea';
-        return '<div class="r' + (full ? ' full' : '') + '"><span class="l">' + esc(f.l) + '</span><span class="v' + (v === '' ? ' kosong' : '') + '">' + (v === '' ? '—' : esc(v)) + '</span></div>';
+        return '<div class="r' + (full ? ' full' + (String(f.l).length <= 20 ? ' sj' : '') : '') + '"><span class="l">' + esc(f.l) + '</span><span class="v' + (v === '' ? ' kosong' : '') + '">' + (v === '' ? '—' : esc(v)) + '</span></div>';
       }).join('') + '</div></div>');
     }); });
     var BATAS_HAL1 = 5; // jumlah bagian di halaman 1 (A, B, C, D, E)
@@ -1375,7 +1717,7 @@
         '.sec h4{margin:0 0 4px;font-size:10pt;font-weight:800;letter-spacing:.2px;color:' + NAVY + ';border-left:4px solid ' + NAVY + ';border-bottom:1.5px solid ' + NAVY + ';padding:1px 0 2px 7px;page-break-after:avoid}',
         '.kv{display:grid;grid-template-columns:1fr 1fr;column-gap:20px}',
         '.kv .r{display:flex;gap:4px;padding:2.4px 0;border-bottom:.5px dotted #9ca3af;page-break-inside:avoid}.kv .r.full{grid-column:1/-1}',
-        '.kv .l{flex:0 0 41%;color:#000;font-size:9pt}.kv .r.full .l{flex-basis:20.5%}',
+        '.kv .l{flex:0 0 41%;color:#000;font-size:9pt}.kv .r.full .l{flex-basis:20.5%}.kv .r.full.sj .l{flex-basis:calc(20.5% - 4.1px)}',
         '.kv .v{flex:1;min-width:0;font-weight:600;word-break:break-word;white-space:pre-wrap;min-height:1.1em}',
         '.kv .v:before{content:": ";color:#000;font-weight:400}.kv .v.kosong{color:#000;font-weight:400}',
         /* tabel nilai & catatan */
@@ -1390,7 +1732,7 @@
       '.pb{page-break-before:always;height:0}',
       '.bio{line-height:1.25}.bio .judul{margin:10px 0 8px}.bio .kartu{padding:7px 10px}',
       '.bio .sec{margin-top:8px}.bio .sec h4{margin-bottom:3px}',
-      '.bio .kv .r{padding:1.7px 0}.bio .kv .r.full .l{flex-basis:31%}.bio .kv .l,.bio .kv .v{font-size:9pt}',
+      '.bio .kv .r{padding:1.7px 0}.bio .kv .r.full .l{flex-basis:31%}.bio .kv .r.full.sj .l{flex-basis:calc(20.5% - 4.1px)}.bio .kv .l,.bio .kv .v{font-size:9pt}',
       '.bio .ringkas .nama{margin-bottom:4px}.bio .ringkas td{padding:1px 3px}',
       '.bio table.g td{padding:2px 4px}.bio .ft{margin-top:8px}',
       /* cover (modern) */
@@ -1805,13 +2147,18 @@
         var k = BI.kelengkapan(s);
         return '<tr><td data-label="Nama">' + esc(s.nama) + '</td><td data-label="NIS">' + esc(s.nis || '—') + '</td><td data-label="NISN">' + esc(s.nisn || '—') + '</td>' +
           '<td data-label="Kelas">' + esc(s.kelas ? s.kelas.nama : '—') + '</td><td data-label="Status">' + chipStatus(s.status) + '</td><td data-label="Kelengkapan">' + chipKelengkapan(k.persen) + '</td>' +
-          '<td style="white-space:nowrap;"><button class="btn-small" data-detail="' + s.id + '">👁 Detail</button> <button class="btn-small btn-small--primary" data-buka="' + s.id + '">Buka</button></td></tr>';
+          '<td style="white-space:nowrap;">' + (opts.aksi === 'editcetak' ?
+          '<button class="btn-small btn-small--primary" data-buka="' + s.id + '">✏️ Edit</button> <button class="btn-small" data-cetak="' + s.id + '">🖨 Cetak</button>' :
+          '<button class="btn-small" data-detail="' + s.id + '">👁 Detail</button> <button class="btn-small btn-small--primary" data-buka="' + s.id + '">Buka</button>') + '</td></tr>';
       }).join('') : '<tr><td colspan="7">Tidak ada siswa yang cocok.</td></tr>';
       function bukaForm(s) {
         BI.bukaSiswa(s, { root: root, bolehUbah: opts.bolehUbah !== false, labelKembali: 'Kembali ke Daftar', onKembali: function () { BI.renderDaftar(Object.assign({}, opts, { filterAwal: filter })); } });
       }
       root.querySelectorAll('[data-buka]').forEach(function (b) {
         b.addEventListener('click', function () { bukaForm(list.find(function (x) { return x.id === b.dataset.buka; })); });
+      });
+      root.querySelectorAll('[data-cetak]').forEach(function (b) {
+        b.addEventListener('click', function () { BI.pilihCetak(list.find(function (x) { return x.id === b.dataset.cetak; })); });
       });
       root.querySelectorAll('[data-detail]').forEach(function (b) {
         b.addEventListener('click', function () {
