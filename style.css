@@ -3316,3 +3316,70 @@ table.rapor-cetak__nilai tbody tr.rapor-cetak__section-row td {
 .topbar__row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .topbar__app { display: inline-flex; align-items: center; gap: 5px; text-decoration: none; white-space: nowrap; }
 .topbar__app i, .topbar__app svg { flex-shrink: 0; }
+
+/* Tombol aplikasi di topbar: warna navy yang sama dengan kartu hero dashboard
+   (var(--sidebar-bg)) supaya lebih terlihat. Tombol Panduan tetap biru. */
+.topbar__app {
+  background: var(--sidebar-bg);
+  color: #fff;
+  border-color: var(--sidebar-bg);
+  box-shadow: 0 4px 10px -3px rgba(15, 23, 42, 0.45);
+}
+.topbar__app:hover { background: #1e293b; border-color: #60a5fa; color: #fff; }
+.topbar__app:focus-visible { outline: 2px solid #60a5fa; outline-offset: 2px; }
+.topbar__app i, .topbar__app svg { color: #93c5fd; }
+
+/* ================= Dashboard Guru: peringkat kelas (wali kelas) ================= */
+.rk__grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.rk__grup { min-width: 0; padding: 0 22px; }
+.rk__grup:first-child { padding-left: 0; }
+.rk__grup + .rk__grup { padding-right: 0; border-left: 1px solid var(--border); }
+.rk__judul { display: flex; align-items: center; gap: 7px; margin: 0 0 16px; font-size: 12.5px; font-weight: 700; }
+.rk__judul svg { width: 15px; height: 15px; }
+.rk__judul--atas { color: var(--success); }
+.rk__judul--bawah { color: #d97706; }
+.rk__list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.rk-item { display: flex; flex-direction: column; align-items: center; text-align: center; min-width: 0; }
+.rk-foto {
+  position: relative;
+  width: 76px; height: 76px;
+  margin-bottom: 12px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, var(--primary-soft), #4f46e5);
+  color: #fff;
+  font-family: var(--font-display); font-size: 28px; font-weight: 800;
+  box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--rk-warna, var(--border-strong));
+}
+.rk-foto img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
+.rk-badge {
+  position: absolute; right: -5px; bottom: -5px;
+  min-width: 24px; height: 24px; padding: 0 6px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 999px;
+  background: var(--rk-warna); color: var(--rk-teks, #fff);
+  font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 0 2px var(--surface);
+}
+.rk-nama {
+  width: 100%;
+  font-size: 13px; font-weight: 700; line-height: 1.3; color: var(--ink);
+  overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+.rk-skor { margin-top: 5px; font-family: var(--font-display); font-size: 17px; font-weight: 800; line-height: 1.1; color: var(--ink); font-variant-numeric: tabular-nums; }
+.rk-skor small { display: block; margin-top: 2px; font-family: var(--font-body, inherit); font-size: 11px; font-weight: 500; color: var(--ink-faint); }
+.rk-item--1 { --rk-warna: #facc15; --rk-teks: #422006; }
+.rk-item--2 { --rk-warna: #cbd5e1; --rk-teks: #0f172a; }
+.rk-item--3 { --rk-warna: #e0a060; --rk-teks: #422006; }
+.rk-item--bawah { --rk-warna: #dc2626; --rk-teks: #fff; }
+.rk-item--bawah .rk-foto { box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px #fca5a5; }
+.rk__catatan { margin: 16px 0 0; padding-top: 12px; border-top: 1px solid var(--border); font-size: 12px; color: var(--ink-soft); }
+@media (max-width: 760px) {
+  .rk__grid { grid-template-columns: 1fr; }
+  .rk__grup, .rk__grup:first-child, .rk__grup + .rk__grup { padding: 0; border-left: 0; }
+  .rk__grup + .rk__grup { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--border); }
+  .rk__list { gap: 8px; }
+  .rk-foto { width: 62px; height: 62px; font-size: 23px; }
+  .rk-nama { font-size: 12px; }
+  .rk-skor { font-size: 15px; }
+}

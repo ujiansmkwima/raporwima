@@ -6,7 +6,7 @@
 <title>Dashboard Guru E-Rapor — PORTAL DATA DAN PENILAIAN SMK WIDYA MANDALA TAMBAK</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=18">
+<link rel="stylesheet" href="style.css?v=19">
 <script src="https://unpkg.com/lucide@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -1222,10 +1222,20 @@
         return '<div class="dx-bar dx-tone-' + dxToneG(p) + '" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + p + '"><span style="width:' + p + '%"></span></div>';
       }
 
+      // Peringkat kelas wali: hanya untuk wali kelas. Isinya dimuat belakangan
+      // (lihat muatPeringkatKelas) supaya dashboard tidak menunggu data siswa.
+      var peringkatKelasHtml = waliKelas
+        ? '<section class="dx-card rk" id="dxRank" style="margin-bottom:20px;">' +
+          '<div class="dx-card__head"><h3 class="dx-card__title"><i data-lucide="trophy"></i>Peringkat kelas ' + escapeHtml(waliKelas.kelas.nama) + '</h3>' +
+          '<span class="dx-card__hint">dari jumlah nilai rapor Semester ' + escapeHtml(tahunAktif.semester) + '</span></div>' +
+          '<div id="dxRankBody"><div class="task-section__empty" style="padding:8px 0;">Memuat peringkat kelas…</div></div></section>'
+        : '';
+
       content.innerHTML =
         '<div class="panel-head"><div><div class="panel-head__title">Dashboard Saya</div>' +
         '<div class="panel-head__desc">Semua tugas kamu — Tahun Ajaran ' + escapeHtml(tahunAktif.nama) + ' Semester ' + escapeHtml(tahunAktif.semester) + '.</div></div></div>' +
         ringkasanPeranHtml +
+        peringkatKelasHtml +
         antreanHtml +
         sectionAnalisisHtml +
         sectionEkskulHtml +
@@ -1234,6 +1244,112 @@
         '<div class="panel-note">Analisis nilai semester dihitung dari nilai rapor akhir seluruh mapel yang sudah tersimpan. Progres ekstrakurikuler & kokurikuler dihitung dari peserta/siswa yang jadi tanggung jawabmu. Progres presensi dihitung dari siswa yang datanya sudah pernah disimpan.</div>';
 
       lucide.createIcons();
+
+      // ---------- Peringkat kelas wali: 3 teratas & 3 yang perlu perhatian ----------
+      // Jumlah = penjumlahan nilai rapor semua mapel di semester aktif (tahunAktif).
+      // Siswa yang belum punya satu pun nilai tidak diperingkat (dicatat di bawah kartu).
+      if (waliKelas) {
+        (async function muatPeringkatKelas() {
+          var badan = document.getElementById('dxRankBody');
+          if (!badan) return;
+          function pesan(teks) {
+            var el = document.getElementById('dxRankBody');
+            if (el) el.innerHTML = '<div class="task-section__empty" style="padding:8px 0;">' + escapeHtml(teks) + '</div>';
+          }
+          try {
+            var kelasIdWali = waliKelas.kelas.id;
+            var skRes = await supabaseClient.from('siswa_kelas').select('siswa:siswa_id(id, nama)')
+              .eq('kelas_id', kelasIdWali).eq('tahun_ajaran_id', tahunAktif.id);
+            var anggota = (skRes.data || []).filter(function (r) { return r.siswa; })
+              .map(function (r) { return { id: r.siswa.id, nama: r.siswa.nama || '(tanpa nama)' }; });
+            if (!anggota.length) { pesan('Belum ada siswa di kelas ini pada tahun ajaran aktif.'); return; }
+
+            var idsAnggota = anggota.map(function (a) { return a.id; });
+            var barisNilaiRk = [];
+            for (var dari = 0; ; dari += 1000) {
+              var nr = await supabaseClient.from('nilai').select('siswa_id, nilai')
+                .eq('tahun_ajaran_id', tahunAktif.id).eq('jenis', 'rapor').in('siswa_id', idsAnggota)
+                .order('id').range(dari, dari + 999);
+              if (nr.error || !nr.data) break;
+              barisNilaiRk = barisNilaiRk.concat(nr.data);
+              if (nr.data.length < 1000) break;
+            }
+            var totalMap = {}, mapelMapRk = {};
+            barisNilaiRk.forEach(function (r) {
+              if (r.nilai === null || r.nilai === undefined || r.nilai === '') return;
+              var n = Number(r.nilai);
+              if (isNaN(n)) return;
+              totalMap[r.siswa_id] = (totalMap[r.siswa_id] || 0) + n;
+              mapelMapRk[r.siswa_id] = (mapelMapRk[r.siswa_id] || 0) + 1;
+            });
+
+            var diperingkat = anggota.filter(function (a) { return mapelMapRk[a.id] > 0; })
+              .map(function (a) { return { id: a.id, nama: a.nama, total: totalMap[a.id], jmlMapel: mapelMapRk[a.id] }; })
+              .sort(function (a, b) { return b.total - a.total || a.nama.localeCompare(b.nama); });
+            var belumAdaNilai = anggota.length - diperingkat.length;
+            if (!diperingkat.length) { pesan('Belum ada nilai rapor yang tersimpan untuk kelas ini, jadi peringkat belum bisa dihitung.'); return; }
+
+            // Nomor peringkat; jumlah yang sama berbagi peringkat yang sama.
+            diperingkat.forEach(function (d, i) {
+              d.peringkat = (i > 0 && d.total === diperingkat[i - 1].total) ? diperingkat[i - 1].peringkat : i + 1;
+            });
+            var atas = diperingkat.slice(0, Math.min(3, diperingkat.length));
+            var sisa = diperingkat.slice(atas.length);
+            var bawah = sisa.slice(-3);
+
+            // Foto siswa dari Buku Induk (path Storage -> URL bertanda tangan).
+            var fotoUrl = {};
+            try {
+              var idsTampil = atas.concat(bawah).map(function (d) { return d.id; });
+              var detRes = await supabaseClient.from('bi_siswa_detail').select('siswa_id, foto').in('siswa_id', idsTampil);
+              var pathFotoRk = [], pathPerSiswa = {};
+              (detRes.data || []).forEach(function (d) {
+                if (!d.foto) return;
+                if (String(d.foto).indexOf('data:') === 0) { fotoUrl[d.siswa_id] = d.foto; return; }
+                pathPerSiswa[d.siswa_id] = d.foto;
+                if (pathFotoRk.indexOf(d.foto) < 0) pathFotoRk.push(d.foto);
+              });
+              if (pathFotoRk.length) {
+                var sg = await supabaseClient.storage.from('buku-induk-foto').createSignedUrls(pathFotoRk, 3600);
+                var urlPerPath = {};
+                if (!sg.error && sg.data) sg.data.forEach(function (x) { if (x && x.path && x.signedUrl) urlPerPath[x.path] = x.signedUrl; });
+                Object.keys(pathPerSiswa).forEach(function (sid) { if (urlPerPath[pathPerSiswa[sid]]) fotoUrl[sid] = urlPerPath[pathPerSiswa[sid]]; });
+              }
+            } catch (e) { /* foto hanya pelengkap: tampilkan inisial kalau gagal */ }
+
+            var fmtRk = function (n) { return Number(n).toLocaleString('id-ID', { maximumFractionDigits: 1 }); };
+            function kartuSiswa(d, kelasCss) {
+              var inisial = String(d.nama).trim().charAt(0).toUpperCase() || '?';
+              var isiFoto = fotoUrl[d.id]
+                ? '<img src="' + escapeHtml(fotoUrl[d.id]) + '" alt="Foto ' + escapeHtml(d.nama) + '" loading="lazy">'
+                : '<span aria-hidden="true">' + escapeHtml(inisial) + '</span>';
+              return '<li class="rk-item ' + kelasCss + '">' +
+                '<div class="rk-foto">' + isiFoto + '<span class="rk-badge" aria-label="Peringkat ' + d.peringkat + '">' + d.peringkat + '</span></div>' +
+                '<div class="rk-nama">' + escapeHtml(d.nama) + '</div>' +
+                '<div class="rk-skor">' + fmtRk(d.total) + '<small>' + d.jmlMapel + ' mapel</small></div></li>';
+            }
+
+            var html = '<div class="rk__grid">' +
+              '<div class="rk__grup"><h4 class="rk__judul rk__judul--atas"><i data-lucide="trophy"></i>Peringkat 1–' + atas.length + '</h4>' +
+              '<ul class="rk__list">' + atas.map(function (d) { return kartuSiswa(d, 'rk-item--' + Math.min(3, d.peringkat)); }).join('') + '</ul></div>';
+            if (bawah.length) {
+              html += '<div class="rk__grup"><h4 class="rk__judul rk__judul--bawah"><i data-lucide="alert-triangle"></i>Perlu perhatian</h4>' +
+                '<ul class="rk__list">' + bawah.map(function (d) { return kartuSiswa(d, 'rk-item--bawah'); }).join('') + '</ul></div>';
+            }
+            html += '</div>';
+            if (belumAdaNilai > 0) {
+              html += '<p class="rk__catatan">' + belumAdaNilai + ' siswa belum punya nilai rapor dan belum ikut diperingkat.</p>';
+            }
+
+            var tujuanEl = document.getElementById('dxRankBody');
+            if (!tujuanEl) return; // sudah pindah halaman
+            tujuanEl.innerHTML = html;
+            lucide.createIcons();
+          } catch (err) {
+            pesan('Peringkat kelas belum bisa dimuat. Muat ulang halaman untuk mencoba lagi.');
+          }
+        })();
+      }
 
       // Foto profil di kartu hero (klik untuk ganti). Diam saja kalau fitur foto belum aktif.
       (async function () {
