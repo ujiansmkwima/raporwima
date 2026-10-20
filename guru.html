@@ -19,7 +19,6 @@
 <script src="pelanggaran-cp.js?v=1"></script>
 <script src="simpan-atas.js?v=1"></script>
 <script src="sticky-nama.js?v=1"></script>
-<script src="sambutan-guru.js?v=1"></script>
 <script src="mobile.js?v=1" defer></script>
 <script src="bottomnav.js?v=1" defer></script>
 <script src="foto-profil.js?v=3" defer></script>
@@ -292,9 +291,6 @@
     var nama = (profileResult.data && profileResult.data.nama) ? profileResult.data.nama : user.email;
     document.getElementById('userName').textContent = nama;
     document.getElementById('userAvatar').textContent = nama.trim().charAt(0).toUpperCase();
-
-    // Pop up penyemangat — hanya muncul sekali setelah login (lihat sambutan-guru.js).
-    if (window.SambutanGuru) SambutanGuru.tampilkanJikaBaruLogin(profileResult.data && profileResult.data.nama);
 
     // 3. Ambil tahun ajaran yang SEDANG AKTIF — ini kuncinya.
     //    Semua data guru di bawah selalu difilter pakai tahunAktif.id,

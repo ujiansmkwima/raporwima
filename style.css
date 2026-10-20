@@ -2614,6 +2614,14 @@ table.rapor-cetak__nilai tbody tr.rapor-cetak__section-row td {
   color: var(--ink-soft);
   margin: 0 0 22px;
 }
+.sambutan-sholat {
+  display: flex; align-items: flex-start; gap: 10px; text-align: left;
+  margin: 0 0 14px; padding: 12px 14px;
+  background: var(--success-tint); color: var(--ink);
+  border: 1px solid var(--success); border-radius: 12px;
+  font-size: 13px; line-height: 1.55; font-weight: 600;
+}
+.sambutan-sholat > span:first-child { font-size: 22px; line-height: 1.2; }
 .sambutan-tutup { padding: 10px 22px; font-size: 13px; }
 @keyframes sambutanMuncul {
   from { opacity: 0; transform: translateY(10px) scale(0.97); }
