@@ -10,7 +10,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-client.js"></script>
 <script src="sticky-nama.js?v=1"></script>
-<script src="supervisi-form.js?v=4"></script>
+<script src="supervisi-form.js?v=5"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -31,20 +31,25 @@
       <img class="sidebar__brand-logo" src="assets/logo.png" alt="Logo">
       <div class="sidebar__brand-text"><span class="sidebar__brand-mark">Supervisi</span><span class="sidebar__brand-school">SMK Widya Mandala Tambak</span></div>
     </div>
-    <div class="sidebar__role"><i data-lucide="clipboard-check" style="width:13px;height:13px;"></i> Supervisor</div>
-    <div class="sidebar__section-label">Menu</div>
+    <div class="sidebar__role"><i data-lucide="clipboard-check" style="width:13px;height:13px;"></i> Supervisi</div>
     <nav class="menu-list">
-      <a href="#" class="menu-item menu-item--active" data-view="jadwal"><i data-lucide="calendar-check" class="menu-icon"></i><span class="menu-item__title">Jadwal Saya</span></a>
-      <a href="#" class="menu-item" data-view="isi"><i data-lucide="wand-sparkles" class="menu-icon"></i><span class="menu-item__title">Isi Jawaban</span></a>
+      <div class="sidebar__section-label">Saat Saya Menyupervisi</div>
+      <a href="#" class="menu-item menu-item--active" data-view="jadwal"><i data-lucide="calendar-check" class="menu-icon"></i><span class="menu-item__title">Jadwal Menyupervisi</span></a>
+      <a href="#" class="menu-item" data-view="isi"><i data-lucide="wand-sparkles" class="menu-icon"></i><span class="menu-item__title">Isi Form Otomatis</span></a>
       <a href="#" class="menu-item" data-view="ttd"><i data-lucide="pen-line" class="menu-icon"></i><span class="menu-item__title">Tanda Tangan Saya</span></a>
+
+      <div class="sidebar__section-label">Saat Saya Disupervisi</div>
+      <a href="#" class="menu-item" data-view="wawancara"><i data-lucide="message-square-text" class="menu-icon"></i><span class="menu-item__title">Jadwal &amp; Wawancara Saya</span></a>
+
+      <div class="sidebar__section-label">Lainnya</div>
       <a href="portal.html" class="menu-item"><i data-lucide="layout-grid" class="menu-icon"></i><span class="menu-item__title">Menu Utama</span></a>
       <a href="guru.html" class="menu-item"><i data-lucide="arrow-left" class="menu-icon"></i><span class="menu-item__title">Ke E-Rapor</span></a>
     </nav>
   </aside>
   <div class="main">
     <div class="topbar">
-      <div><div class="topbar__title" id="judul">Jadwal Supervisi Saya</div><div class="topbar__meta">Form boleh diisi kapan saja, tidak harus menunggu tanggal jadwal</div></div>
-      <div class="user-chip"><div class="user-chip__text"><div class="user-chip__name" id="userName">Memuat...</div><div class="user-chip__role">Supervisor</div>
+      <div><div class="topbar__title" id="judul">Jadwal Menyupervisi</div><div class="topbar__meta" id="metaHal">Form boleh diisi kapan saja, tidak harus menunggu tanggal jadwal</div></div>
+      <div class="user-chip"><div class="user-chip__text"><div class="user-chip__name" id="userName">Memuat...</div><div class="user-chip__role">Guru</div>
         <a href="#" id="logoutBtn" class="user-chip__logout"><i data-lucide="log-out" style="width:13px;height:13px;"></i> Keluar</a></div></div>
     </div>
     <div class="content" id="content"></div>
@@ -75,6 +80,7 @@
     ]);
     rows = r[0].data || []; guruList = r[1].data || []; mapelList = r[2].data || []; formList = r[3].data || []; profil = r[4].data;
     var today = hariIni();
+    if (tampilan === 'wawancara') return renderWawancara();
     if (tampilan === 'isi') return renderIsi(today);
     content.innerHTML = '<div class="table-wrap"><table class="data-table"><thead><tr><th>Tanggal</th><th>Jenis</th><th>Nama Guru</th><th>Mapel</th><th>Status</th><th></th></tr></thead><tbody>' +
       (rows.length ? rows.map(function (j) {
@@ -115,7 +121,7 @@
       if (i < mulai) return '';
       return '<div data-panel="' + i + '"' + (i !== mulai ? ' style="display:none;"' : '') + '>' +
         (banyak ? '<div class="sv-bagian"><div class="sv-bagian__t">' + esc(f.judul) + '</div></div>' : '') +
-        '<div class="svBody">' + SvForm.render(f, isian[i].jawaban, idn(j)) + '</div>' +
+        '<div class="svBody">' + SvForm.render(f, isian[i].jawaban, idn(j), isian[i].dariGuru) + '</div>' +
         '<div class="sv-q"><div class="sv-q__t">Catatan / Tindak Lanjut</div><textarea data-cat rows="3" style="width:100%;">' + esc(isian[i].catatan) + '</textarea></div></div>';
     }).join('');
     o.innerHTML = '<div class="modal-box"><div class="modal-box__head"><div class="modal-box__title">' + esc(f0.judul) + (anak ? ' <span style="font-size:12px;font-weight:500;">(form sepaket)</span>' : banyak ? ' <span style="font-size:12px;font-weight:500;">(+' + (forms.length - 1) + ' form sepaket)</span>' : '') + '</div><button class="modal-box__close">×</button></div>' +
@@ -131,7 +137,7 @@
       body.addEventListener('change', function (e) {
         if (!e.target.dataset || !e.target.dataset.penentu) return;
         var i = parseInt(body.parentNode.dataset.panel, 10);
-        body.innerHTML = SvForm.render(forms[i], SvForm.baca(body), idn(j));
+        body.innerHTML = SvForm.render(forms[i], SvForm.baca(body), idn(j), isian[i].dariGuru);
       });
     });
     o.querySelector('.modal-box__close').addEventListener('click', function () { o.remove(); });
@@ -171,7 +177,7 @@
         if (!ganti) Object.keys(manual[i]).forEach(function (k) { if (cur[k] !== undefined && cur[k] !== '') tetap[k] = cur[k]; });
         var r = SvOto.isi(f, tg, { mapel: nm(mapelList, j.mapel_id), kelas: j.kelas || '', tanggal: j.tanggal, jawabanAwal: cur, tetap: tetap });
         var jw = Object.assign({}, r.jawaban, tetap);
-        pn(i).querySelector('.svBody').innerHTML = SvForm.render(f, jw, idn(j));
+        pn(i).querySelector('.svBody').innerHTML = SvForm.render(f, jw, idn(j), isian[i].dariGuru);
         if (ganti || !manual[i]['\u0000cat'] || !cat(i).value) { cat(i).value = r.catatan; if (ganti) manual[i] = {}; }
         if (r.skor) {
           // Skor akhir dihitung dari isian di form (termasuk butir manual)
@@ -204,7 +210,7 @@
       var f = forms[aktif];
       SvXlsx.pilihFile(function (rows) {
         var r = SvXlsx.isianDari(f, rows), cur = SvForm.baca(pn(aktif));
-        pn(aktif).querySelector('.svBody').innerHTML = SvForm.render(f, Object.assign(cur, r.jawaban), idn(j));
+        pn(aktif).querySelector('.svBody').innerHTML = SvForm.render(f, Object.assign(cur, r.jawaban), idn(j), isian[aktif].dariGuru);
         if (r.catatan !== null) { cat(aktif).value = r.catatan; manual[aktif]['\u0000cat'] = 1; }
         Object.keys(r.jawaban).forEach(function (k) { if (r.jawaban[k] !== '') manual[aktif][k] = 1; });
         alert(r.n + ' isian diimpor' + (tampilTab ? ' ke form tab ' + (aktif + 1) : '') + '.' + (r.err.length ? '\n\nDilewati:\n' + r.err.join('\n') : '') + '\n\nPeriksa dulu, lalu klik Simpan.');
@@ -223,6 +229,68 @@
       var res = await supabaseClient.from('supervisi_jadwal').update(d).eq('id', j.id);
       if (res.error) { alert('Gagal menyimpan: ' + res.error.message + ((banyak || anak) ? '\n\nJalankan migrasi_supervisi_paket.sql di Supabase SQL Editor bila belum.' : '')); return; }
       o.remove(); if (anak) alert('Isian form sepaket tersimpan. Jadwal tetap berstatus terjadwal.'); muat();
+    });
+  }
+
+  // ===== Wawancara Saya: guru yang disupervisi mengisi sendiri jawaban wawancara =====
+  var wRows = [];
+  function soalGuru(j) {
+    var f0 = formList.find(function (x) { return x.id === j.form_id; });
+    if (!f0) return [];
+    return SvForm.paket(f0, formList).map(function (f) { return { form: f, soal: SvForm.untukGuru(f) }; })
+      .filter(function (x) { return x.soal.length; });
+  }
+  function hitungWawancara(j) {
+    var t = 0, n = 0, jg = j.jawaban_guru || {};
+    soalGuru(j).forEach(function (x) {
+      x.soal.forEach(function (q) { t++; var v = (jg[x.form.id] || {})[q.id]; if (v !== undefined && v !== null && String(v).trim() !== '') n++; });
+    });
+    return { total: t, terisi: n };
+  }
+  async function renderWawancara() {
+    content.innerHTML = '<div class="panel-note">Memuat...</div>';
+    var r = await supabaseClient.rpc('supervisi_jadwal_guru');
+    if (r.error) {
+      content.innerHTML = '<div class="panel-note">Fitur belum siap — minta admin menjalankan <strong>migrasi_supervisi_wawancara_guru.sql</strong> di Supabase SQL Editor. (' + esc(r.error.message) + ')</div>';
+      return;
+    }
+    wRows = r.data || [];
+    content.innerHTML = '<div class="panel-note">Bila kamu yang disupervisi, jawab sendiri pertanyaan wawancara di sini. Jawabanmu otomatis muncul di formulir supervisor (supervisor masih bisa menambahkan atau mengubahnya). Kamu bisa mengubah jawaban sampai supervisor menandai supervisi <strong>selesai</strong>.</div>' +
+      '<div class="table-wrap" style="margin-top:12px;"><table class="data-table"><thead><tr><th>Tanggal</th><th>Jenis</th><th>Supervisor</th><th>Mapel</th><th>Wawancara</th><th></th></tr></thead><tbody>' +
+      (wRows.length ? wRows.map(function (j) {
+        var h = hitungWawancara(j), kunci = j.status === 'selesai';
+        var ket = h.total ? h.terisi + ' / ' + h.total + ' terjawab' : 'Tidak ada pertanyaan wawancara';
+        var label = kunci ? 'Lihat' : (h.terisi ? 'Ubah Jawaban' : 'Isi Wawancara');
+        return '<tr><td>' + tglId(j.tanggal) + '</td><td>' + JENIS[j.jenis] + '</td><td>' + esc(nm(guruList, j.supervisor_id)) + '</td><td>' + esc(nm(mapelList, j.mapel_id)) + '</td>' +
+          '<td><span class="chip ' + (h.total && h.terisi === h.total ? 'chip--aktif' : 'chip--muted') + '">' + ket + '</span>' + (kunci ? ' <span class="chip chip--muted">supervisi selesai</span>' : '') + '</td>' +
+          '<td><button class="btn-small ' + (kunci ? '' : 'btn-small--primary') + '" data-wwc="' + j.id + '"' + (h.total ? '' : ' disabled') + '>' + label + '</button></td></tr>';
+      }).join('') : '<tr><td colspan="6">Belum ada jadwal supervisi yang menyangkut kamu sebagai guru yang disupervisi.</td></tr>') + '</tbody></table></div>';
+    content.querySelectorAll('[data-wwc]').forEach(function (b) {
+      b.addEventListener('click', function () { isiWawancara(wRows.find(function (x) { return x.id === b.dataset.wwc; })); });
+    });
+  }
+  function isiWawancara(j) {
+    var grup = soalGuru(j), kunci = j.status === 'selesai', jg = j.jawaban_guru || {};
+    var o = document.createElement('div'); o.className = 'modal-overlay';
+    o.innerHTML = '<div class="modal-box"><div class="modal-box__head"><div class="modal-box__title">Wawancara — ' + esc(JENIS[j.jenis]) + '</div><button class="modal-box__close" type="button">×</button></div>' +
+      SvForm.identitas(idn(j)) +
+      (kunci ? '<div class="panel-note" style="margin-bottom:10px;">Supervisi ini sudah ditandai selesai, jadi jawaban wawancara tidak bisa diubah lagi.</div>'
+             : '<div class="panel-note" style="margin-bottom:10px;">Jawab dengan kalimatmu sendiri. Boleh disimpan sebagian dan dilanjutkan nanti.</div>') +
+      grup.map(function (x) {
+        return (grup.length > 1 ? '<div class="sv-bagian"><div class="sv-bagian__t">' + esc(x.form.judul) + '</div></div>' : '') +
+          '<div data-gf="' + x.form.id + '">' + SvForm.renderGuru(x.form, jg[x.form.id] || {}, kunci) + '</div>';
+      }).join('') +
+      (kunci ? '' : '<div style="margin-top:18px;"><button class="btn-small btn-small--primary" id="wSimpan">Simpan Jawaban</button></div>') + '</div>';
+    document.body.appendChild(o);
+    o.querySelector('.modal-box__close').addEventListener('click', function () { o.remove(); });
+    var bs = o.querySelector('#wSimpan');
+    if (bs) bs.addEventListener('click', async function () {
+      var payload = {};
+      o.querySelectorAll('[data-gf]').forEach(function (el) { payload[el.dataset.gf] = SvForm.bacaGuru(el); });
+      bs.disabled = true; var t = bs.textContent; bs.textContent = 'Menyimpan...';
+      var res = await supabaseClient.rpc('supervisi_isi_wawancara', { p_jadwal: j.id, p_jawaban: payload });
+      if (res.error) { alert('Gagal menyimpan: ' + res.error.message); bs.disabled = false; bs.textContent = t; return; }
+      o.remove(); alert('Jawaban wawancara tersimpan.'); renderWawancara();
     });
   }
 
@@ -257,13 +325,21 @@
       btn.addEventListener('click', function () { isiForm(rows.find(function (x) { return x.id === sel.dataset.tg; }), sel.value); });
     });
   }
+  var HALAMAN = {
+    jadwal: ['Jadwal Menyupervisi', 'Jadwal saat kamu menjadi supervisor. Form boleh diisi kapan saja, tidak harus menunggu tanggal jadwal'],
+    isi: ['Isi Form Otomatis', 'Untuk supervisor: isi draft form dari target nilai, lalu periksa dan simpan'],
+    ttd: ['Tanda Tangan Saya', 'NIP dan tanda tangan kamu sebagai supervisor'],
+    wawancara: ['Jadwal & Wawancara Saya', 'Saat kamu yang disupervisi: lihat jadwal dan jawab sendiri pertanyaan wawancara']
+  };
+  function keHalaman(v) {
+    tampilan = v;
+    document.querySelectorAll('.menu-list .menu-item[data-view]').forEach(function (x) { x.classList.toggle('menu-item--active', x.dataset.view === v); });
+    document.getElementById('judul').textContent = HALAMAN[v][0];
+    document.getElementById('metaHal').textContent = HALAMAN[v][1];
+    muat();
+  }
   document.querySelectorAll('.menu-list .menu-item[data-view]').forEach(function (a) {
-    a.addEventListener('click', function (e) {
-      e.preventDefault(); tampilan = a.dataset.view;
-      document.querySelectorAll('.menu-list .menu-item[data-view]').forEach(function (x) { x.classList.toggle('menu-item--active', x === a); });
-      document.getElementById('judul').textContent = { isi: 'Isi Jawaban', ttd: 'Tanda Tangan Saya' }[tampilan] || 'Jadwal Supervisi Saya';
-      muat();
-    });
+    a.addEventListener('click', function (e) { e.preventDefault(); keHalaman(a.dataset.view); });
   });
 
   (async function () {
@@ -274,7 +350,15 @@
     meId = s.user.id; meNama = (p.data && p.data.nama) || s.user.email;
     document.getElementById('userName').textContent = meNama;
     lucide.createIcons();
-    muat();
+    var awal = 'jadwal';
+    try {
+      var c1 = await supabaseClient.from('supervisi_jadwal').select('id', { count: 'exact', head: true });
+      if (!c1.error && !c1.count) {
+        var c2 = await supabaseClient.rpc('supervisi_jadwal_guru');
+        if (!c2.error && c2.data && c2.data.length) awal = 'wawancara';
+      }
+    } catch (x) { /* tetap di halaman jadwal */ }
+    keHalaman(awal);
   })();
   document.getElementById('logoutBtn').addEventListener('click', async function (e) { e.preventDefault(); await catatAktivitas('logout', 'Akun', 'Keluar dari aplikasi'); await supabaseClient.auth.signOut(); location.href = 'index.html'; });
 </script>

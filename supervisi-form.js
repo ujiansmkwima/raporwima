@@ -28,7 +28,29 @@ var SvForm = (function () {
     o.pertanyaan = f.pertanyaan.filter(function (q) { return q.tipe === 'bagian' || !/\(K\)/.test(q.teks); });
     return o;
   }
-  function render(f, jw, d) {
+  // Butir yang DIJAWAB GURU (wawancara / dialog reflektif): tipe teks pada bagian berjudul "Wawancara ..."
+  // atau berketerangan "Isi dengan jawaban/tanggapan guru"; atau butir bertanda oleh:'guru'.
+  function untukGuru(f) {
+    var out = [], dalam = false;
+    (f.pertanyaan || []).forEach(function (q) {
+      if (q.tipe === 'bagian') { dalam = /wawancara/i.test(q.teks || '') || /isi dengan (jawaban|tanggapan) guru/i.test(q.keterangan || ''); return; }
+      if (q.tipe === 'teks' && (dalam || q.oleh === 'guru')) out.push(q);
+    });
+    return out;
+  }
+  // Tampilan isian guru (halaman Wawancara Saya): jg = { id_pertanyaan: jawaban }
+  function renderGuru(f, jg, kunci) {
+    jg = jg || {}; var n = 0;
+    return untukGuru(f).map(function (q) {
+      return '<div class="sv-q"><div class="sv-q__t">' + (++n) + '. ' + esc(q.teks) + '</div><textarea data-g="' + q.id + '" rows="4" style="width:100%;"' + (kunci ? ' disabled' : '') + '>' + esc(jg[q.id]) + '</textarea></div>';
+    }).join('');
+  }
+  function bacaGuru(root) {
+    var j = {};
+    root.querySelectorAll('[data-g]').forEach(function (el) { j[el.dataset.g] = el.value; });
+    return j;
+  }
+  function render(f, jw, d, dariGuru) {
     jw = jw || {}; var n = 0; var pn = penentu(f); f = aktif(f, jw);
     function v(k) { return jw[k] === undefined ? '' : String(jw[k]); }
     return f.pertanyaan.map(function (q) {
@@ -45,7 +67,8 @@ var SvForm = (function () {
         var tu = turunan(q.teks, d);
         b = '<input data-a="' + q.id + '" style="width:100%;" value="' + esc(tu || v(q.id)) + '"' + (tu ? ' readonly' : '') + '>';
       } else b = '<textarea data-a="' + q.id + '" rows="3" style="width:100%;">' + esc(v(q.id)) + '</textarea>';
-      return '<div class="sv-q"><div class="sv-q__t">' + esc(judul) + '</div>' + b + '</div>';
+      var lencana = (dariGuru && dariGuru[q.id]) ? ' <span style="font-size:11px;font-weight:700;color:#047857;background:#d1fae5;border-radius:99px;padding:2px 8px;white-space:nowrap;">✓ Diisi oleh guru</span>' : '';
+      return '<div class="sv-q"><div class="sv-q__t">' + esc(judul) + lencana + '</div>' + b + '</div>';
     }).join('');
   }
 
@@ -83,12 +106,19 @@ var SvForm = (function () {
   }
   // Isian tiap form dalam paket dari sebuah jadwal: [{ form, jawaban, catatan }]. Induk memakai kolom lama, sisanya jawaban_paket.
   function isianPaket(j, forms) {
-    var jp = j.jawaban_paket || {};
+    var jp = j.jawaban_paket || {}, jg = j.jawaban_guru || {};
     return forms.map(function (f, i) {
-      if (i === 0) return { form: f, jawaban: j.jawaban || {}, catatan: j.catatan || '' };
-      var p = jp[f.id] || {};
-      return { form: f, jawaban: p.jawaban || {}, catatan: p.catatan || '' };
+      var it;
+      if (i === 0) it = { form: f, jawaban: Object.assign({}, j.jawaban || {}), catatan: j.catatan || '' };
+      else { var p = jp[f.id] || {}; it = { form: f, jawaban: Object.assign({}, p.jawaban || {}), catatan: p.catatan || '' }; }
+      // Jawaban wawancara yang ditulis guru sendiri didahulukan; supervisor tetap boleh mengeditnya.
+      var g = jg[f.id] || {}; it.dariGuru = {};
+      untukGuru(f).forEach(function (q) {
+        var v = g[q.id];
+        if (v !== undefined && v !== null && String(v).trim() !== '') { it.jawaban[q.id] = v; it.dariGuru[q.id] = 1; }
+      });
+      return it;
     });
   }
-  return { penentu: penentu, aktif: aktif, render: render, baca: baca, hasil: hasil, identitas: identitas, paket: paket, indukDari: indukDari, isianPaket: isianPaket };
+  return { penentu: penentu, aktif: aktif, render: render, baca: baca, hasil: hasil, identitas: identitas, paket: paket, indukDari: indukDari, isianPaket: isianPaket, untukGuru: untukGuru, renderGuru: renderGuru, bacaGuru: bacaGuru };
 })();
