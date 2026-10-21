@@ -813,6 +813,9 @@
     '@media(max-width:700px){.bi-ds-form .form-grid{grid-template-columns:1fr;}}' +
     '.bi-ds-act button:disabled{opacity:.55;cursor:not-allowed;}' +
     '.bi-ds-fcol{display:flex;flex-direction:column;gap:6px;align-items:stretch;width:92px;}' +
+    '.bi-ds-fupl{border:1px solid rgba(255,255,255,.7);background:#fff;color:var(--primary-dim);font-family:var(--font-body);font-size:11px;font-weight:700;padding:6px 4px;border-radius:8px;cursor:pointer;width:100%;}' +
+    '.bi-ds-fupl:hover{background:#eff6ff;}' +
+    '.bi-ds-fupl:disabled{opacity:.6;cursor:not-allowed;}' +
     '.bi-ds-fhapus{border:1px solid rgba(254,202,202,.85);background:rgba(220,38,38,.88);color:#fff;font-family:var(--font-body);font-size:11px;font-weight:700;padding:6px 4px;border-radius:8px;cursor:pointer;width:100%;}' +
     '.bi-ds-fhapus:hover{background:#b91c1c;}' +
     '.bi-ds-fhapus:disabled{opacity:.6;cursor:not-allowed;}' +
@@ -996,9 +999,10 @@
         '<div class="bi-ds-hero">' +
         '<div class="bi-ds-fotos">' +
         '<div class="bi-ds-fcol"><div class="bi-ds-foto" id="biDsFotoMasuk">Foto<br>3 × 4</div>' +
-        (editMode && bolehUbah ? '<button type="button" class="bi-ds-fhapus" data-hapus="masuk" hidden>🗑 Hapus Foto</button>' : '') + '</div>' +
+        (editMode && bolehUbah ? '<button type="button" class="bi-ds-fupl" data-upl="masuk">📷 Upload Foto</button><button type="button" class="bi-ds-fhapus" data-hapus="masuk" hidden>🗑 Hapus Foto</button>' : '') + '</div>' +
         '<div class="bi-ds-fcol"><div class="bi-ds-foto" id="biDsFotoLulus"' + (bolehUbah ? '' : ' hidden') + '>' + (bolehUbah ? 'Foto<br>Lulus' : '') + '</div>' +
-        (editMode && bolehUbah ? '<button type="button" class="bi-ds-fhapus" data-hapus="lulus" hidden>🗑 Hapus Foto</button>' : '') + '</div></div>' +
+        (editMode && bolehUbah ? '<button type="button" class="bi-ds-fupl" data-upl="lulus">📷 Upload Foto</button><button type="button" class="bi-ds-fhapus" data-hapus="lulus" hidden>🗑 Hapus Foto</button>' : '') + '</div>' +
+        (editMode && bolehUbah ? '<input type="file" id="biDsFile" accept="image/*" hidden>' : '') + '</div>' +
         '<div class="bi-ds-who"><h2 class="bi-ds-nama">' + esc(s.nama) + '</h2><div class="bi-ds-meta">' +
         (s.kelas ? '<span class="bi-ds-pill">' + esc(s.kelas.nama) + '</span>' : '') +
         (s.no_absen ? '<span class="bi-ds-pill">Absen ' + esc(s.no_absen) + '</span>' : '') +
@@ -1010,10 +1014,7 @@
         (bolehUbah ? (editMode ?
           '<button type="button" class="simpan" id="biDsSimpan">💾 Simpan Perubahan</button><button type="button" id="biDsBatal">✕ Batal</button>' :
           '<button type="button" class="utama" id="biDsEdit">✏️ Edit Data</button>') +
-          '<span class="bi-ds-upl"><button type="button" id="biDsUpl">📷 Upload Foto ▾</button><div class="bi-ds-uplmenu" id="biDsUplMenu" hidden>' +
-          '<button type="button" data-j="masuk">🎓 Foto Saat Masuk<small>Foto 3×4 saat diterima di sekolah</small></button>' +
-          '<button type="button" data-j="lulus">🏅 Foto Saat Lulus<small>Foto 3×4 saat lulus / keluar</small></button></div></span>' +
-          '<input type="file" id="biDsFile" accept="image/*" hidden>' : '') +
+          '' : '') +
         '<button type="button" id="biDsCetak">🖨 Cetak Biodata</button><button type="button" id="biDsCetakNilai">🖨 Cetak Nilai</button>' +
         '</div></div>' +
         '<div class="bi-ds-rata"><div class="bi-ds-rata-t">Rata-rata nilai per semester</div><div class="bi-ds-rata-g" id="biDsRata">' + htmlRata(rataCache[s.id]) + '</div></div>' +
@@ -1090,28 +1091,26 @@
         });
       });
 
-      // Upload foto: pilih jenis (saat masuk / saat lulus) lalu pilih file.
-      var bUpl = elKartu.querySelector('#biDsUpl'), menuUpl = elKartu.querySelector('#biDsUplMenu'), inpFile = elKartu.querySelector('#biDsFile');
-      if (bUpl && menuUpl && inpFile) {
-        bUpl.addEventListener('click', function () { menuUpl.hidden = !menuUpl.hidden; });
-        menuUpl.querySelectorAll('[data-j]').forEach(function (b) {
-          b.addEventListener('click', function () { jenisFoto = b.dataset.j; menuUpl.hidden = true; inpFile.value = ''; inpFile.click(); });
+      // Upload foto lewat tombol di bawah tiap foto (hanya muncul saat mode edit, hanya admin/guru).
+      var inpFile = elKartu.querySelector('#biDsFile');
+      if (inpFile) {
+        var tombolUpl = null;
+        elKartu.querySelectorAll('[data-upl]').forEach(function (bu) {
+          bu.addEventListener('click', function () { jenisFoto = bu.dataset.upl; tombolUpl = bu; inpFile.value = ''; inpFile.click(); });
         });
         inpFile.addEventListener('change', async function () {
-          var file = inpFile.files[0]; var key = jenisFoto;
-          if (!file || !key) return;
+          var file = inpFile.files[0]; var key = jenisFoto; var bu = tombolUpl;
+          if (!file || !key || !bu) return;
           var ket = key === 'masuk' ? 'saat masuk' : 'saat lulus';
-          bUpl.disabled = true; var teksU = bUpl.textContent; bUpl.textContent = 'Mengunggah...';
+          bu.disabled = true; var teksU = bu.textContent; bu.textContent = 'Mengunggah...';
           try {
             await unggahFotoSiswa(s, key, file);
             toast('Foto ' + ket + ' berhasil disimpan.');
             if (my === token) muatFotoKartu();
           } catch (err) { toast('Gagal mengunggah foto: ' + pesanError(err), true); }
-          bUpl.disabled = false; bUpl.textContent = teksU; inpFile.value = '';
+          bu.disabled = false; bu.textContent = teksU; inpFile.value = '';
         });
       }
-      elKartu.querySelector('#biDsCetak').addEventListener('click', function () { BI.cetak([s], 'biodata'); });
-      elKartu.querySelector('#biDsCetakNilai').addEventListener('click', function () { BI.cetak([s], 'nilai'); });
 
       // Rata-rata semester dimuat belakangan (di-cache per siswa).
       (function () {
