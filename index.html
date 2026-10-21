@@ -14,7 +14,7 @@
 <style id="introSplashCss">
 /* ===== Animasi pembuka halaman Masuk ===== */
 .intro-splash{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;
-  background:radial-gradient(120% 90% at 50% 40%,#16254a 0%,#0b1220 70%);color:#f8fafc;cursor:pointer;
+  background:radial-gradient(120% 90% at 50% 40%,rgba(22,37,74,.86) 0%,rgba(11,18,32,.92) 70%);color:#f8fafc;cursor:pointer;
   transition:transform .9s cubic-bezier(.77,0,.18,1),opacity .4s ease .6s;}
 .intro-splash.is-leaving{transform:translateY(-100%);opacity:0;pointer-events:none;}
 .intro-splash.is-gone{display:none;}
@@ -35,13 +35,26 @@
 @keyframes introRing{to{stroke-dashoffset:0;}}
 @keyframes introWord{to{opacity:1;filter:blur(0);letter-spacing:-.01em;}}
 @keyframes introFade{to{opacity:1;}}
+.intro-splash__inner,.intro-splash__skip{position:relative;z-index:2;}
+.intro-splash__skip{position:absolute;}
 @media (prefers-reduced-motion:reduce){
   .intro-splash,.intro-splash__logo,.intro-splash__logo circle,.intro-splash__text .w,.intro-splash__skip{animation-duration:.01s!important;animation-delay:0s!important;transition-duration:.2s!important;transition-delay:0s!important;}
   .intro-splash.is-leaving{transform:none;}
 }
 </style>
+<style id="pageBgCss">
+/* Latar slideshow hitam putih di belakang seluruh halaman Masuk */
+body{background:#0b1220;}
+.page-bg.login-slideshow{position:fixed;inset:0;width:100%;height:100%;aspect-ratio:auto;max-height:none;
+  border-radius:0;box-shadow:none;background:#0b1220;z-index:0;filter:grayscale(1) contrast(1.05);}
+.page-bg::after{content:"";position:absolute;inset:0;z-index:5;pointer-events:none;
+  background:linear-gradient(180deg,rgba(8,12,22,.5),rgba(8,12,22,.66));}
+.page-bg .login-slideshow__caption{display:none;}
+.login-shell{position:relative;z-index:1;background:transparent;background-image:none;}
+</style>
 </head>
 <body>
+<div class="login-slideshow page-bg" id="pageBg" aria-hidden="true"><div class="login-slideshow__track" id="pageBgTrack"></div></div>
 
 <div class="intro-splash" id="introSplash" role="presentation">
   <div class="intro-splash__inner">
@@ -421,7 +434,66 @@
   document.documentElement.style.overflow = 'hidden';
   el.addEventListener('click', tutup);
   document.addEventListener('keydown', tutup, { once: true });
-  setTimeout(tutup, 3800);
+  setTimeout(tutup, 5000);
+})();
+</script>
+
+
+<script>
+// Slideshow latar halaman (hitam putih, selalu berjalan) — data sama dengan slideshow login.
+(function () {
+  var bg = document.getElementById('pageBg');
+  var track = document.getElementById('pageBgTrack');
+  if (!bg || !track) return;
+  var CACHE_KEY = 'login_slideshow_cache_v1';
+  var INTERVAL = 5500;
+  var EFEK = ['zoom', 'geser', 'lingkar', 'tirai', 'kabur'];
+  var slides = [], aktif = 0, timer = null, efekLalu = '';
+
+  function url(v) {
+    if (!v) return '';
+    if (/^(data:|https?:)/.test(v)) return v;
+    try { return supabaseClient.storage.from('login-slideshow').getPublicUrl(v).data.publicUrl; } catch (e) { return ''; }
+  }
+  function tambah(row) {
+    var u = url(row.gambar);
+    if (!u) return;
+    var el = document.createElement('div');
+    el.className = 'login-slideshow__slide' + (slides.length === 0 ? ' is-active' : '');
+    var img = document.createElement('img');
+    img.alt = ''; img.decoding = 'async'; img.src = u;
+    el.appendChild(img);
+    track.appendChild(el);
+    slides.push(el);
+    if (slides.length === 1) track.setAttribute('data-efek', 'kabur');
+    if (slides.length === 2) timer = setInterval(geser, INTERVAL);
+  }
+  function pilihEfek() {
+    var e; do { e = EFEK[Math.floor(Math.random() * EFEK.length)]; } while (e === efekLalu);
+    efekLalu = e; return e;
+  }
+  function geser() {
+    if (document.hidden) return;
+    var lama = aktif; aktif = (aktif + 1) % slides.length;
+    track.setAttribute('data-efek', pilihEfek());
+    slides.forEach(function (el, i) {
+      if (i === aktif) { el.classList.remove('is-leaving'); el.classList.add('is-active'); }
+      else if (i === lama) { el.classList.remove('is-active'); el.classList.add('is-leaving'); }
+      else el.classList.remove('is-active', 'is-leaving');
+    });
+  }
+
+  try {
+    var raw = localStorage.getItem(CACHE_KEY);
+    var cache = raw ? JSON.parse(raw) : null;
+    if (cache && cache.length) { cache.slice(0, 10).forEach(tambah); return; }
+  } catch (e) { /* lanjut ambil dari server */ }
+
+  if (typeof supabaseClient === 'undefined') return;
+  supabaseClient.from('login_slideshow').select('*')
+    .order('urutan', { ascending: true }).order('created_at', { ascending: true }).limit(8)
+    .then(function (r) { (r.data || []).forEach(tambah); })
+    .catch(function () { /* dekoratif: abaikan */ });
 })();
 </script>
 </body>
