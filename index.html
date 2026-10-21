@@ -11,8 +11,48 @@
 <script src="https://unpkg.com/lucide@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-client.js"></script>
+<style id="introSplashCss">
+/* ===== Animasi pembuka halaman Masuk ===== */
+.intro-splash{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(120% 90% at 50% 40%,#16254a 0%,#0b1220 70%);color:#f8fafc;cursor:pointer;
+  transition:transform .9s cubic-bezier(.77,0,.18,1),opacity .4s ease .6s;}
+.intro-splash.is-leaving{transform:translateY(-100%);opacity:0;pointer-events:none;}
+.intro-splash.is-gone{display:none;}
+.intro-splash__inner{display:flex;flex-direction:column;align-items:center;gap:28px;padding:24px;text-align:center;max-width:720px;}
+.intro-splash__logo{position:relative;width:96px;height:96px;display:flex;align-items:center;justify-content:center;
+  opacity:0;transform:scale(.7);animation:introLogo .9s cubic-bezier(.2,.8,.2,1) .15s forwards;}
+.intro-splash__logo img{width:72px;height:auto;position:relative;z-index:1;}
+.intro-splash__logo svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg);}
+.intro-splash__logo circle{fill:none;stroke:#60a5fa;stroke-width:2;stroke-linecap:round;stroke-dasharray:289;stroke-dashoffset:289;
+  animation:introRing 1.4s ease-in-out .3s forwards;}
+.intro-splash__text{margin:0;font-family:var(--font-display,'Plus Jakarta Sans',sans-serif);font-weight:700;
+  font-size:clamp(22px,4.6vw,40px);line-height:1.25;letter-spacing:-.01em;}
+.intro-splash__text .w{display:inline-block;opacity:0;filter:blur(10px);letter-spacing:.08em;
+  animation:introWord .75s cubic-bezier(.2,.8,.2,1) forwards;animation-delay:calc(1s + var(--i)*.14s);}
+.intro-splash__skip{position:absolute;bottom:24px;left:0;right:0;text-align:center;font-size:12px;color:#94a3b8;
+  opacity:0;animation:introFade .6s ease 1.4s forwards;}
+@keyframes introLogo{to{opacity:1;transform:scale(1);}}
+@keyframes introRing{to{stroke-dashoffset:0;}}
+@keyframes introWord{to{opacity:1;filter:blur(0);letter-spacing:-.01em;}}
+@keyframes introFade{to{opacity:1;}}
+@media (prefers-reduced-motion:reduce){
+  .intro-splash,.intro-splash__logo,.intro-splash__logo circle,.intro-splash__text .w,.intro-splash__skip{animation-duration:.01s!important;animation-delay:0s!important;transition-duration:.2s!important;transition-delay:0s!important;}
+  .intro-splash.is-leaving{transform:none;}
+}
+</style>
 </head>
 <body>
+
+<div class="intro-splash" id="introSplash" role="presentation">
+  <div class="intro-splash__inner">
+    <div class="intro-splash__logo">
+      <svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="46"/></svg>
+      <img src="assets/logo.png" alt="">
+    </div>
+    <p class="intro-splash__text" id="introText" aria-label="Presented to incredible Teacher of SMK WIMATA.">Presented to incredible Teacher of SMK WIMATA.</p>
+  </div>
+  <div class="intro-splash__skip">Ketuk untuk melewati</div>
+</div>
 
 <div class="login-shell" id="loginShell">
 
@@ -362,5 +402,27 @@
   });
 </script>
 
+
+<script>
+(function () {
+  var el = document.getElementById('introSplash');
+  var txt = document.getElementById('introText');
+  if (!el || !txt) return;
+  var words = txt.textContent.split(' ');
+  txt.innerHTML = words.map(function (w, i) {
+    return '<span class="w" aria-hidden="true" style="--i:' + i + '">' + w + '</span>';
+  }).join(' ');
+  var done = false;
+  function tutup() {
+    if (done) return; done = true;
+    el.classList.add('is-leaving');
+    setTimeout(function () { el.classList.add('is-gone'); document.documentElement.style.overflow = ''; }, 1100);
+  }
+  document.documentElement.style.overflow = 'hidden';
+  el.addEventListener('click', tutup);
+  document.addEventListener('keydown', tutup, { once: true });
+  setTimeout(tutup, 3800);
+})();
+</script>
 </body>
 </html>
