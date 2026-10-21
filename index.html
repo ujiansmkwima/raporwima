@@ -51,7 +51,43 @@ body{background:#0b1220;}
   background:linear-gradient(180deg,rgba(8,12,22,.5),rgba(8,12,22,.66));}
 .page-bg .login-slideshow__caption{display:none;}
 .login-shell{position:relative;z-index:1;background:transparent;background-image:none;}
-.login-panduan-alt{display:block;}
+
+/* ===== Layout setelah animasi pembuka: panel merek (kiri) + kartu login (kanan) ===== */
+.login-shell{display:flex!important;flex-direction:row!important;align-items:center;justify-content:center;
+  gap:clamp(32px,7vw,110px);min-height:100vh;padding:40px clamp(20px,6vw,96px);box-sizing:border-box;width:100%;}
+.login-shell .login-card{margin:0;}
+.login-shell .login-card__title{margin-bottom:22px;}
+.login-shell .login-card__icon,.login-shell .login-card__sub{display:none!important;}
+.brand-panel{flex:1 1 0;max-width:560px;color:#f8fafc;display:flex;flex-direction:column;align-items:flex-start;gap:20px;}
+.brand-panel__logo{width:clamp(84px,9vw,120px);height:auto;filter:drop-shadow(0 8px 24px rgba(0,0,0,.45));}
+.brand-panel__title{margin:0;font-family:var(--font-display,'Plus Jakarta Sans',sans-serif);font-weight:800;
+  font-size:clamp(28px,4.2vw,52px);line-height:1.1;letter-spacing:-.02em;}
+.brand-panel__tag{margin:0;font-size:clamp(11px,1.2vw,13px);font-weight:600;letter-spacing:.14em;line-height:1.8;
+  text-transform:uppercase;color:#cbd5e1;max-width:46ch;}
+.brand-panel__features{display:flex;flex-wrap:wrap;gap:14px;margin-top:10px;}
+.brand-feature{display:flex;align-items:center;gap:12px;padding:10px 18px 10px 10px;border-radius:14px;
+  background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}
+.brand-feature__ico{width:40px;height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;
+  background:rgba(96,165,250,.2);color:#93c5fd;}
+.brand-feature__ico svg{width:20px;height:20px;}
+.brand-feature__label{font-size:14px;font-weight:700;letter-spacing:.02em;}
+/* muncul setelah animasi pembuka selesai */
+body:not(.intro-done) .reveal{opacity:0;}
+body.intro-done .reveal{animation:revealUp .8s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(.1s + var(--r,0)*.14s);}
+@keyframes revealUp{from{opacity:0;transform:translateY(22px);}to{opacity:1;transform:none;}}
+@media (max-width:900px){
+  .login-shell{flex-direction:column!important;justify-content:flex-start;gap:28px;padding:36px 20px;}
+  .brand-panel{align-items:center;text-align:center;max-width:100%;flex:0 0 auto;}
+  .brand-panel__features{justify-content:center;}
+  .login-shell .login-card{width:min(400px,100%);}
+}
+@media (max-width:480px){
+  .login-shell{padding:28px 16px;gap:24px;}
+  .brand-panel__features{gap:10px;}
+  .brand-feature{padding:8px 14px 8px 8px;}
+  .brand-feature__label{font-size:13px;}
+}
+@media (prefers-reduced-motion:reduce){body.intro-done .reveal{animation-duration:.01s;animation-delay:0s;}}
 </style>
 </head>
 <body>
@@ -70,14 +106,24 @@ body{background:#0b1220;}
 
 <div class="login-shell" id="loginShell">
 
-  <form class="login-card" id="loginForm">
+  <section class="brand-panel reveal" style="--r:0">
+    <img class="brand-panel__logo" src="assets/logo.png" alt="Logo SMK Widya Mandala Tambak">
+    <h1 class="brand-panel__title">PORTAL DATA<br>DAN PENILAIAN</h1>
+    <p class="brand-panel__tag">Presented to incredible Teachers and Students of SMK Widya Mandala Tambak</p>
+    <div class="brand-panel__features">
+      <div class="brand-feature"><span class="brand-feature__ico"><i data-lucide="book-marked"></i></span><span class="brand-feature__label">Buku Induk</span></div>
+      <div class="brand-feature"><span class="brand-feature__ico"><i data-lucide="clipboard-check"></i></span><span class="brand-feature__label">E-Rapor</span></div>
+      <div class="brand-feature"><span class="brand-feature__ico"><i data-lucide="eye"></i></span><span class="brand-feature__label">Supervisi</span></div>
+    </div>
+  </section>
+
+  <form class="login-card reveal" style="--r:1" id="loginForm">
 
     <div class="login-card__icon">
       <img src="assets/logo.png" alt="Logo SMK Widya Mandala Tambak">
     </div>
 
     <div class="login-card__title" id="loginTitle">Masuk</div>
-    <div class="login-card__sub">PORTAL DATA DAN PENILAIAN SMK WIDYA MANDALA TAMBAK<br>Buku Induk · E-Rapor · Supervisi</div>
 
     <div class="field">
       <label for="email">NIS atau Email</label>
@@ -214,6 +260,7 @@ body{background:#0b1220;}
   function tutup() {
     if (done) return; done = true;
     el.classList.add('is-leaving');
+    document.body.classList.add('intro-done');
     setTimeout(function () { el.classList.add('is-gone'); document.documentElement.style.overflow = ''; }, 1100);
   }
   document.documentElement.style.overflow = 'hidden';
