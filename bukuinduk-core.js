@@ -287,8 +287,13 @@
     return m;
   }
 
+  // Hanya admin dan guru (wali kelas) yang boleh mengubah / mengunggah / menghapus foto & biodata.
+  // Siswa hanya melihat. (Server juga menolak lewat RLS; ini lapisan tambahan di tampilan.)
+  BI.bolehEdit = function () { return !!(BI.ctx && (BI.ctx.admin || BI.ctx.role === 'guru')); };
+
   // Unggah blob JPEG ke Storage. Nama file unik supaya tidak kena cache.
   BI.unggahFoto = async function (siswaId, key, blob) {
+    if (!BI.bolehEdit()) throw new Error('Hanya guru dan admin yang boleh mengubah foto.');
     var path = siswaId + '/' + key + '-' + Date.now() + '.jpg';
     var r = await sb().storage.from(BUCKET_FOTO).upload(path, blob, { contentType: 'image/jpeg', cacheControl: '3600', upsert: false });
     if (r.error) throw r.error;
@@ -449,7 +454,7 @@
   // opts: { root, bolehUbah, onKembali, labelKembali }
   BI.bukaSiswa = async function (s, opts) {
     var root = opts.root;
-    var bolehUbah = opts.bolehUbah !== false;
+    var bolehUbah = opts.bolehUbah !== false && BI.bolehEdit();
     var FOTO = [
       { key: 'masuk', kolom: 'foto', judul: 'Foto Saat Masuk', ket: 'Foto 3×4 saat diterima di sekolah.' },
       { key: 'lulus', kolom: 'foto_lulus', judul: 'Foto Saat Lulus', ket: 'Foto 3×4 saat lulus / meninggalkan sekolah.' }
@@ -807,6 +812,11 @@
     '@media(min-width:1000px){.bi-ds-form .form-grid{grid-template-columns:1fr 1fr 1fr;}}' +
     '@media(max-width:700px){.bi-ds-form .form-grid{grid-template-columns:1fr;}}' +
     '.bi-ds-act button:disabled{opacity:.55;cursor:not-allowed;}' +
+    '.bi-ds-fcol{display:flex;flex-direction:column;gap:6px;align-items:stretch;width:92px;}' +
+    '.bi-ds-fhapus{border:1px solid rgba(254,202,202,.85);background:rgba(220,38,38,.88);color:#fff;font-family:var(--font-body);font-size:11px;font-weight:700;padding:6px 4px;border-radius:8px;cursor:pointer;width:100%;}' +
+    '.bi-ds-fhapus:hover{background:#b91c1c;}' +
+    '.bi-ds-fhapus:disabled{opacity:.6;cursor:not-allowed;}' +
+    '.bi-ds-fhapus[hidden]{display:none;}' +
     '.bi-ds-act button.simpan{background:#34d399;border-color:#34d399;color:#053b2a;}' +
     '.bi-ds-act button.simpan:hover{background:#6ee7b7;}' +
     '.bi-ds-upl{position:relative;display:inline-block;}' +
@@ -854,7 +864,7 @@
   // opts: { root, kelasId, bolehUbah, siswaId (awal), tabAwal, daftar (opsional: daftar siswa yang sudah dimuat) }
   BI.dashboardSiswa = async function (opts) {
     var root = opts.root;
-    var bolehUbah = opts.bolehUbah !== false;
+    var bolehUbah = opts.bolehUbah !== false && BI.bolehEdit();
     pasangCssDash();
     root.innerHTML = '<div class="panel-note">Memuat data siswa...</div>';
     var list = opts.daftar;
@@ -931,6 +941,18 @@
       if (cur.path && cur.path[key]) await BI.hapusFoto(cur.path[key]);
     }
 
+    async function hapusFotoSiswa(s, key) {
+      if (!BI.bolehEdit()) throw new Error('Hanya guru dan admin yang boleh menghapus foto.');
+      var kolom = key === 'masuk' ? 'foto' : 'foto_lulus';
+      var cur = await BI.muatFotoSemua(s.id);
+      var lama = cur.path && cur.path[key];
+      var d = { siswa_id: s.id, updated_by: BI.ctx.userId, updated_at: new Date().toISOString() };
+      d[kolom] = null;
+      var r = await sb().from('bi_siswa_detail').upsert(d, { onConflict: 'siswa_id' });
+      if (r.error) throw r.error;
+      if (lama) await BI.hapusFoto(lama);
+    }
+
     function muatLazy(id, s, el) {
       if (id === 'perkembangan') renderPerkembangan(el, s, bolehUbah);
       else if (id === 'catatan') renderCatatan(el, s, bolehUbah);
@@ -972,7 +994,11 @@
       elKartu.innerHTML =
         '<div class="bi-ds-card' + (editMode ? ' bi-ds-card--edit' : '') + '">' +
         '<div class="bi-ds-hero">' +
-        '<div class="bi-ds-fotos"><div class="bi-ds-foto" id="biDsFotoMasuk">Foto<br>3 × 4</div><div class="bi-ds-foto" id="biDsFotoLulus"' + (bolehUbah ? '' : ' hidden') + '>' + (bolehUbah ? 'Foto<br>Lulus' : '') + '</div></div>' +
+        '<div class="bi-ds-fotos">' +
+        '<div class="bi-ds-fcol"><div class="bi-ds-foto" id="biDsFotoMasuk">Foto<br>3 × 4</div>' +
+        (editMode && bolehUbah ? '<button type="button" class="bi-ds-fhapus" data-hapus="masuk" hidden>🗑 Hapus Foto</button>' : '') + '</div>' +
+        '<div class="bi-ds-fcol"><div class="bi-ds-foto" id="biDsFotoLulus"' + (bolehUbah ? '' : ' hidden') + '>' + (bolehUbah ? 'Foto<br>Lulus' : '') + '</div>' +
+        (editMode && bolehUbah ? '<button type="button" class="bi-ds-fhapus" data-hapus="lulus" hidden>🗑 Hapus Foto</button>' : '') + '</div></div>' +
         '<div class="bi-ds-who"><h2 class="bi-ds-nama">' + esc(s.nama) + '</h2><div class="bi-ds-meta">' +
         (s.kelas ? '<span class="bi-ds-pill">' + esc(s.kelas.nama) + '</span>' : '') +
         (s.no_absen ? '<span class="bi-ds-pill">Absen ' + esc(s.no_absen) + '</span>' : '') +
@@ -1046,6 +1072,24 @@
         }
       });
 
+      elKartu.querySelectorAll('[data-hapus]').forEach(function (bh) {
+        bh.addEventListener('click', async function () {
+          var key = bh.dataset.hapus, ket = key === 'masuk' ? 'saat masuk' : 'saat lulus';
+          if (!confirm('Hapus foto ' + ket + ' siswa ini? Tindakan ini langsung tersimpan.')) return;
+          bh.disabled = true;
+          try {
+            await hapusFotoSiswa(s, key);
+            if (my === token) {
+              var box = elKartu.querySelector(key === 'masuk' ? '#biDsFotoMasuk' : '#biDsFotoLulus');
+              if (box) box.innerHTML = key === 'masuk' ? 'Foto<br>3 × 4' : 'Foto<br>Lulus';
+              bh.hidden = true;
+            }
+            toast('Foto ' + ket + ' dihapus.');
+          } catch (err) { toast('Gagal menghapus foto: ' + pesanError(err), true); }
+          bh.disabled = false;
+        });
+      });
+
       // Upload foto: pilih jenis (saat masuk / saat lulus) lalu pilih file.
       var bUpl = elKartu.querySelector('#biDsUpl'), menuUpl = elKartu.querySelector('#biDsUplMenu'), inpFile = elKartu.querySelector('#biDsFile');
       if (bUpl && menuUpl && inpFile) {
@@ -1084,6 +1128,8 @@
         function isi(id, src, ket) {
           var el = elKartu.querySelector(id); if (!el || !src) return;
           el.hidden = false; el.innerHTML = '<img src="' + src + '" alt="' + ket + '"><small>' + ket + '</small>';
+          var bh = elKartu.querySelector('[data-hapus="' + (id === '#biDsFotoMasuk' ? 'masuk' : 'lulus') + '"]');
+          if (bh) bh.hidden = false;
         }
         isi('#biDsFotoMasuk', foto.masuk, 'SAAT MASUK');
         isi('#biDsFotoLulus', foto.lulus, 'SAAT LULUS');
@@ -2529,6 +2575,7 @@
     BI.ctx.userId = user.id;
     BI.ctx.nama = nama;
     BI.ctx.admin = !!(pr.data && pr.data.role === 'admin');
+    BI.ctx.role = pr.data ? pr.data.role : null;
     BI.ctx.ta = ta || null;
     return { user: user, nama: nama, role: pr.data ? pr.data.role : null, ta: ta };
   };
