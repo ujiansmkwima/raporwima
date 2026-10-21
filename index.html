@@ -51,6 +51,7 @@ body{background:#0b1220;}
   background:linear-gradient(180deg,rgba(8,12,22,.5),rgba(8,12,22,.66));}
 .page-bg .login-slideshow__caption{display:none;}
 .login-shell{position:relative;z-index:1;background:transparent;background-image:none;}
+.login-panduan-alt{display:block;}
 </style>
 </head>
 <body>
@@ -68,16 +69,6 @@ body{background:#0b1220;}
 </div>
 
 <div class="login-shell" id="loginShell">
-
-  <div class="login-left" id="loginLeft" style="display:none;">
-    <div class="login-slideshow" id="loginSlideshow">
-      <div class="login-slideshow__track" id="loginSlideshowTrack"></div>
-      <div class="login-slideshow__dots" id="loginSlideshowDots"></div>
-    </div>
-    <a href="panduan-guru.html" target="_blank" rel="noopener" class="btn-panduan">
-      <i data-lucide="book-open"></i> BACA PANDUAN
-    </a>
-  </div>
 
   <form class="login-card" id="loginForm">
 
@@ -128,212 +119,6 @@ body{background:#0b1220;}
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
-
-  // ================= Slideshow Login =================
-  // Ambil gambar (+ Judul/Deskripsi opsional) dari tabel
-  // public.login_slideshow (diatur Admin lewat menu Admin →
-  // "Slideshow Login"), urut sesuai kolom `urutan`. Tabel ini boleh
-  // dibaca siapa saja (termasuk belum login) — lihat catatan RLS di
-  // migrasi_slideshow_login.sql. Kalau belum ada gambar sama sekali
-  // (atau gagal diambil), panel slideshow tetap disembunyikan dan
-  // halaman Masuk tampil seperti biasa (form login di tengah).
-  (async function initLoginSlideshow() {
-    // Supaya slideshow muncul CEPAT: gambar disimpan sebagai base64 (besar),
-    // jadi TIDAK diambil sekaligus. Alurnya:
-    //   1) Kalau pernah dibuka sebelumnya, tampilkan langsung dari cache
-    //      browser (hampir instan), lalu cache disegarkan di latar belakang.
-    //   2) Kalau belum ada cache, ambil GAMBAR PERTAMA saja dulu -> tampil,
-    //      baru sisanya diambil di latar belakang dan ditambahkan.
-    var CACHE_KEY = 'login_slideshow_cache_v1';
-    var DURASI = 6500; // ms per slide (bar progres di titik ikut durasi ini)
-    var EFEK = ['zoom', 'geser', 'lingkar', 'tirai', 'kabur', 'balik'];
-
-    var wrap = document.getElementById('loginSlideshow');
-    var track = document.getElementById('loginSlideshowTrack');
-    var dots = document.getElementById('loginSlideshowDots');
-    var shell = document.getElementById('loginShell');
-    var left = document.getElementById('loginLeft');
-
-    var slideEls = [];
-    var dotEls = [];
-    var aktif = 0;
-    var timer = null;
-    var timerLeaving = null;
-    var efekTerakhir = '';
-    var kontrolAktif = false;
-    wrap.style.setProperty('--ss-durasi', DURASI + 'ms');
-
-    function bacaCache() {
-      try {
-        var raw = localStorage.getItem(CACHE_KEY);
-        var arr = raw ? JSON.parse(raw) : null;
-        return (arr && arr.length) ? arr : null;
-      } catch (e) { return null; }
-    }
-    function simpanCache(arr) {
-      try { localStorage.setItem(CACHE_KEY, JSON.stringify(arr)); }
-      catch (e) {
-        // Kuota penuh -> simpan gambar pertama saja (yang paling penting).
-        try { localStorage.setItem(CACHE_KEY, JSON.stringify(arr.slice(0, 1))); } catch (e2) {}
-      }
-    }
-    function hapusCache() { try { localStorage.removeItem(CACHE_KEY); } catch (e) {} }
-
-    function pilihEfek() {
-      var e;
-      do { e = EFEK[Math.floor(Math.random() * EFEK.length)]; } while (e === efekTerakhir && EFEK.length > 1);
-      efekTerakhir = e;
-      return e;
-    }
-
-    // Mulai ulang animasi bar progres di titik aktif.
-    function segarkanDot() {
-      dotEls.forEach(function (el) { el.classList.remove('is-active'); });
-      void wrap.offsetWidth; // paksa reflow supaya animasi mulai dari nol
-      if (dotEls[aktif]) dotEls[aktif].classList.add('is-active');
-    }
-
-    function tampilkan(i, arah) {
-      var baru = (i + slideEls.length) % slideEls.length;
-      if (baru === aktif && slideEls[baru].classList.contains('is-active')) return;
-      var lama = aktif;
-      aktif = baru;
-
-      track.style.setProperty('--dir', arah === -1 ? -1 : 1);
-      track.setAttribute('data-efek', pilihEfek());
-
-      slideEls.forEach(function (el, idx) {
-        if (idx === aktif) { el.classList.remove('is-leaving'); el.classList.add('is-active'); }
-        else if (idx === lama) { el.classList.remove('is-active'); el.classList.add('is-leaving'); }
-        else { el.classList.remove('is-active', 'is-leaving'); }
-      });
-      segarkanDot();
-
-      clearTimeout(timerLeaving);
-      timerLeaving = setTimeout(function () {
-        slideEls.forEach(function (el) { el.classList.remove('is-leaving'); });
-      }, 1600);
-    }
-
-    function mulaiAutoGeser() {
-      if (timer) clearInterval(timer);
-      timer = null;
-      if (slideEls.length < 2) return;
-      timer = setInterval(function () { tampilkan(aktif + 1, 1); }, DURASI);
-    }
-
-    // Tombol panah + jeda saat hover: baru dipasang begitu ada >= 2 gambar.
-    function aktifkanKontrol() {
-      if (kontrolAktif) return;
-      kontrolAktif = true;
-      dots.style.display = '';
-
-      var ikonKiri = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>';
-      var ikonKanan = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>';
-      var btnPrev = document.createElement('button');
-      btnPrev.type = 'button';
-      btnPrev.className = 'login-slideshow__nav login-slideshow__nav--prev';
-      btnPrev.setAttribute('aria-label', 'Gambar sebelumnya');
-      btnPrev.innerHTML = ikonKiri;
-      var btnNext = document.createElement('button');
-      btnNext.type = 'button';
-      btnNext.className = 'login-slideshow__nav login-slideshow__nav--next';
-      btnNext.setAttribute('aria-label', 'Gambar berikutnya');
-      btnNext.innerHTML = ikonKanan;
-      wrap.appendChild(btnPrev);
-      wrap.appendChild(btnNext);
-      btnPrev.addEventListener('click', function () { tampilkan(aktif - 1, -1); mulaiAutoGeser(); });
-      btnNext.addEventListener('click', function () { tampilkan(aktif + 1, 1); mulaiAutoGeser(); });
-
-      wrap.addEventListener('mouseenter', function () {
-        wrap.classList.add('is-paused');
-        if (timer) { clearInterval(timer); timer = null; }
-      });
-      wrap.addEventListener('mouseleave', function () {
-        wrap.classList.remove('is-paused');
-        segarkanDot();
-        mulaiAutoGeser();
-      });
-
-      segarkanDot();
-      mulaiAutoGeser();
-    }
-
-    // Gambar ada di Supabase Storage (bucket publik "login-slideshow"); kolom `gambar`
-    // berisi path file. Nilai lama berupa data URL / http tetap dipakai apa adanya.
-    function urlSlide(v) {
-      if (!v) return '';
-      if (/^(data:|https?:)/.test(v)) return v;
-      return supabaseClient.storage.from('login-slideshow').getPublicUrl(v).data.publicUrl;
-    }
-
-    function tambahSlide(s) {
-      var caption = '';
-      if (s.judul || s.deskripsi) {
-        caption = '<div class="login-slideshow__caption">' +
-          (s.judul ? '<div class="login-slideshow__caption-title">' + escapeHtml(s.judul) + '</div>' : '') +
-          (s.deskripsi ? '<div class="login-slideshow__caption-desc">' + escapeHtml(s.deskripsi) + '</div>' : '') +
-          '</div>';
-      }
-      var el = document.createElement('div');
-      el.className = 'login-slideshow__slide' + (slideEls.length === 0 ? ' is-active' : '');
-      el.innerHTML = '<img src="' + urlSlide(s.gambar) + '" alt="" decoding="async">' + caption;
-      track.appendChild(el);
-      slideEls.push(el);
-
-      var dot = document.createElement('span');
-      dot.className = 'login-slideshow__dot';
-      dot.dataset.i = String(slideEls.length - 1);
-      dot.addEventListener('click', function () {
-        var tujuan = parseInt(dot.dataset.i, 10);
-        tampilkan(tujuan, tujuan < aktif ? -1 : 1);
-        mulaiAutoGeser();
-      });
-      dots.appendChild(dot);
-      dotEls.push(dot);
-
-      if (slideEls.length === 1) dots.style.display = 'none'; // 1 gambar: tanpa titik
-      if (slideEls.length >= 2) aktifkanKontrol();
-    }
-
-    function tampilkanPanel() {
-      left.style.display = '';
-      shell.classList.add('login-shell--with-slideshow');
-      segarkanDot();
-    }
-
-    function ambil() {
-      return supabaseClient.from('login_slideshow').select('*')
-        .order('urutan', { ascending: true }).order('created_at', { ascending: true });
-    }
-
-    try {
-      var cache = bacaCache();
-      if (cache) {
-        // Jalur cepat: langsung tampil dari cache, lalu segarkan cache di belakang layar.
-        cache.forEach(tambahSlide);
-        tampilkanPanel();
-        var resAll = await ambil();
-        if (!resAll.error) {
-          if ((resAll.data || []).length) simpanCache(resAll.data); else hapusCache();
-        }
-      } else {
-        // Belum ada cache: ambil 1 gambar dulu supaya cepat tampil.
-        var res1 = await ambil().limit(1);
-        var pertama = res1.data || [];
-        if (!pertama.length) return;
-        tambahSlide(pertama[0]);
-        tampilkanPanel();
-        var resSisa = await ambil().range(1, 49);
-        var sisa = resSisa.data || [];
-        sisa.forEach(tambahSlide);
-        simpanCache(pertama.concat(sisa));
-      }
-    } catch (err) {
-      // Diamkan — slideshow bersifat dekoratif, kegagalan di sini
-      // tidak boleh mengganggu proses login.
-    }
-  })();
 
   function togglePassword() {
     var input = document.getElementById('password');
@@ -483,16 +268,36 @@ body{background:#0b1220;}
     });
   }
 
+  // Perbarui cache di belakang layar supaya perubahan dari Admin ikut muncul di kunjungan berikutnya.
+  function segarkanCache() {
+    if (typeof supabaseClient === 'undefined') return;
+    supabaseClient.from('login_slideshow').select('*')
+      .order('urutan', { ascending: true }).order('created_at', { ascending: true }).range(0, 9)
+      .then(function (r) {
+        if (r.error) return;
+        try {
+          if ((r.data || []).length) localStorage.setItem(CACHE_KEY, JSON.stringify(r.data));
+          else localStorage.removeItem(CACHE_KEY);
+        } catch (e) {
+          try { localStorage.setItem(CACHE_KEY, JSON.stringify((r.data || []).slice(0, 1))); } catch (e2) {}
+        }
+      }).catch(function () {});
+  }
+
   try {
     var raw = localStorage.getItem(CACHE_KEY);
     var cache = raw ? JSON.parse(raw) : null;
-    if (cache && cache.length) { cache.slice(0, 10).forEach(tambah); return; }
+    if (cache && cache.length) {
+      cache.slice(0, 10).forEach(tambah);
+      segarkanCache();
+      return;
+    }
   } catch (e) { /* lanjut ambil dari server */ }
 
   if (typeof supabaseClient === 'undefined') return;
   supabaseClient.from('login_slideshow').select('*')
     .order('urutan', { ascending: true }).order('created_at', { ascending: true }).limit(8)
-    .then(function (r) { (r.data || []).forEach(tambah); })
+    .then(function (r) { (r.data || []).forEach(tambah); if ((r.data || []).length) { try { localStorage.setItem(CACHE_KEY, JSON.stringify(r.data)); } catch (e) {} } })
     .catch(function () { /* dekoratif: abaikan */ });
 })();
 </script>
