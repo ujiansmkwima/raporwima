@@ -611,12 +611,12 @@
     '.bi-dt__prog-top{display:flex;justify-content:space-between;font-size:11.5px;font-weight:600;margin-bottom:5px;opacity:.95;}' +
     '.bi-dt__bar{height:7px;background:rgba(255,255,255,.22);border-radius:99px;overflow:hidden;}' +
     '.bi-dt__bar>i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#6ee7b7,#34d399);}' +
-    '.bi-dt__tabs{display:flex;gap:6px;padding:12px max(24px,calc((100% - 1100px) / 2 + 30px)) 0;border-bottom:1px solid var(--border);overflow-x:auto;background:var(--surface-tint);flex-shrink:0;}' +
-    '.bi-dt__tab{border:none;background:none;font-family:var(--font-body);font-size:13px;font-weight:600;color:var(--ink-soft);padding:9px 14px 11px;cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap;display:flex;gap:7px;align-items:center;}' +
-    '.bi-dt__tab:hover{color:var(--ink);}' +
-    '.bi-dt__tab.on{color:var(--primary-dim);border-bottom-color:var(--primary);}' +
-    '.bi-dt__cnt{font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:99px;background:var(--surface-tint-strong);color:var(--ink-soft);}' +
-    '.bi-dt__tab.on .bi-dt__cnt{background:var(--primary-tint-strong);color:var(--primary-dim);}' +
+    '.bi-dt__tabs{display:flex;flex-wrap:wrap;gap:8px;padding:14px max(24px,calc((100% - 1100px) / 2 + 30px));border-bottom:1px solid var(--border-strong);background:var(--surface-tint-strong);flex-shrink:0;}' +
+    '.bi-dt__tab{border:1.5px solid var(--border-strong);background:#fff;font-family:var(--font-body);font-size:13.5px;font-weight:700;color:var(--ink);padding:9px 16px;cursor:pointer;border-radius:999px;white-space:nowrap;display:flex;gap:8px;align-items:center;box-shadow:0 1px 2px rgba(15,23,42,.08);transition:all .15s;}' +
+    '.bi-dt__tab:hover{border-color:var(--primary);color:var(--primary-dim);background:var(--primary-tint);}' +
+    '.bi-dt__tab.on{background:linear-gradient(135deg,var(--primary),var(--primary-dim));border-color:var(--primary-dim);color:#fff;box-shadow:0 8px 16px -8px rgba(37,99,235,.75);}' +
+    '.bi-dt__cnt{font-size:11px;font-weight:800;padding:1px 8px;border-radius:99px;background:var(--surface-tint-strong);color:var(--ink-soft);}' +
+    '.bi-dt__tab.on .bi-dt__cnt{background:rgba(255,255,255,.26);color:#fff;}' +
     '.bi-dt__scroll{flex:1;min-height:0;overflow-y:auto;}' +
     '.bi-dt__body{padding:8px 30px 24px;width:100%;max-width:1100px;margin:0 auto;}' +
     '.bi-dt__sec{margin-top:20px;}' +
@@ -631,7 +631,7 @@
     '.bi-dt__foot{display:flex;justify-content:flex-end;gap:10px;padding:14px max(24px,calc((100% - 1100px) / 2 + 30px));border-top:1px solid var(--border);background:var(--surface);flex-shrink:0;}' +
     '@media(min-width:900px){.bi-dt__grid{grid-template-columns:1fr 1fr 1fr;}.bi-dt__it--full{grid-column:1/-1;}}' +
     '@media(max-width:640px){.bi-dt__hero{flex-direction:column;align-items:flex-start;padding:22px 18px 18px !important;}.bi-dt__nama{font-size:18px;padding-right:30px;}' +
-    '.bi-dt__body{padding:4px 16px 20px;}.bi-dt__tabs{padding:10px 10px 0 !important;}.bi-dt__grid{grid-template-columns:1fr;}.bi-dt__foot{padding:12px 14px !important;flex-wrap:wrap;}.bi-dt__foot .btn-small{flex:1 1 auto;}}';
+    '.bi-dt__body{padding:4px 16px 20px;}.bi-dt__tabs{flex-wrap:nowrap;overflow-x:auto;padding:10px 10px !important;}.bi-dt__grid{grid-template-columns:1fr;}.bi-dt__foot{padding:12px 14px !important;flex-wrap:wrap;}.bi-dt__foot .btn-small{flex:1 1 auto;}}';
 
   function pasangCssDetail() {
     if (document.getElementById('biDtCss')) return;
@@ -783,12 +783,12 @@
     '.bi-ds-rt-n{font-size:20px;font-weight:800;line-height:1.1;}' +
     '.bi-ds-rt-k{max-width:100%;font-size:9.5px;color:rgba(191,219,254,.7);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:1.2em;}' +
     '.bi-ds-rt--kosong .bi-ds-rt-n{font-weight:600;color:rgba(255,255,255,.4);}' +
-    '.bi-ds-tabs{display:flex;gap:4px;padding:10px 18px 0;border-bottom:1px solid var(--border);overflow-x:auto;background:var(--surface-tint);}' +
-    '.bi-ds-tab{border:none;background:none;font-family:var(--font-body);font-size:13px;font-weight:600;color:var(--ink-soft);padding:9px 14px 11px;cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap;display:flex;gap:7px;align-items:center;}' +
-    '.bi-ds-tab:hover{color:var(--ink);}' +
-    '.bi-ds-tab.on{color:var(--primary-dim);border-bottom-color:var(--primary);}' +
-    '.bi-ds-cnt{font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:99px;background:var(--surface-tint-strong);color:var(--ink-soft);}' +
-    '.bi-ds-tab.on .bi-ds-cnt{background:var(--primary-tint-strong);color:var(--primary-dim);}' +
+    '.bi-ds-tabs{display:flex;flex-wrap:wrap;gap:8px;padding:14px 20px;border-bottom:1px solid var(--border-strong);background:var(--surface-tint-strong);}' +
+    '.bi-ds-tab{border:1.5px solid var(--border-strong);background:#fff;font-family:var(--font-body);font-size:13.5px;font-weight:700;color:var(--ink);padding:9px 16px;cursor:pointer;border-radius:999px;white-space:nowrap;display:flex;gap:8px;align-items:center;box-shadow:0 1px 2px rgba(15,23,42,.08);transition:all .15s;}' +
+    '.bi-ds-tab:hover{border-color:var(--primary);color:var(--primary-dim);background:var(--primary-tint);transform:translateY(-1px);}' +
+    '.bi-ds-tab.on{background:linear-gradient(135deg,var(--primary),var(--primary-dim));border-color:var(--primary-dim);color:#fff;box-shadow:0 8px 16px -8px rgba(37,99,235,.75);}' +
+    '.bi-ds-cnt{font-size:11px;font-weight:800;padding:1px 8px;border-radius:99px;background:var(--surface-tint-strong);color:var(--ink-soft);}' +
+    '.bi-ds-tab.on .bi-ds-cnt{background:rgba(255,255,255,.26);color:#fff;}' +
     '.bi-ds-body{padding:6px 26px 26px;}' +
     '.bi-ds-sec{margin-top:20px;}' +
     '.bi-ds-sec-t{font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--primary-dim);display:flex;align-items:center;gap:8px;margin-bottom:10px;}' +
@@ -799,8 +799,26 @@
     '.bi-ds-l{font-size:10.5px;font-weight:700;letter-spacing:.3px;color:var(--ink-faint);text-transform:uppercase;margin-bottom:3px;}' +
     '.bi-ds-v{font-size:13.5px;font-weight:600;color:var(--ink);word-break:break-word;white-space:pre-wrap;}' +
     '.bi-ds-v--kosong{font-weight:500;font-style:italic;color:var(--ink-faint);font-size:12.5px;}' +
+    '.bi-ds-card--edit{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-tint-strong),0 10px 30px -18px rgba(15,23,42,.35);}' +
+    '.bi-ds-editbar{display:none;align-items:center;gap:10px;padding:10px 26px;background:#fffbeb;border-bottom:1px solid #fde68a;color:#92400e;font-size:12.5px;font-weight:600;}' +
+    '.bi-ds-card--edit .bi-ds-editbar{display:flex;}' +
+    '.bi-ds-form .form-section-title{margin-top:20px;}' +
+    '.bi-ds-form .form-grid{grid-template-columns:1fr 1fr;}' +
+    '@media(min-width:1000px){.bi-ds-form .form-grid{grid-template-columns:1fr 1fr 1fr;}}' +
+    '@media(max-width:700px){.bi-ds-form .form-grid{grid-template-columns:1fr;}}' +
+    '.bi-ds-act button:disabled{opacity:.55;cursor:not-allowed;}' +
+    '.bi-ds-act button.simpan{background:#34d399;border-color:#34d399;color:#053b2a;}' +
+    '.bi-ds-act button.simpan:hover{background:#6ee7b7;}' +
+    '.bi-ds-upl{position:relative;display:inline-block;}' +
+    '.bi-ds-uplmenu{position:absolute;left:0;bottom:calc(100% + 6px);min-width:200px;background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 18px 40px -12px rgba(15,23,42,.45);padding:6px;z-index:40;}' +
+    '.bi-ds-uplmenu[hidden]{display:none;}' +
+    '.bi-ds-act .bi-ds-uplmenu button{display:flex;width:100%;gap:8px;align-items:center;text-align:left;border:none;background:none;color:var(--ink);font-size:13px;font-weight:600;padding:9px 10px;border-radius:8px;}' +
+    '.bi-ds-act .bi-ds-uplmenu button:hover{background:var(--primary-tint);}' +
+    '.bi-ds-act .bi-ds-uplmenu small{display:block;font-weight:500;font-size:11px;color:var(--ink-faint);}' +
+    '.bi-ds-toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:9999;background:#0f172a;color:#fff;padding:11px 18px;border-radius:12px;font-size:13px;font-weight:600;box-shadow:0 14px 34px -10px rgba(0,0,0,.5);max-width:90vw;}' +
+    '.bi-ds-toast--err{background:#b91c1c;}' +
     '@media(min-width:1000px){.bi-ds-grid{grid-template-columns:1fr 1fr 1fr;}}' +
-    '@media(max-width:700px){.bi-ds-hero{flex-direction:column;align-items:flex-start;padding:20px 16px;}.bi-ds-who{width:100%;flex:none;}.bi-ds-rata{flex:none;width:100%;margin-left:0;align-self:auto;padding:8px 10px;border-radius:12px;}.bi-ds-rata-t{font-size:9.5px;margin-bottom:6px;}.bi-ds-rata-g{gap:5px;}.bi-ds-rt{flex:1;width:auto;border-radius:11px;padding:4px 2px;}.bi-ds-rt-s{font-size:9px;}.bi-ds-rt-n{font-size:15px;}.bi-ds-rt-k{display:none;}.bi-ds-nama{font-size:19px;}.bi-ds-body{padding:4px 14px 20px;}.bi-ds-grid{grid-template-columns:1fr;}.bi-ds-tabs{padding:8px 8px 0;}' +
+    '@media(max-width:700px){.bi-ds-hero{flex-direction:column;align-items:flex-start;padding:20px 16px;}.bi-ds-who{width:100%;flex:none;}.bi-ds-rata{flex:none;width:100%;margin-left:0;align-self:auto;padding:8px 10px;border-radius:12px;}.bi-ds-rata-t{font-size:9.5px;margin-bottom:6px;}.bi-ds-rata-g{gap:5px;}.bi-ds-rt{flex:1;width:auto;border-radius:11px;padding:4px 2px;}.bi-ds-rt-s{font-size:9px;}.bi-ds-rt-n{font-size:15px;}.bi-ds-rt-k{display:none;}.bi-ds-nama{font-size:19px;}.bi-ds-body{padding:4px 14px 20px;}.bi-ds-grid{grid-template-columns:1fr;}.bi-ds-tabs{flex-wrap:nowrap;overflow-x:auto;padding:10px 10px;}' +
     '.bi-ds-nav{gap:8px;}.bi-ds-search{order:-1;flex-basis:100%;}.bi-ds-navbtn{flex:1;}.bi-ds-act button{flex:1 1 auto;}}' +
     '@media print{.bi-ds-nav{display:none;}}';
 
@@ -853,6 +871,7 @@
     if (opts.siswaId) { var f0 = list.findIndex(function (x) { return x.id === opts.siswaId; }); if (f0 >= 0) idx = f0; }
     var tabAktif = opts.tabAwal || 'identitas';
     var token = 0;
+    var editMode = false, snapAwal = '', jenisFoto = null;
     var tabs = F.TAB.map(function (t) { return { id: t.id, judul: t.judul, tab: t }; })
       .concat([{ id: 'perkembangan', judul: 'Perkembangan Belajar' }, { id: 'catatan', judul: 'Prestasi & Catatan' }, { id: 'pelanggaran', judul: 'Pelanggaran (CP)' }]);
     if (!tabs.some(function (t) { return t.id === tabAktif; })) tabAktif = 'identitas';
@@ -886,6 +905,30 @@
       var n = 0, t = 0;
       tb.bagian.forEach(function (bg) { bg.fields.forEach(function (f) { t++; if (!kosong(s[f.k])) n++; }); });
       return n + '/' + t;
+    }
+    // Mode edit: isian tab yang sama berubah jadi form (tanpa pindah halaman).
+    function formPanel(tb, s) { return '<div class="bi-ds-form">' + formTabHtml(tb, s, true) + '</div>'; }
+    function toast(msg, err) {
+      var t = document.createElement('div');
+      t.className = 'bi-ds-toast' + (err ? ' bi-ds-toast--err' : '');
+      t.textContent = msg;
+      document.body.appendChild(t);
+      setTimeout(function () { t.remove(); }, err ? 6000 : 3200);
+    }
+    function adaPerubahan() { return editMode && JSON.stringify(bacaNilaiForm(elKartu)) !== snapAwal; }
+
+    // Unggah foto (masuk / lulus): dikompres <= 50 KB, langsung disimpan.
+    async function unggahFotoSiswa(s, key, file) {
+      var kolom = key === 'masuk' ? 'foto' : 'foto_lulus';
+      var blob = await BI.fotoDariFile(file);
+      var cur = { path: {} };
+      try { cur = await BI.muatFotoSemua(s.id); } catch (e) { /* abaikan */ }
+      var pth = await BI.unggahFoto(s.id, key, blob);
+      var d = { siswa_id: s.id, updated_by: BI.ctx.userId, updated_at: new Date().toISOString() };
+      d[kolom] = pth;
+      var r = await sb().from('bi_siswa_detail').upsert(d, { onConflict: 'siswa_id' });
+      if (r.error) { await BI.hapusFoto(pth); throw r.error; }
+      if (cur.path && cur.path[key]) await BI.hapusFoto(cur.path[key]);
     }
 
     function muatLazy(id, s, el) {
@@ -927,9 +970,9 @@
       btnNext.disabled = idx === list.length - 1;
 
       elKartu.innerHTML =
-        '<div class="bi-ds-card">' +
+        '<div class="bi-ds-card' + (editMode ? ' bi-ds-card--edit' : '') + '">' +
         '<div class="bi-ds-hero">' +
-        '<div class="bi-ds-fotos"><div class="bi-ds-foto" id="biDsFotoMasuk">Foto<br>3 × 4</div><div class="bi-ds-foto" id="biDsFotoLulus" hidden></div></div>' +
+        '<div class="bi-ds-fotos"><div class="bi-ds-foto" id="biDsFotoMasuk">Foto<br>3 × 4</div><div class="bi-ds-foto" id="biDsFotoLulus"' + (bolehUbah ? '' : ' hidden') + '>' + (bolehUbah ? 'Foto<br>Lulus' : '') + '</div></div>' +
         '<div class="bi-ds-who"><h2 class="bi-ds-nama">' + esc(s.nama) + '</h2><div class="bi-ds-meta">' +
         (s.kelas ? '<span class="bi-ds-pill">' + esc(s.kelas.nama) + '</span>' : '') +
         (s.no_absen ? '<span class="bi-ds-pill">Absen ' + esc(s.no_absen) + '</span>' : '') +
@@ -938,17 +981,24 @@
         '<div class="bi-ds-prog"><div class="bi-ds-prog-top"><span>Kelengkapan data</span><span>' + kel.persen + '%</span></div>' +
         '<div class="bi-ds-bar"><i style="width:' + kel.persen + '%;' + warna + '"></i></div></div>' +
         '<div class="bi-ds-act">' +
-        (bolehUbah ? '<button type="button" class="utama" id="biDsEdit">✏️ Edit Data</button>' : '') +
+        (bolehUbah ? (editMode ?
+          '<button type="button" class="simpan" id="biDsSimpan">💾 Simpan Perubahan</button><button type="button" id="biDsBatal">✕ Batal</button>' :
+          '<button type="button" class="utama" id="biDsEdit">✏️ Edit Data</button>') +
+          '<span class="bi-ds-upl"><button type="button" id="biDsUpl">📷 Upload Foto ▾</button><div class="bi-ds-uplmenu" id="biDsUplMenu" hidden>' +
+          '<button type="button" data-j="masuk">🎓 Foto Saat Masuk<small>Foto 3×4 saat diterima di sekolah</small></button>' +
+          '<button type="button" data-j="lulus">🏅 Foto Saat Lulus<small>Foto 3×4 saat lulus / keluar</small></button></div></span>' +
+          '<input type="file" id="biDsFile" accept="image/*" hidden>' : '') +
         '<button type="button" id="biDsCetak">🖨 Cetak Biodata</button><button type="button" id="biDsCetakNilai">🖨 Cetak Nilai</button>' +
         '</div></div>' +
         '<div class="bi-ds-rata"><div class="bi-ds-rata-t">Rata-rata nilai per semester</div><div class="bi-ds-rata-g" id="biDsRata">' + htmlRata(rataCache[s.id]) + '</div></div>' +
         '</div>' +
+        '<div class="bi-ds-editbar">✏️ Mode edit aktif — ubah isian pada tab di bawah, lalu klik “Simpan Perubahan”. Data dasar juga berlaku di E-Rapor.</div>' +
         '<div class="bi-ds-tabs" role="tablist">' + tabs.map(function (tb) {
           return '<button type="button" role="tab" class="bi-ds-tab' + (tb.id === tabAktif ? ' on' : '') + '" data-t="' + tb.id + '">' + esc(tb.judul) +
             (tb.tab ? '<span class="bi-ds-cnt">' + hitungTab(tb.tab, s) + '</span>' : '') + '</button>';
         }).join('') + '</div>' +
         '<div class="bi-ds-body">' + tabs.map(function (tb) {
-          return '<div data-p="' + tb.id + '"' + (tb.id === tabAktif ? '' : ' hidden') + '>' + (tb.tab ? nilaiPanel(tb.tab, s) : '<div class="panel-note">Memuat...</div>') + '</div>';
+          return '<div data-p="' + tb.id + '"' + (tb.id === tabAktif ? '' : ' hidden') + '>' + (tb.tab ? (editMode ? formPanel(tb.tab, s) : nilaiPanel(tb.tab, s)) : '<div class="panel-note">Memuat...</div>') + '</div>';
         }).join('') + '</div></div>';
 
       var dimuat = {};
@@ -963,7 +1013,59 @@
       pilihTab(tabAktif);
 
       var bEdit = elKartu.querySelector('#biDsEdit');
-      if (bEdit) bEdit.addEventListener('click', function () { bukaEdit(s); });
+      if (bEdit) bEdit.addEventListener('click', function () {
+        editMode = true; tampilSiswa();
+        snapAwal = JSON.stringify(bacaNilaiForm(elKartu));
+        var nv = root.querySelector('.bi-ds-nav'); if (nv && nv.getBoundingClientRect().top < 0) nv.scrollIntoView({ block: 'start' });
+      });
+      var bBatal = elKartu.querySelector('#biDsBatal');
+      if (bBatal) bBatal.addEventListener('click', function () {
+        if (adaPerubahan() && !confirm('Perubahan yang belum disimpan akan dibuang. Lanjutkan?')) return;
+        editMode = false; snapAwal = ''; tampilSiswa();
+      });
+      var bSimpan = elKartu.querySelector('#biDsSimpan');
+      if (bSimpan) bSimpan.addEventListener('click', async function () {
+        bSimpan.disabled = true; var teks = bSimpan.textContent; bSimpan.textContent = 'Menyimpan...';
+        try {
+          var v = bacaNilaiForm(elKartu);
+          if (v.siswa.nama !== undefined && !v.siswa.nama) throw new Error('Nama lengkap tidak boleh kosong.');
+          if (Object.keys(v.siswa).length) {
+            var r1 = await sb().from('siswa').update(v.siswa).eq('id', s.id);
+            if (r1.error) throw r1.error;
+          }
+          var d = Object.assign({ siswa_id: s.id, updated_by: BI.ctx.userId, updated_at: new Date().toISOString() }, v.detail);
+          var r2 = await sb().from('bi_siswa_detail').upsert(d, { onConflict: 'siswa_id' });
+          if (r2.error) throw r2.error;
+          Object.assign(s, v.siswa, v.detail);
+          editMode = false; snapAwal = '';
+          tampilSiswa();
+          toast('Tersimpan. Biodata dasar juga langsung berlaku di E-Rapor.');
+        } catch (err) {
+          toast('Gagal menyimpan: ' + pesanError(err), true);
+          bSimpan.disabled = false; bSimpan.textContent = teks;
+        }
+      });
+
+      // Upload foto: pilih jenis (saat masuk / saat lulus) lalu pilih file.
+      var bUpl = elKartu.querySelector('#biDsUpl'), menuUpl = elKartu.querySelector('#biDsUplMenu'), inpFile = elKartu.querySelector('#biDsFile');
+      if (bUpl && menuUpl && inpFile) {
+        bUpl.addEventListener('click', function () { menuUpl.hidden = !menuUpl.hidden; });
+        menuUpl.querySelectorAll('[data-j]').forEach(function (b) {
+          b.addEventListener('click', function () { jenisFoto = b.dataset.j; menuUpl.hidden = true; inpFile.value = ''; inpFile.click(); });
+        });
+        inpFile.addEventListener('change', async function () {
+          var file = inpFile.files[0]; var key = jenisFoto;
+          if (!file || !key) return;
+          var ket = key === 'masuk' ? 'saat masuk' : 'saat lulus';
+          bUpl.disabled = true; var teksU = bUpl.textContent; bUpl.textContent = 'Mengunggah...';
+          try {
+            await unggahFotoSiswa(s, key, file);
+            toast('Foto ' + ket + ' berhasil disimpan.');
+            if (my === token) muatFotoKartu();
+          } catch (err) { toast('Gagal mengunggah foto: ' + pesanError(err), true); }
+          bUpl.disabled = false; bUpl.textContent = teksU; inpFile.value = '';
+        });
+      }
       elKartu.querySelector('#biDsCetak').addEventListener('click', function () { BI.cetak([s], 'biodata'); });
       elKartu.querySelector('#biDsCetakNilai').addEventListener('click', function () { BI.cetak([s], 'nilai'); });
 
@@ -976,6 +1078,7 @@
           .catch(function () { rataCache[sid] = {}; isiRata(); });
       })();
       // Foto & ringkasan pelanggaran dimuat belakangan supaya kartu langsung muncul.
+      function muatFotoKartu() {
       BI.muatFotoSemua(s.id).then(function (foto) {
         if (my !== token) return;
         function isi(id, src, ket) {
@@ -985,6 +1088,8 @@
         isi('#biDsFotoMasuk', foto.masuk, 'SAAT MASUK');
         isi('#biDsFotoLulus', foto.lulus, 'SAAT LULUS');
       }).catch(function () { /* foto tidak wajib */ });
+      }
+      muatFotoKartu();
       if (g.PelanggaranCP) {
         g.PelanggaranCP.ambil([pelItem(s)]).then(function (m) {
           if (my !== token) return;
@@ -1001,17 +1106,12 @@
       }
     }
 
-    function bukaEdit(s) {
-      detach();
-      BI.bukaSiswa(s, {
-        root: root, bolehUbah: true, labelKembali: 'Kembali ke Dashboard',
-        onKembali: function () { BI.dashboardSiswa(Object.assign({}, opts, { daftar: list, siswaId: s.id, tabAwal: tabAktif })); },
-        onSimpan: function () { BI.dashboardSiswa(Object.assign({}, opts, { daftar: list, siswaId: s.id, tabAwal: tabAktif })); }
-      });
-    }
-
     function ke(i) {
       if (i < 0 || i >= list.length) return;
+      if (editMode) {
+        if (adaPerubahan() && !confirm('Ada perubahan yang belum disimpan. Pindah siswa dan buang perubahan?')) return;
+        editMode = false; snapAwal = '';
+      }
       idx = i;
       tampilSiswa();
       var top = root.querySelector('.bi-ds-nav');
@@ -1064,12 +1164,18 @@
       if (!document.body.contains(elKartu)) { detach(); return; }
       var tg = (e.target && e.target.tagName || '').toLowerCase();
       if (tg === 'input' || tg === 'textarea' || tg === 'select' || e.ctrlKey || e.metaKey || e.altKey) return;
-      if (document.querySelector('.modal-overlay')) return;
+      if (document.querySelector('.modal-overlay') || editMode) return;
       if (e.key === 'ArrowLeft') { ke(idx - 1); }
       else if (e.key === 'ArrowRight') { ke(idx + 1); }
     }
-    function detach() { document.removeEventListener('keydown', onKey); }
+    function onDocClick(e) {
+      if (!document.body.contains(elKartu)) { detach(); return; }
+      var m = elKartu.querySelector('#biDsUplMenu');
+      if (m && !m.hidden && !(e.target.closest && e.target.closest('.bi-ds-upl'))) m.hidden = true;
+    }
+    function detach() { document.removeEventListener('keydown', onKey); document.removeEventListener('click', onDocClick); }
     document.addEventListener('keydown', onKey);
+    document.addEventListener('click', onDocClick);
 
     tampilSiswa();
   };
