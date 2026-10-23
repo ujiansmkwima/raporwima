@@ -189,6 +189,7 @@
   }
 
   async function unduhXlsxRapi(wb, namaFile) {
+    if (typeof catatAktivitas === 'function') catatAktivitas('unduh', 'Unduh Excel', namaFile);
     try {
       if (typeof ExcelJS === 'undefined') throw new Error('ExcelJS belum dimuat');
       var wbEx = new ExcelJS.Workbook();

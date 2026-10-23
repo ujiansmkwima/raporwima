@@ -197,6 +197,7 @@
   }
 
   function unduhBlob(blob, namaFile) {
+    if (typeof catatAktivitas === 'function') catatAktivitas('unduh', /\.zip$/i.test(namaFile) ? 'Unduh ZIP Excel' : 'Unduh Excel', namaFile);
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
     a.href = url;

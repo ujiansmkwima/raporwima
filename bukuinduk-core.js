@@ -1640,6 +1640,9 @@
         return im.complete ? Promise.resolve() : new Promise(function (ok) { im.onload = im.onerror = ok; });
       }));
       await Promise.race([tunggu, new Promise(function (ok) { setTimeout(ok, 10000); })]);
+      if (typeof g.catatAktivitas === 'function') g.catatAktivitas('cetak', 'Cetak Buku Induk',
+        'Cetak ' + (jenis === 'nilai' ? 'nilai' : jenis === 'biodata' ? 'biodata' : 'biodata & nilai') + ' — ' +
+        (list.length === 1 ? (list[0].nama || '1 siswa') : list.length + ' siswa'));
       setTimeout(function () { w.print(); }, 300);
     } catch (e) {
       w.document.body.innerHTML = '<p style="font-family:sans-serif;color:#b91c1c;">Gagal menyiapkan cetak: ' + esc(pesanError(e)) + '</p>';
@@ -1727,6 +1730,7 @@
       w.focus();
       var imgs = Array.prototype.slice.call(w.document.images);
       await Promise.race([Promise.all(imgs.map(function (im) { return im.complete ? Promise.resolve() : new Promise(function (ok) { im.onload = im.onerror = ok; }); })), new Promise(function (ok) { setTimeout(ok, 10000); })]);
+      if (typeof g.catatAktivitas === 'function') g.catatAktivitas('cetak', 'Cetak Cover Buku Induk', 'Kelas ' + kelas.nama + ' (' + list.length + ' siswa)');
       setTimeout(function () { w.print(); }, 300);
     } catch (e) {
       w.document.body.innerHTML = '<p style="font-family:sans-serif;color:#b91c1c;">Gagal menyiapkan cetak: ' + esc(pesanError(e)) + '</p>';
@@ -2085,6 +2089,7 @@
   };
 
   async function simpanWorkbook(wb, namaFile) {
+    if (typeof g.catatAktivitas === 'function') g.catatAktivitas('unduh', 'Unduh Excel Buku Induk', namaFile);
     var buf = await wb.xlsx.writeBuffer();
     var blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     var url = URL.createObjectURL(blob);

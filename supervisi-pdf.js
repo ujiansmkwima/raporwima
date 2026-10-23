@@ -74,7 +74,7 @@ var SvPdf = (function () {
       if (t.error) throw t.error; out.spv = t.data || null;
     } catch (e) { out.peringatan.push('Tanda tangan supervisor tidak bisa dibaca — jalankan migrasi_supervisi_ttd.sql (' + (e.message || e) + ').'); }
     if (!out.peringatan.length) {
-      if (!out.profil.ttd_kepala_sekolah) out.peringatan.push('Tanda tangan Kepala Sekolah belum diunggah (menu Profil Sekolah di panel admin) — ruang tanda tangan dikosongkan.');
+      if (!out.profil.ttd_kepala_sekolah) out.peringatan.push('Tanda tangan Kepala Sekolah belum diunggah (aplikasi Pengaturan Sekolah → Profil Sekolah) — ruang tanda tangan dikosongkan.');
       if (!out.spv || !out.spv.ttd) out.peringatan.push('Tanda tangan supervisor belum diunggah (menu Tanda Tangan Saya) — ruang tanda tangan dikosongkan.');
     }
     return out;
@@ -453,7 +453,7 @@ var SvPdf = (function () {
         if (p.error) throw p.error; profil = p.data || {};
       } catch (e) { profil = {}; peringatan.push('Profil sekolah tidak bisa dibaca (' + (e.message || e) + ').'); }
     }
-    if (!peringatan.length && !profil.ttd_kepala_sekolah) peringatan.push('Tanda tangan Kepala Sekolah belum diunggah (Admin > Profil Sekolah) - ruang tanda tangan dikosongkan.');
+    if (!peringatan.length && !profil.ttd_kepala_sekolah) peringatan.push('Tanda tangan Kepala Sekolah belum diunggah (Pengaturan Sekolah > Profil Sekolah) - ruang tanda tangan dikosongkan.');
 
     var urut = rows.slice().sort(function (a, b) { return String(a.tanggal).localeCompare(String(b.tanggal)); });
     var logo = await muatLogo();
