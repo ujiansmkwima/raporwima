@@ -6810,7 +6810,7 @@
       var jumlahSiswa = siswaList.length;
       content.innerHTML =
         '<div class="panel-head"><div><div class="panel-head__title">Cetak Data Sekolah — ' + escapeHtml(wk.kelas.nama) + '</div>' +
-        '<div class="panel-head__desc">Data sekolah (HAL 2 rapor) diambil otomatis dari menu Admin → Profil, jadi sama untuk semua siswa. Cetak 1 halaman, atau cetak sebanyak jumlah siswa kelas ini kalau tiap siswa butuh halamannya sendiri.</div></div>' +
+        '<div class="panel-head__desc">Data sekolah (HAL 2 rapor) diambil otomatis dari aplikasi Pengaturan Sekolah → Profil Sekolah (admin), jadi sama untuk semua siswa. Cetak 1 halaman, atau cetak sebanyak jumlah siswa kelas ini kalau tiap siswa butuh halamannya sendiri.</div></div>' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
         '<button class="btn-small btn-small--primary" id="btnDsCetakSatu"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak 1 Halaman</button>' +
         (jumlahSiswa > 1 ? '<button class="btn-small" id="btnDsCetakSemua"><i data-lucide="printer" style="width:14px;height:14px;"></i> Cetak ' + jumlahSiswa + ' Salinan (1 per siswa)</button>' : '') +

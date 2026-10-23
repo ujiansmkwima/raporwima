@@ -111,7 +111,7 @@
     var tt = await supabaseClient.from('supervisi_ttd').select('guru_id, nip, ttd'), ttdMap = {};
     (tt.data || []).forEach(function (x) { ttdMap[x.guru_id] = x; });
     var tabelTtd = '<div class="form-section-title" style="margin-top:22px;">NIP & Tanda Tangan Guru / Supervisor</div>' +
-      '<div class="panel-note">Dipakai pada blok tanda tangan PDF hasil supervisi. Tanda tangan Kepala Sekolah diatur di E-Rapor → Profil Sekolah.</div>' +
+      '<div class="panel-note">Dipakai pada blok tanda tangan PDF hasil supervisi. Tanda tangan Kepala Sekolah diatur di Pengaturan Sekolah → Profil Sekolah.</div>' +
       (tt.error ? '<div class="panel-note" style="margin-top:8px;">Tabel belum siap — jalankan <strong>migrasi_supervisi_ttd.sql</strong> di Supabase SQL Editor. (' + esc(tt.error.message) + ')</div>' : '') +
       '<div class="table-wrap" style="margin-top:10px;"><table class="data-table"><thead><tr><th>Nama</th><th>NIP</th><th>Tanda Tangan</th><th></th></tr></thead><tbody>' +
       (guruList.length ? guruList.map(function (g) { var t = ttdMap[g.id] || {};
@@ -196,7 +196,7 @@
       '<div class=\"field\"><label>Tanggal Tanda Tangan</label><input type=\"date\" id=\"pTtd\" value=\"' + iso + '\"></div>' +
       '<div class=\"field\"><label>Dari Tanggal (opsional)</label><input type=\"date\" id=\"pDari\"></div>' +
       '<div class=\"field\"><label>Sampai Tanggal (opsional)</label><input type=\"date\" id=\"pSampai\"></div></div>' +
-      '<div class=\"panel-note\" style=\"margin-top:10px;\">Nama, NIP, kota, dan gambar tanda tangan Kepala Sekolah diambil dari menu Profil Sekolah.</div>' +
+      '<div class=\"panel-note\" style=\"margin-top:10px;\">Nama, NIP, kota, dan gambar tanda tangan Kepala Sekolah diambil dari aplikasi Pengaturan Sekolah → Profil Sekolah.</div>' +
       '<div style=\"margin-top:18px;\"><button class=\"btn-small btn-small--primary\" id=\"pUnduh\">Unduh PDF</button></div>');
     o.querySelector('#pUnduh').addEventListener('click', async function () {
       var jenis = o.querySelector('#pJenis').value, dari = o.querySelector('#pDari').value, sampai = o.querySelector('#pSampai').value;

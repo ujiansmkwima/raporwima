@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pengaturan Sekolah (Admin) — PORTAL DATA DAN PENILAIAN SMK WIDYA MANDALA TAMBAK</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=11">
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-client.js"></script>
+<script src="unsaved-guard.js?v=1"></script>
+<script src="mobile.js?v=1" defer></script>
+<script src="foto-profil.js?v=3" defer></script>
+</head>
+<body>
+
+<div class="app">
+
+  <aside class="sidebar">
+    <div class="sidebar__brand">
+      <img class="sidebar__brand-logo" src="assets/logo.png" alt="Logo SMK Widya Mandala Tambak">
+      <div class="sidebar__brand-text">
+        <span class="sidebar__brand-mark">Pengaturan</span>
+        <span class="sidebar__brand-school">SMK Widya Mandala Tambak</span>
+      </div>
+    </div>
+    <div class="sidebar__role"><i data-lucide="shield-check" style="width:13px;height:13px;"></i> Admin Pengaturan Sekolah</div>
+
+    <div class="sidebar__section-label">Data Sekolah</div>
+    <nav class="menu-list" id="menuAdmin">
+      <a href="#profilSekolah" class="menu-item" data-view="profilSekolah"><i data-lucide="school" class="menu-icon"></i><span class="menu-item__title">Profil Sekolah</span></a>
+      <a href="#tahunAjaran" class="menu-item" data-view="tahunAjaran"><i data-lucide="calendar-clock" class="menu-icon"></i><span class="menu-item__title">Tahun Ajaran</span></a>
+    </nav>
+
+    <div class="sidebar__footer">
+      <div style="margin-bottom:8px; opacity:0.8;">SMK Widya Mandala Tambak · Banyumas</div>
+      <div style="margin-top:8px;font-size:10px;opacity:0.45;">developed by Hanif Shohibul A.</div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <div class="topbar__title">Pengaturan Sekolah</div>
+        <div class="topbar__row"><div class="topbar__meta" id="topbarMeta">Memuat tahun ajaran aktif...</div><a href="portal.html" class="btn-small topbar__app"><i data-lucide="layout-grid" style="width:14px;height:14px;"></i> Menu Utama</a><a href="admin.html" class="btn-small topbar__app"><i data-lucide="file-text" style="width:14px;height:14px;"></i> E-Rapor</a></div>
+      </div>
+      <div class="user-chip">
+        <div class="user-chip__text">
+          <div class="user-chip__name" id="userName">Memuat...</div>
+          <div class="user-chip__role">Admin</div>
+          <a href="#" id="logoutBtn" class="user-chip__logout"><i data-lucide="log-out" style="width:13px;height:13px;"></i> Keluar</a>
+        </div>
+        <div class="user-chip__avatar" id="userAvatar">•</div>
+      </div>
+    </div>
+
+    <div class="content" id="content"></div>
+  </div>
+
+</div>
+
+<script>
+  lucide.createIcons();
+
+  var content = document.getElementById('content');
+  var topbarMeta = document.getElementById('topbarMeta');
+  var tahunAktif = null;
+
+  function escapeHtml(s) {
+    return (s === null || s === undefined) ? '' : String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function setActiveMenu(view) {
+    document.querySelectorAll('#menuAdmin .menu-item').forEach(function (m) {
+      m.classList.toggle('menu-item--active', m.dataset.view === view);
+    });
+  }
+
+  async function muatTahunAktif() {
+    var r = await supabaseClient.from('tahun_ajaran').select('id, nama, semester').eq('is_aktif', true).maybeSingle();
+    tahunAktif = r.data;
+    topbarMeta.textContent = tahunAktif
+      ? 'Tahun Ajaran Aktif: ' + tahunAktif.nama + ' — Semester ' + tahunAktif.semester
+      : 'Belum ada tahun ajaran aktif — aktifkan salah satu di menu "Tahun Ajaran".';
+  }
+
+  // ================= PANEL: TAHUN AJARAN =================
+  // ================= Profil Sekolah (singleton) =================
+  // Satu baris data sekolah yang dipakai Cetak Rapor: Nama Sekolah,
+  // Kepala Sekolah, dan Kota untuk baris tanda tangan. Disimpan/​
+  // diperbarui lewat upsert onConflict=singleton, jadi selalu cuma
+  // ada 1 baris di tabel profil_sekolah.
+  async function renderProfilSekolah() {
+    content.innerHTML = '<div class="panel-head"><div><div class="panel-head__title">Profil Sekolah</div>' +
+      '<div class="panel-head__desc">Memuat data Profil Sekolah...</div></div></div>';
+
+    var res = await supabaseClient.from('profil_sekolah').select('*').maybeSingle();
+    var p = res.data || {};
+
+    // Gambar tanda tangan Kepala Sekolah disimpan sebagai data URL
+    // base64 langsung di kolom ttd_kepala_sekolah (bukan Supabase
+    // Storage) supaya tidak perlu setup bucket terpisah. Disimpan di
+    // variabel ini dulu (bukan langsung ke DB) supaya upload/hapus
+    // bisa dibatalkan kalau form belum di-Simpan.
+    var ttdDataUrl = p.ttd_kepala_sekolah || null;
+
+    content.innerHTML =
+      '<div class="panel-head"><div><div class="panel-head__title">Profil Sekolah</div>' +
+      '<div class="panel-head__desc">Data ini dipakai otomatis di kepala Cetak Rapor, Cetak Data Sekolah (HAL 2 rapor) dan baris tanda tangan Kepala Sekolah — sekali diisi di sini, semua rapor/nilai tengah semester/nilai PKL yang dicetak wali kelas & guru memakai data yang sama.</div></div></div>' +
+      '<form class="add-form" id="formProfilSekolah" style="flex-direction:column;align-items:stretch;max-width:520px;">' +
+      '<div class="field"><label>Nama Sekolah</label><input type="text" id="psNamaSekolah" value="' + escapeHtml(p.nama_sekolah || '') + '" placeholder="SMK Widya Mandala Tambak" required></div>' +
+      '<div class="field"><label>Alamat Sekolah (jalan / komplek / RT RW) — tampil di Cetak Data Sekolah</label><input type="text" id="psAlamatSekolah" value="' + escapeHtml(p.alamat_sekolah || '') + '" placeholder="Komplek ..., RT 04/ RW 03 Desa ..."></div>' +
+      '<div class="field"><label>NPSN</label><input type="text" id="psNpsn" value="' + escapeHtml(p.npsn || '') + '" placeholder="69899923"></div>' +
+      '<div class="field"><label>NSS (opsional, kosongkan kalau tidak ada)</label><input type="text" id="psNss" value="' + escapeHtml(p.nss || '') + '"></div>' +
+      '<div class="field"><label>Kelurahan / Desa</label><input type="text" id="psKelurahan" value="' + escapeHtml(p.kelurahan || '') + '" placeholder="Purwodadi"></div>' +
+      '<div class="field"><label>Kecamatan</label><input type="text" id="psKecamatan" value="' + escapeHtml(p.kecamatan || '') + '" placeholder="Kecamatan Tambak"></div>' +
+      '<div class="field"><label>Kota / Kabupaten</label><input type="text" id="psKabKota" value="' + escapeHtml(p.kab_kota || '') + '" placeholder="Kabupaten Banyumas"></div>' +
+      '<div class="field"><label>Provinsi</label><input type="text" id="psProvinsi" value="' + escapeHtml(p.provinsi || '') + '" placeholder="Jawa Tengah"></div>' +
+      '<div class="field"><label>Website</label><input type="text" id="psWebsite" value="' + escapeHtml(p.website || '') + '" placeholder="http://www.contoh.sch.id"></div>' +
+      '<div class="field"><label>Email Sekolah</label><input type="text" id="psEmail" value="' + escapeHtml(p.email || '') + '" placeholder="sekolah@gmail.com"></div>' +
+      '<div class="field"><label>Nama Kepala Sekolah</label><input type="text" id="psKepalaSekolah" value="' + escapeHtml(p.kepala_sekolah || '') + '" placeholder="Agung Pambudi, S.E., S. Kom., M.M."></div>' +
+      '<div class="field"><label>NIP Kepala Sekolah (opsional)</label><input type="text" id="psNipKepalaSekolah" value="' + escapeHtml(p.nip_kepala_sekolah || '') + '"></div>' +
+      '<div class="field"><label>Kota (untuk baris tanda tangan, mis. "Tambak, ....... 2026")</label><input type="text" id="psKotaTtd" value="' + escapeHtml(p.kota_ttd || 'Tambak') + '" placeholder="Tambak"></div>' +
+      '<div class="field"><label>Tanggal Rapor (untuk baris tanda tangan Cetak Rapor, mis. "Tambak, 12 Desember 2026")</label><input type="date" id="psTanggalRapor" value="' + escapeHtml(p.tanggal_rapor || '') + '"></div>' +
+      '<div class="field"><label>Tanggal Tengah Semester (untuk baris tanda tangan Cetak Nilai Tengah Semester)</label><input type="date" id="psTanggalTengahSemester" value="' + escapeHtml(p.tanggal_tengah_semester || '') + '"></div>' +
+      '<div class="field"><label>Tanggal Nilai PKL (untuk baris tanda tangan Cetak Nilai PKL)</label><input type="date" id="psTanggalPkl" value="' + escapeHtml(p.tanggal_pkl || '') + '"></div>' +
+      '<div class="field">' +
+        '<label>Tanda Tangan Kepala Sekolah (gambar)</label>' +
+        '<div id="psTtdPreviewWrap" style="margin-bottom:8px;">' + renderTtdPreview(ttdDataUrl) + '</div>' +
+        '<input type="file" id="psTtdFile" accept="image/png,image/jpeg,image/webp">' +
+        '<div style="margin-top:6px;">' +
+          '<button type="button" class="btn-small" id="psTtdHapus"' + (ttdDataUrl ? '' : ' disabled') + '>Hapus Tanda Tangan</button>' +
+        '</div>' +
+        '<div class="panel-note" style="margin:8px 0 0;padding:0;">Pakai foto/scan tanda tangan dengan latar putih atau PNG transparan. Gambar otomatis dikecilkan saat diupload.</div>' +
+      '</div>' +
+      '<div class="field">' +
+        '<label>Tampilkan Tanda Tangan (gambar) di:</label>' +
+        '<div style="display:flex;flex-direction:column;gap:6px;margin-top:4px;">' +
+          '<label style="display:flex;align-items:center;gap:8px;font-weight:400;"><input type="checkbox" id="psTampilRapor"' + (p.tampil_ttd_rapor !== false ? ' checked' : '') + '> Cetak Rapor (+ Cetak Identitas)</label>' +
+          '<label style="display:flex;align-items:center;gap:8px;font-weight:400;"><input type="checkbox" id="psTampilTengahSemester"' + (p.tampil_ttd_tengah_semester !== false ? ' checked' : '') + '> Cetak Nilai Tengah Semester</label>' +
+          '<label style="display:flex;align-items:center;gap:8px;font-weight:400;"><input type="checkbox" id="psTampilPkl"' + (p.tampil_ttd_pkl !== false ? ' checked' : '') + '> Cetak Nilai PKL</label>' +
+        '</div>' +
+        '<div class="panel-note" style="margin:8px 0 0;padding:0;">Centang semua kalau tanda tangan mau dipakai di semua format cetak. Kalau tidak dicentang (atau belum ada gambar), ruang tanda tangan di format itu tetap kosong seperti biasa untuk ditandatangani tulis tangan.</div>' +
+      '</div>' +
+      '<button type="submit" class="btn-small btn-small--primary" style="align-self:flex-start;">Simpan</button>' +
+      '</form>' +
+      '<div id="profilSekolahMsg" style="margin-top:10px;"></div>';
+
+    function renderTtdPreview(dataUrl) {
+      if (!dataUrl) return '<div class="panel-note" style="margin:0;padding:0;">Belum ada tanda tangan diupload.</div>';
+      return '<img src="' + dataUrl + '" alt="Tanda tangan Kepala Sekolah" style="max-height:70px;max-width:220px;object-fit:contain;border:1px solid var(--line,#e5e7eb);border-radius:6px;padding:4px;background:#fff;">';
+    }
+
+    // Mengecilkan gambar tanda tangan di sisi browser (lewat <canvas>)
+    // sebelum disimpan sebagai data URL base64, supaya baris di tabel
+    // profil_sekolah tidak membengkak walau file asli hasil scan/foto
+    // besar. Lebar dibatasi maksimal 500px, tinggi menyesuaikan
+    // (proporsional), diekspor sebagai PNG.
+    function kecilkanGambarTtd(file) {
+      return new Promise(function (resolve, reject) {
+        var reader = new FileReader();
+        reader.onerror = function () { reject(new Error('Gagal membaca file.')); };
+        reader.onload = function () {
+          var img = new Image();
+          img.onerror = function () { reject(new Error('File bukan gambar yang valid.')); };
+          img.onload = function () {
+            var LEBAR_MAKS = 500;
+            var skala = img.width > LEBAR_MAKS ? (LEBAR_MAKS / img.width) : 1;
+            var w = Math.round(img.width * skala);
+            var h = Math.round(img.height * skala);
+            var canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            var ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL('image/png'));
+          };
+          img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    document.getElementById('psTtdFile').addEventListener('change', async function (e) {
+      var file = e.target.files && e.target.files[0];
+      if (!file) return;
+      var msg = document.getElementById('profilSekolahMsg');
+      try {
+        msg.textContent = 'Memproses gambar tanda tangan...';
+        ttdDataUrl = await kecilkanGambarTtd(file);
+        document.getElementById('psTtdPreviewWrap').innerHTML = renderTtdPreview(ttdDataUrl);
+        document.getElementById('psTtdHapus').disabled = false;
+        msg.textContent = 'Gambar siap — klik "Simpan" di bawah untuk menyimpannya.';
+      } catch (err) {
+        msg.textContent = 'Gagal memproses gambar: ' + (err && err.message ? err.message : err);
+      } finally {
+        e.target.value = '';
+      }
+    });
+
+    document.getElementById('psTtdHapus').addEventListener('click', function () {
+      ttdDataUrl = null;
+      document.getElementById('psTtdPreviewWrap').innerHTML = renderTtdPreview(null);
+      document.getElementById('psTtdHapus').disabled = true;
+      document.getElementById('profilSekolahMsg').textContent = 'Tanda tangan akan dihapus — klik "Simpan" di bawah untuk menerapkannya.';
+    });
+
+    document.getElementById('formProfilSekolah').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var msg = document.getElementById('profilSekolahMsg');
+      msg.textContent = 'Menyimpan...';
+
+      var upd = await supabaseClient.from('profil_sekolah').upsert({
+        singleton: true,
+        nama_sekolah: document.getElementById('psNamaSekolah').value.trim() || 'SMK Widya Mandala Tambak',
+        alamat_sekolah: document.getElementById('psAlamatSekolah').value.trim() || null,
+        npsn: document.getElementById('psNpsn').value.trim() || null,
+        nss: document.getElementById('psNss').value.trim() || null,
+        kelurahan: document.getElementById('psKelurahan').value.trim() || null,
+        kecamatan: document.getElementById('psKecamatan').value.trim() || null,
+        kab_kota: document.getElementById('psKabKota').value.trim() || null,
+        provinsi: document.getElementById('psProvinsi').value.trim() || null,
+        website: document.getElementById('psWebsite').value.trim() || null,
+        email: document.getElementById('psEmail').value.trim() || null,
+        kepala_sekolah: document.getElementById('psKepalaSekolah').value.trim() || null,
+        nip_kepala_sekolah: document.getElementById('psNipKepalaSekolah').value.trim() || null,
+        kota_ttd: document.getElementById('psKotaTtd').value.trim() || 'Tambak',
+        tanggal_rapor: document.getElementById('psTanggalRapor').value || null,
+        tanggal_tengah_semester: document.getElementById('psTanggalTengahSemester').value || null,
+        tanggal_pkl: document.getElementById('psTanggalPkl').value || null,
+        ttd_kepala_sekolah: ttdDataUrl,
+        tampil_ttd_rapor: document.getElementById('psTampilRapor').checked,
+        tampil_ttd_tengah_semester: document.getElementById('psTampilTengahSemester').checked,
+        tampil_ttd_pkl: document.getElementById('psTampilPkl').checked,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'singleton' });
+
+      if (upd.error) {
+        var salahKolom = /column|schema cache/i.test(upd.error.message || '');
+        msg.textContent = 'Gagal menyimpan: ' + upd.error.message +
+          (salahKolom ? ' — jalankan dulu migrasi_profil_sekolah_data_sekolah.sql di Supabase SQL Editor.' : '');
+      } else {
+        msg.textContent = 'Tersimpan.';
+      }
+    });
+  }
+
+
+  async function renderTahunAjaran() {
+    content.innerHTML =
+      '<div class="panel-head"><div><div class="panel-head__title">Tahun Ajaran</div>' +
+      '<div class="panel-head__desc">Hanya satu tahun ajaran yang boleh aktif. Semua data guru & siswa mengikuti yang aktif di sini.</div></div></div>' +
+      '<form class="add-form" id="formTA">' +
+      '<div class="field"><label>Nama (contoh: 2026/2027)</label><input type="text" id="taNama" required></div>' +
+      '<div class="field"><label>Semester</label><select id="taSemester"><option value="Gasal">Gasal</option><option value="Genap">Genap</option></select></div>' +
+      '<button type="submit" class="btn-small btn-small--primary">Tambah</button>' +
+      '</form>' +
+      '<div class="table-wrap"><table class="data-table"><thead><tr><th>Nama</th><th>Semester</th><th>Status</th><th></th></tr></thead><tbody id="taBody"></tbody></table></div>' +
+      '<div id="nkWrap"></div>';
+
+    document.getElementById('formTA').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var nama = document.getElementById('taNama').value.trim();
+      var semester = document.getElementById('taSemester').value;
+      if (!nama) return;
+      var res = await supabaseClient.from('tahun_ajaran').insert({ nama: nama, semester: semester });
+      if (res.error) { alert('Gagal menambah: ' + res.error.message); return; }
+      renderTahunAjaran();
+    });
+
+    var listRes = await supabaseClient.from('tahun_ajaran').select('id, nama, semester, is_aktif').order('nama', { ascending: false });
+    var rows = listRes.data || [];
+    var body = document.getElementById('taBody');
+    body.innerHTML = rows.length ? '' : '<tr><td colspan="4">Belum ada tahun ajaran.</td></tr>';
+
+    rows.forEach(function (r) {
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td>' + escapeHtml(r.nama) + '</td>' +
+        '<td>' + escapeHtml(r.semester) + '</td>' +
+        '<td>' + (r.is_aktif ? '<span class="chip chip--aktif">Aktif</span>' : '<span class="chip chip--muted">Nonaktif</span>') + '</td>' +
+        '<td>' +
+        '<button class="btn-small" data-edit-id="' + r.id + '">Edit</button> ' +
+        (r.is_aktif ? '' : '<button class="btn-small" data-id="' + r.id + '">Aktifkan</button>') +
+        '</td>';
+      body.appendChild(tr);
+
+      tr.querySelector('[data-edit-id]').addEventListener('click', function () {
+        bukaModalTahunAjaran(r);
+      });
+    });
+
+    body.querySelectorAll('button[data-id]').forEach(function (btn) {
+      btn.addEventListener('click', async function () {
+        var res = await supabaseClient.from('tahun_ajaran').update({ is_aktif: true }).eq('id', btn.dataset.id);
+        if (res.error) { alert('Gagal mengaktifkan: ' + res.error.message); return; }
+        await muatTahunAktif();
+        renderTahunAjaran();
+      });
+    });
+
+    renderNaikKelasPanel(rows);
+
+    // ---------- Modal Edit ----------
+    function bukaModalTahunAjaran(existing) {
+      var overlay = document.createElement('div');
+      overlay.className = 'modal-overlay';
+      overlay.innerHTML =
+        '<div class="modal-box">' +
+        '<div class="modal-box__head"><div class="modal-box__title">Edit Tahun Ajaran</div>' +
+        '<button type="button" class="modal-box__close" id="modalCloseBtn">×</button></div>' +
+        '<form id="formModalTA">' +
+        '<div class="form-grid">' +
+        '<div class="field"><label>Nama</label><input type="text" id="f_taNama" value="' + escapeHtml(existing.nama) + '" required></div>' +
+        '<div class="field"><label>Semester</label><select id="f_taSemester">' +
+        '<option value="Gasal"' + (existing.semester === 'Gasal' ? ' selected' : '') + '>Gasal</option>' +
+        '<option value="Genap"' + (existing.semester === 'Genap' ? ' selected' : '') + '>Genap</option>' +
+        '</select></div>' +
+        '</div>' +
+        '<div class="modal-box__actions">' +
+        '<button type="button" class="btn-small" id="modalCancelBtn">Batal</button>' +
+        '<button type="submit" class="btn-small btn-small--primary">Simpan</button>' +
+        '</div>' +
+        '</form>' +
+        '</div>';
+      document.body.appendChild(overlay);
+
+      function tutup() { overlay.remove(); }
+      document.getElementById('modalCloseBtn').addEventListener('click', tutup);
+      document.getElementById('modalCancelBtn').addEventListener('click', tutup);
+      overlay.addEventListener('click', function (e) { if (e.target === overlay) tutup(); });
+
+      document.getElementById('formModalTA').addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var nama = document.getElementById('f_taNama').value.trim();
+        var semester = document.getElementById('f_taSemester').value;
+        if (!nama) return;
+        var res = await supabaseClient.from('tahun_ajaran').update({ nama: nama, semester: semester }).eq('id', existing.id);
+        if (res.error) { alert('Gagal menyimpan: ' + res.error.message); return; }
+        tutup();
+        await muatTahunAktif();
+        renderTahunAjaran();
+      });
+    }
+  }
+
+
+
+
+
+  // ================= NAIK KELAS & KELULUSAN =================
+  // Dipanggil dari panel Tahun Ajaran. Memindahkan siswa AKTIF dari
+  // tahun ajaran ASAL ke tahun ajaran TUJUAN:
+  //   Tingkat 10 -> kelas Tingkat 11, Tingkat 11 -> kelas Tingkat 12,
+  //   Tingkat 12 -> status siswa menjadi 'lulus'.
+  // Yang dilakukan hanya INSERT ke siswa_kelas (baris tahun lama tidak
+  // disentuh, jadi riwayat/leger aman) dan UPDATE siswa.status untuk
+  // yang lulus. Siswa yang SUDAH punya penempatan di tahun tujuan
+  // dilewati, jadi proses ini aman diulang.
+
+  // "XI ANM 1" -> "ANM1": awalan tingkat & pemisah dibuang, huruf besar.
+  // Dipakai untuk menebak pasangan kelas ("X ANM 1" <-> "XI ANM 1").
+  function kunciNamaKelas(nama) {
+    var s = String(nama || '').trim().toUpperCase();
+    s = s.replace(/^(XII|XI|X|12|11|10)(?=[\s\-_.]|$)[\s\-_.]*/, '');
+    return s.replace(/[\s\-_.]+/g, '');
+  }
+
+  function tebakKelasTujuan(kelasAsal, kandidat) {
+    var kunci = kunciNamaKelas(kelasAsal.nama);
+    var cocokNama = kandidat.filter(function (k) { return kunci && kunciNamaKelas(k.nama) === kunci; });
+    if (cocokNama.length === 1) return cocokNama[0].id;
+
+    var punyaProgram = !!(kelasAsal.program_keahlian || kelasAsal.konsentrasi_keahlian);
+    if (!punyaProgram) return '';
+    var cocokProgram = kandidat.filter(function (k) {
+      return (k.program_keahlian || '') === (kelasAsal.program_keahlian || '') &&
+        (k.konsentrasi_keahlian || '') === (kelasAsal.konsentrasi_keahlian || '');
+    });
+    return cocokProgram.length === 1 ? cocokProgram[0].id : '';
+  }
+
+  function renderNaikKelasPanel(semuaTA) {
+    var wrap = document.getElementById('nkWrap');
+    if (!wrap) return;
+
+    var headHtml =
+      '<div class="panel-head" style="margin-top:32px;"><div><div class="panel-head__title">Naik Kelas &amp; Kelulusan</div>' +
+      '<div class="panel-head__desc">Dipakai saat pergantian tahun ajaran: siswa Tingkat 10 naik ke Tingkat 11, Tingkat 11 naik ke Tingkat 12, dan siswa Tingkat 12 dinyatakan lulus. ' +
+      'Data tahun ajaran lama tidak diubah atau dihapus.</div></div></div>';
+
+    if (semuaTA.length < 2) {
+      wrap.innerHTML = headHtml + '<div class="panel-note">Buat dulu tahun ajaran tujuan (mis. 2027/2028 Gasal) lewat form di atas, lalu proses kenaikan kelas dari sini.</div>';
+      return;
+    }
+
+    var asalDefault = semuaTA.filter(function (t) { return t.is_aktif; })[0] || semuaTA[0];
+    var kandidatTujuan = semuaTA
+      .filter(function (t) { return t.id !== asalDefault.id && t.nama > asalDefault.nama; })
+      .sort(function (a, b) {
+        if (a.nama !== b.nama) return a.nama < b.nama ? -1 : 1;
+        return a.semester === 'Gasal' ? -1 : 1;
+      });
+    var tujuanDefault = kandidatTujuan.length ? kandidatTujuan[0].id : '';
+
+    function opsiTA(selectedId, placeholder) {
+      return (placeholder ? '<option value="">' + placeholder + '</option>' : '') + semuaTA.map(function (t) {
+        return '<option value="' + t.id + '"' + (t.id === selectedId ? ' selected' : '') + '>' +
+          escapeHtml(t.nama + ' — ' + t.semester + (t.is_aktif ? ' (aktif)' : '')) + '</option>';
+      }).join('');
+    }
+
+    wrap.innerHTML = headHtml +
+      '<form class="add-form" id="formNK">' +
+      '<div class="field"><label>Dari tahun ajaran</label><select id="nkAsal">' + opsiTA(asalDefault.id) + '</select></div>' +
+      '<div class="field"><label>Ke tahun ajaran</label><select id="nkTujuan">' + opsiTA(tujuanDefault, '— pilih —') + '</select></div>' +
+      '<button type="submit" class="btn-small btn-small--primary">Lihat Pratinjau</button>' +
+      '</form>' +
+      '<div id="nkPreview"></div>';
+
+    document.getElementById('formNK').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var asal = semuaTA.filter(function (t) { return t.id === document.getElementById('nkAsal').value; })[0];
+      var tujuan = semuaTA.filter(function (t) { return t.id === document.getElementById('nkTujuan').value; })[0];
+      var box = document.getElementById('nkPreview');
+      if (!asal || !tujuan) { box.innerHTML = '<div class="panel-note">Pilih tahun ajaran asal dan tujuan dulu.</div>'; return; }
+      if (asal.id === tujuan.id) { box.innerHTML = '<div class="panel-note">Tahun ajaran asal dan tujuan tidak boleh sama.</div>'; return; }
+      muatPratinjauNaikKelas(asal, tujuan);
+    });
+  }
+
+  async function muatPratinjauNaikKelas(asal, tujuan) {
+    var box = document.getElementById('nkPreview');
+    box.innerHTML = '<div class="panel-note">Memuat data siswa...</div>';
+
+    var kelasList, skAsal, skTujuan;
+    try {
+      var kelasRes = await supabaseClient.from('kelas')
+        .select('id, nama, tingkat, program_keahlian, konsentrasi_keahlian').order('tingkat').order('nama');
+      if (kelasRes.error) throw kelasRes.error;
+      kelasList = kelasRes.data || [];
+
+      skAsal = await ambilSemuaBaris(function () {
+        return supabaseClient.from('siswa_kelas')
+          .select('id, siswa_id, kelas_id, siswa:siswa_id(id, nama, nis, status)')
+          .eq('tahun_ajaran_id', asal.id).order('id');
+      });
+      skTujuan = await ambilSemuaBaris(function () {
+        return supabaseClient.from('siswa_kelas').select('id, siswa_id')
+          .eq('tahun_ajaran_id', tujuan.id).order('id');
+      });
+    } catch (err) {
+      box.innerHTML = '<div class="panel-note">Gagal memuat data: ' + escapeHtml(err.message || err) + '</div>';
+      return;
+    }
+
+    var sudahDiTujuan = {};
+    skTujuan.forEach(function (r) { sudahDiTujuan[r.siswa_id] = true; });
+    var kelasMap = {};
+    kelasList.forEach(function (k) { kelasMap[k.id] = k; });
+
+    // Kelompokkan siswa AKTIF per kelas asal. Siswa berstatus lulus/pindah/
+    // keluar tidak ikut diproses.
+    var kelompok = {};
+    var jumlahNonAktif = 0;
+    skAsal.forEach(function (r) {
+      var k = kelasMap[r.kelas_id];
+      var s = r.siswa;
+      if (!k || !s) return;
+      if (s.status !== 'aktif') { jumlahNonAktif++; return; }
+      if (!kelompok[k.id]) kelompok[k.id] = { kelas: k, siswa: [] };
+      kelompok[k.id].siswa.push({ id: s.id, nama: s.nama || '', nis: s.nis, sudah: !!sudahDiTujuan[s.id] });
+    });
+    var daftar = Object.keys(kelompok).map(function (id) { return kelompok[id]; }).sort(function (a, b) {
+      if (a.kelas.tingkat !== b.kelas.tingkat) return a.kelas.tingkat - b.kelas.tingkat;
+      return a.kelas.nama.localeCompare(b.kelas.nama, 'id', { numeric: true });
+    });
+    daftar.forEach(function (g) { g.siswa.sort(function (a, b) { return a.nama.localeCompare(b.nama); }); });
+
+    if (!daftar.length) {
+      box.innerHTML = '<div class="panel-note">Tidak ada siswa aktif yang tercatat di kelas pada tahun ajaran ' +
+        escapeHtml(asal.nama + ' ' + asal.semester) + '.</div>';
+      return;
+    }
+
+    // Peringatan kalau kombinasi tahun ajaran tidak lazim.
+    var peringatan = [];
+    if (asal.semester !== 'Genap' || tujuan.semester !== 'Gasal') {
+      peringatan.push('Kenaikan kelas biasanya dilakukan dari semester Genap ke semester Gasal tahun ajaran berikutnya. ' +
+        'Kamu memilih ' + asal.nama + ' ' + asal.semester + ' → ' + tujuan.nama + ' ' + tujuan.semester + '.');
+    }
+    var thAsal = parseInt(String(asal.nama).slice(0, 4), 10);
+    var thTujuan = parseInt(String(tujuan.nama).slice(0, 4), 10);
+    if (!isNaN(thAsal) && !isNaN(thTujuan) && thTujuan !== thAsal + 1) {
+      peringatan.push('Tahun ajaran tujuan (' + tujuan.nama + ') bukan tahun berikutnya dari tahun ajaran asal (' + asal.nama + ').');
+    }
+
+    var barisHtml = daftar.map(function (g) {
+      var tingkat = g.kelas.tingkat;
+      var jumlahSudah = g.siswa.filter(function (s) { return s.sudah; }).length;
+
+      var aksiHtml;
+      if (tingkat >= 12) {
+        aksiHtml = '<span class="chip chip--aktif">Lulus</span>';
+      } else {
+        var kandidat = kelasList.filter(function (k) { return k.tingkat === tingkat + 1; });
+        if (!kandidat.length) {
+          aksiHtml = '<span class="chip chip--danger">Belum ada kelas Tingkat ' + (tingkat + 1) + '</span>';
+        } else {
+          var tebakan = tebakKelasTujuan(g.kelas, kandidat);
+          aksiHtml = '<select data-nk-kelas="' + g.kelas.id + '">' +
+            '<option value="">— pilih kelas tujuan (kosong = lewati) —</option>' +
+            kandidat.map(function (k) {
+              return '<option value="' + k.id + '"' + (k.id === tebakan ? ' selected' : '') + '>' + escapeHtml(k.nama) + '</option>';
+            }).join('') + '</select>';
+        }
+      }
+
+      var siswaHtml = g.siswa.map(function (s) {
+        return '<label style="display:block;font-size:13px;padding:2px 0;">' +
+          '<input type="checkbox" class="nkTidak" value="' + s.id + '"' + (s.sudah ? ' disabled' : '') + '> ' +
+          escapeHtml(s.nama) + (s.nis ? ' <span style="color:#888;">(' + escapeHtml(s.nis) + ')</span>' : '') +
+          (s.sudah ? ' <span style="color:#b45309;">— sudah punya kelas di tahun tujuan, dilewati</span>' : '') +
+          '</label>';
+      }).join('');
+
+      return '<tr>' +
+        '<td><strong>' + escapeHtml(g.kelas.nama) + '</strong>' +
+        '<details style="margin-top:6px;"><summary style="cursor:pointer;font-size:12px;color:#555;">Ada yang tidak naik / tidak lulus? Ceklis di sini</summary>' +
+        '<div style="margin-top:6px;max-height:220px;overflow:auto;">' + siswaHtml + '</div></details></td>' +
+        '<td>' + escapeHtml(tingkat) + '</td>' +
+        '<td>' + g.siswa.length + (jumlahSudah ? ' <span style="color:#b45309;font-size:12px;">(' + jumlahSudah + ' sudah ada)</span>' : '') + '</td>' +
+        '<td>' + aksiHtml + '</td>' +
+        '</tr>';
+    }).join('');
+
+    box.innerHTML =
+      (peringatan.length
+        ? '<div class="panel-note" style="border-left:4px solid var(--danger);"><strong>Periksa dulu:</strong><br>' +
+          peringatan.map(escapeHtml).join('<br>') + '</div>'
+        : '') +
+      '<div class="panel-note">Pratinjau: <strong>' + escapeHtml(asal.nama + ' ' + asal.semester) + '</strong> → <strong>' +
+      escapeHtml(tujuan.nama + ' ' + tujuan.semester) + '</strong>. ' +
+      'Tingkat 12 akan berstatus <em>lulus</em>. ' +
+      (jumlahNonAktif ? jumlahNonAktif + ' siswa berstatus non-aktif (lulus/pindah/keluar) tidak ikut diproses. ' : '') +
+      'Kelas tujuan sudah ditebak dari nama kelas — periksa dan ubah kalau perlu.</div>' +
+      '<div class="table-wrap"><table class="data-table"><thead><tr><th>Kelas Asal</th><th>Tingkat</th><th>Siswa</th><th>Kelas Tujuan</th></tr></thead>' +
+      '<tbody>' + barisHtml + '</tbody></table></div>' +
+      '<div class="toolbar"><button class="btn-small btn-small--primary" id="nkProses">Proses Naik Kelas &amp; Kelulusan</button></div>' +
+      '<div id="nkHasil"></div>';
+
+    document.getElementById('nkProses').addEventListener('click', async function () {
+      var btn = this;
+      var hasilBox = document.getElementById('nkHasil');
+
+      var tidakSet = {};
+      box.querySelectorAll('.nkTidak:checked').forEach(function (c) { tidakSet[c.value] = true; });
+
+      var barisSiswaKelas = [];
+      var idLulus = [];
+      var kelasDilewati = [];
+      daftar.forEach(function (g) {
+        var ikut = g.siswa.filter(function (s) { return !s.sudah && !tidakSet[s.id]; });
+        if (!ikut.length) return;
+        if (g.kelas.tingkat >= 12) {
+          ikut.forEach(function (s) { idLulus.push(s.id); });
+          return;
+        }
+        var sel = box.querySelector('select[data-nk-kelas="' + g.kelas.id + '"]');
+        var kelasTujuanId = sel ? sel.value : '';
+        if (!kelasTujuanId) {
+          kelasDilewati.push(g.kelas.nama + ' (' + ikut.length + ' siswa)');
+          return;
+        }
+        ikut.forEach(function (s) {
+          barisSiswaKelas.push({ siswa_id: s.id, kelas_id: kelasTujuanId, tahun_ajaran_id: tujuan.id });
+        });
+      });
+
+      if (!barisSiswaKelas.length && !idLulus.length) {
+        hasilBox.innerHTML = '<div class="panel-note">Tidak ada siswa yang bisa diproses. Pilih kelas tujuan dulu.</div>';
+        return;
+      }
+
+      var pesan = 'Proses ' + asal.nama + ' ' + asal.semester + ' → ' + tujuan.nama + ' ' + tujuan.semester + ':\n\n' +
+        '• ' + barisSiswaKelas.length + ' siswa dinaikkan kelas\n' +
+        '• ' + idLulus.length + ' siswa Tingkat 12 dinyatakan LULUS\n' +
+        (kelasDilewati.length ? '• Dilewati (kelas tujuan belum dipilih): ' + kelasDilewati.join(', ') + '\n' : '') +
+        (peringatan.length ? '\nPERHATIAN:\n' + peringatan.join('\n') + '\n' : '') +
+        '\nLanjutkan?';
+      if (!confirm(pesan)) return;
+
+      btn.disabled = true;
+      btn.textContent = 'Memproses...';
+
+      var errorList = [];
+      var berhasilNaik = 0;
+      var berhasilLulus = 0;
+
+      for (var i = 0; i < barisSiswaKelas.length; i += 500) {
+        var batch = barisSiswaKelas.slice(i, i + 500);
+        var r1 = await supabaseClient.from('siswa_kelas')
+          .upsert(batch, { onConflict: 'siswa_id,tahun_ajaran_id', ignoreDuplicates: true });
+        if (r1.error) { errorList.push('Penempatan kelas: ' + r1.error.message); break; }
+        berhasilNaik += batch.length;
+      }
+
+      for (var j = 0; j < idLulus.length; j += 100) {
+        var batchId = idLulus.slice(j, j + 100);
+        var r2 = await supabaseClient.from('siswa').update({ status: 'lulus' }).in('id', batchId);
+        if (r2.error) { errorList.push('Status lulus: ' + r2.error.message); break; }
+        berhasilLulus += batchId.length;
+      }
+
+      btn.disabled = false;
+      btn.textContent = 'Proses Naik Kelas & Kelulusan';
+
+      hasilBox.innerHTML =
+        '<div class="panel-note">' +
+        (errorList.length ? '<strong>Selesai dengan kendala:</strong><br>' + errorList.map(escapeHtml).join('<br>') + '<br><br>' : '<strong>Selesai.</strong> ') +
+        berhasilNaik + ' siswa dinaikkan kelas, ' + berhasilLulus + ' siswa dinyatakan lulus.' +
+        (kelasDilewati.length ? '<br>Belum diproses (kelas tujuan kosong): ' + escapeHtml(kelasDilewati.join(', ')) + '.' : '') +
+        '<br><br>Langkah berikutnya: aktifkan tahun ajaran ' + escapeHtml(tujuan.nama + ' ' + tujuan.semester) +
+        ' di tabel atas, lalu isi menu Intrakurikuler (penugasan mapel) dan Wali Kelas di aplikasi E-Rapor untuk tahun ajaran itu. ' +
+        'Siswa yang tinggal kelas bisa ditempatkan manual lewat menu Siswa di E-Rapor.' +
+        '</div>';
+    });
+  }
+
+
+  // Supabase membatasi 1000 baris per permintaan, jadi diambil bertahap.
+  async function ambilSemuaBaris(buatQuery) {
+    var hasil = [];
+    var ukuran = 1000;
+    for (var dari = 0; ; dari += ukuran) {
+      var r = await buatQuery().range(dari, dari + ukuran - 1);
+      if (r.error) throw r.error;
+      var data = r.data || [];
+      hasil = hasil.concat(data);
+      if (data.length < ukuran) break;
+    }
+    return hasil;
+  }
+
+
+  var views = { profilSekolah: renderProfilSekolah, tahunAjaran: renderTahunAjaran };
+
+  function bukaView(nama) {
+    if (!views[nama]) nama = 'profilSekolah';
+    setActiveMenu(nama);
+    views[nama]();
+  }
+
+  document.querySelectorAll('#menuAdmin .menu-item').forEach(function (item) {
+    item.addEventListener('click', function (e) {
+      e.preventDefault();
+      var v = item.dataset.view;
+      try { history.replaceState(null, '', '#' + v); } catch (err) {}
+      bukaView(v);
+    });
+  });
+
+  (async function () {
+    // 1. Cek sesi login
+    var sessionResult = await supabaseClient.auth.getSession();
+    var session = sessionResult.data.session;
+    if (!session) { window.location.href = 'index.html'; return; }
+    var user = session.user;
+
+    // 2. Hanya admin
+    var profileResult = await supabaseClient.from('profiles').select('nama, role').eq('id', user.id).single();
+    if (profileResult.error || !profileResult.data) { window.location.href = 'portal.html'; return; }
+    if (profileResult.data.role !== 'admin') { window.location.href = 'portal.html'; return; }
+
+    var nama = profileResult.data.nama || user.email;
+    document.getElementById('userName').textContent = nama;
+    document.getElementById('userAvatar').textContent = nama.trim().charAt(0).toUpperCase();
+
+    // 3. Tahun ajaran aktif + buka menu sesuai #hash (default: Profil Sekolah)
+    await muatTahunAktif();
+    bukaView((location.hash || '').replace('#', ''));
+  })();
+
+  document.getElementById('logoutBtn').addEventListener('click', async function (e) {
+    e.preventDefault();
+    await catatAktivitas('logout', 'Akun', 'Keluar dari aplikasi');
+    await supabaseClient.auth.signOut();
+    window.location.href = 'index.html';
+  });
+</script>
+
+</body>
+</html>
