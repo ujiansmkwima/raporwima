@@ -119,10 +119,10 @@
               : 'Lihat jadwal, isi form supervisi, dan jawab wawancara supervisi sendiri.') +
       kartu('pelanggaran.html', 'app-card--pelanggaran', 'shield-alert', 'Catatan Pelanggaran',
         'Lihat seluruh catatan pelanggaran siswa dari aplikasi CP. Pilih kelas, lalu telusuri catatan tiap siswa. Bisa diakses semua guru.') +
-      (admin ? kartu('log-admin.html', 'app-card--log', 'history', 'Log Aktivitas',
-        'Pantau siapa melakukan apa dan kapan di E-Rapor, Buku Induk, PKL, dan aplikasi lain: login, perubahan data, cetak, dan unduh.') : '') +
       (admin ? kartu('pengaturan-admin.html', 'app-card--pengaturan', 'settings', 'Pengaturan Sekolah',
-        'Atur profil sekolah (nama, kepala sekolah, tanda tangan, tanggal rapor) dan tahun ajaran: tambah, aktifkan, serta proses naik kelas & kelulusan.') : '');
+        'Atur profil sekolah (nama, kepala sekolah, tanda tangan, tanggal rapor) tahun ajaran (tambah, aktifkan, naik kelas & kelulusan), dan slideshow halaman login.') : '') +
+      (admin ? kartu('log-admin.html', 'app-card--log', 'history', 'Log Aktivitas',
+        'Pantau siapa melakukan apa dan kapan di E-Rapor, Buku Induk, PKL, dan aplikasi lain: login, perubahan data, cetak, dan unduh.') : '');
 
     if (window.lucide) lucide.createIcons();
 
